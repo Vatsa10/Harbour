@@ -79,8 +79,14 @@ describe('ToolExecutorService gating', () => {
         { provide: DeleteRecordService, useValue: stub },
         { provide: DeleteManyRecordsService, useValue: stub },
         { provide: LogicFunctionExecutorService, useValue: stub },
-        { provide: WorkspaceCacheService, useValue: { getOrRecompute: jest.fn() } },
-        { provide: getRepositoryToken(UserEntity), useValue: { findOne: jest.fn() } },
+        {
+          provide: WorkspaceCacheService,
+          useValue: { getOrRecompute: jest.fn() },
+        },
+        {
+          provide: getRepositoryToken(UserEntity),
+          useValue: { findOne: jest.fn() },
+        },
       ],
     }).compile();
 
