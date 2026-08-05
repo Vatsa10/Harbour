@@ -18,6 +18,7 @@ import { ToolModule } from 'src/engine/core-modules/tool/tool.module';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { AiAgentExecutionModule } from 'src/engine/metadata-modules/ai/ai-agent-execution/ai-agent-execution.module';
 import { AiModelsModule } from 'src/engine/metadata-modules/ai/ai-models/ai-models.module';
+import { AiWriteApprovalModule } from 'src/engine/metadata-modules/ai/ai-write-approval/ai-write-approval.module';
 import { FieldMetadataModule } from 'src/engine/metadata-modules/field-metadata/field-metadata.module';
 import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.module';
 import { LogicFunctionModule } from 'src/engine/metadata-modules/logic-function/logic-function.module';
@@ -51,6 +52,7 @@ import { ToolRegistryService } from './services/tool-registry.service';
     ToolModule,
     RecordCrudModule,
     AiModelsModule,
+    AiWriteApprovalModule,
     forwardRef(() => AiAgentExecutionModule),
     ObjectMetadataModule,
     FieldMetadataModule,
