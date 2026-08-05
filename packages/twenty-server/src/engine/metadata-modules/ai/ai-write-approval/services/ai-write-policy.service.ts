@@ -26,12 +26,19 @@ export class AiWritePolicyService {
   ) {}
 
   async getPolicy(workspaceId: string): Promise<AiWritePolicy> {
-    const stored = await this.keyValuePairService.get({
+    const result = await this.keyValuePairService.get({
       workspaceId,
       userId: null,
       type: KeyValuePairType.CONFIG_VARIABLE,
       key: AI_WRITE_APPROVAL_POLICY_KEY,
     });
+
+    // KeyValuePairService.get() resolves an array of matching rows; a workspace
+    // only ever holds one policy row for this key, so take the first row's
+    // value. Stays defensive around a bare value for stubbed callers.
+    const stored = Array.isArray(result)
+      ? (result[0] as { value?: AiWritePolicy } | undefined)?.value
+      : result;
 
     return isDefined(stored) ? stored : DEFAULT_AI_WRITE_POLICY;
   }
@@ -47,14 +54,19 @@ export class AiWritePolicyService {
   }
 
   resolveMode(policy: AiWritePolicy, keys: string[]): AiWriteMode {
-    const modes = keys.length === 0
-      ? [policy.default]
-      : keys.map(key => policy.overrides[key] ?? policy.default);
+    // Seeding the reduce with policy.default would let the default outrank a
+    // less restrictive override (a lone 'AUTO' override must stay 'AUTO'), so
+    // the default only applies when a key has no override, or when no keys
+    // are supplied at all.
+    const modes =
+      keys.length === 0
+        ? [policy.default]
+        : keys.map((key) => policy.overrides[key] ?? policy.default);
 
-    return modes.reduce((mostRestrictive, mode) => {
-      return MODE_SEVERITY[mode] > MODE_SEVERITY[mostRestrictive]
+    return modes.reduce((mostRestrictive, mode) =>
+      MODE_SEVERITY[mode] > MODE_SEVERITY[mostRestrictive]
         ? mode
-        : mostRestrictive;
-    });
+        : mostRestrictive,
+    );
   }
 }

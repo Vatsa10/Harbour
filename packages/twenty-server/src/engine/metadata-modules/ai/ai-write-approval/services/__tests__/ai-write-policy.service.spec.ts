@@ -45,6 +45,27 @@ describe('AiWritePolicyService', () => {
 
       expect(policy).toEqual(stored);
     });
+
+    it('should unwrap the key value pair rows returned by the real service', async () => {
+      const stored: AiWritePolicy = {
+        default: 'FORBID',
+        overrides: { company: 'AUTO' },
+      };
+
+      keyValuePairService.get.mockResolvedValue([{ value: stored }]);
+
+      const policy = await service.getPolicy('workspace-1');
+
+      expect(policy).toEqual(stored);
+    });
+
+    it('should return the default policy when no row is found', async () => {
+      keyValuePairService.get.mockResolvedValue([]);
+
+      const policy = await service.getPolicy('workspace-1');
+
+      expect(policy).toEqual(DEFAULT_AI_WRITE_POLICY);
+    });
   });
 
   describe('resolveMode', () => {
