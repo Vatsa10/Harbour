@@ -102,8 +102,10 @@ describe('ProposalGateService', () => {
     policyService = module.get<AiWritePolicyService>(AiWritePolicyService);
   });
 
-  const evaluate = (descriptor: ToolDescriptor, args: Record<string, unknown>) =>
-    service.evaluate({ descriptor, args, context });
+  const evaluate = (
+    descriptor: ToolDescriptor,
+    args: Record<string, unknown>,
+  ) => service.evaluate({ descriptor, args, context });
 
   const savedItem = () => proposalItemRepository.save.mock.calls[0][0];
 
@@ -164,7 +166,10 @@ describe('ProposalGateService', () => {
     });
 
     it('should forbid a write when the policy resolves to FORBID', async () => {
-      setPolicy({ default: 'PROPOSE', overrides: { 'person.email': 'FORBID' } });
+      setPolicy({
+        default: 'PROPOSE',
+        overrides: { 'person.email': 'FORBID' },
+      });
 
       const decision = await evaluate(crudDescriptor('update_one'), {
         id: 'record-1',
@@ -313,9 +318,12 @@ describe('ProposalGateService', () => {
     });
 
     it('should gate an unknown static tool', async () => {
-      const decision = await evaluate(staticDescriptor('brand_new_write_tool'), {
-        anything: true,
-      });
+      const decision = await evaluate(
+        staticDescriptor('brand_new_write_tool'),
+        {
+          anything: true,
+        },
+      );
 
       expect(decision.kind).toBe('PROPOSED');
       expect(savedItem()).toMatchObject({
@@ -327,10 +335,9 @@ describe('ProposalGateService', () => {
     });
 
     it('should gate a metadata write tool', async () => {
-      const decision = await evaluate(
-        staticDescriptor('create_view', 'view'),
-        { name: 'My view' },
-      );
+      const decision = await evaluate(staticDescriptor('create_view', 'view'), {
+        name: 'My view',
+      });
 
       expect(decision.kind).toBe('PROPOSED');
     });

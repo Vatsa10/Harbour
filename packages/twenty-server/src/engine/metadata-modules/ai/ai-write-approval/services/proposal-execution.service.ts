@@ -342,10 +342,7 @@ export class ProposalExecutionService {
     await this.proposalItemRepository.update(
       {
         proposalId,
-        status: In([
-          ProposalItemStatus.PENDING,
-          ProposalItemStatus.CONFLICTED,
-        ]),
+        status: In([ProposalItemStatus.PENDING, ProposalItemStatus.CONFLICTED]),
       },
       { status: ProposalItemStatus.REJECTED },
     );
@@ -388,7 +385,9 @@ export class ProposalExecutionService {
       : undefined;
 
     if (!isDefined(workspaceMemberId) || !isDefined(workspaceMember)) {
-      throw new Error(`Approver workspace member not found for user ${user.id}`);
+      throw new Error(
+        `Approver workspace member not found for user ${user.id}`,
+      );
     }
 
     const roleId = await this.userRoleService.getRoleIdForUserWorkspace({

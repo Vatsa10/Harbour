@@ -107,7 +107,9 @@ describe('ProposalDiffTable', () => {
     );
 
     expect(
-      screen.getByText(/not protected against edits made since it was proposed/),
+      screen.getByText(
+        /not protected against edits made since it was proposed/,
+      ),
     ).toBeInTheDocument();
   });
 

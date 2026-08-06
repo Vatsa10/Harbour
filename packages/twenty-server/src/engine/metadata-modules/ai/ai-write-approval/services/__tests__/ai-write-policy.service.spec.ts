@@ -70,12 +70,20 @@ describe('AiWritePolicyService', () => {
 
     it('should drop override values that are not modes', async () => {
       keyValuePairService.get.mockResolvedValue([
-        { value: { default: 'OOPS', overrides: { person: 42, company: 'AUTO' } } },
+        {
+          value: {
+            default: 'OOPS',
+            overrides: { person: 42, company: 'AUTO' },
+          },
+        },
       ]);
 
       const policy = await service.getPolicy('workspace-1');
 
-      expect(policy).toEqual({ default: 'PROPOSE', overrides: { company: 'AUTO' } });
+      expect(policy).toEqual({
+        default: 'PROPOSE',
+        overrides: { company: 'AUTO' },
+      });
     });
   });
 
@@ -99,9 +107,9 @@ describe('AiWritePolicyService', () => {
     });
 
     it('should fall back to the default when nothing matches', () => {
-      expect(service.resolveMode(policy, recordTarget('person', ['jobTitle']))).toBe(
-        'PROPOSE',
-      );
+      expect(
+        service.resolveMode(policy, recordTarget('person', ['jobTitle'])),
+      ).toBe('PROPOSE');
     });
 
     // The bug: the object key used to be unioned in and dragged the default
@@ -113,15 +121,18 @@ describe('AiWritePolicyService', () => {
     });
 
     it('should let an object override win over the workspace default', () => {
-      expect(service.resolveMode(policy, recordTarget('company', ['name']))).toBe(
-        'AUTO',
-      );
+      expect(
+        service.resolveMode(policy, recordTarget('company', ['name'])),
+      ).toBe('AUTO');
     });
 
     it('should prefer the more specific field override over the object override', () => {
       expect(
         service.resolveMode(
-          { default: 'AUTO', overrides: { person: 'AUTO', 'person.email': 'FORBID' } },
+          {
+            default: 'AUTO',
+            overrides: { person: 'AUTO', 'person.email': 'FORBID' },
+          },
           recordTarget('person', ['email']),
         ),
       ).toBe('FORBID');
@@ -138,13 +149,20 @@ describe('AiWritePolicyService', () => {
 
     it('should return the most restrictive mode across several fields', () => {
       expect(
-        service.resolveMode(policy, recordTarget('person', ['linkedinLink', 'email'])),
+        service.resolveMode(
+          policy,
+          recordTarget('person', ['linkedinLink', 'email']),
+        ),
       ).toBe('FORBID');
     });
 
     it('should fall to the object override when a write names no fields', () => {
-      expect(service.resolveMode(policy, recordTarget('company', []))).toBe('AUTO');
-      expect(service.resolveMode(policy, recordTarget('person', []))).toBe('PROPOSE');
+      expect(service.resolveMode(policy, recordTarget('company', []))).toBe(
+        'AUTO',
+      );
+      expect(service.resolveMode(policy, recordTarget('person', []))).toBe(
+        'PROPOSE',
+      );
     });
 
     it('should resolve a static tool on its tool id', () => {

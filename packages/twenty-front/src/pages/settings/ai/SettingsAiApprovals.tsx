@@ -46,7 +46,8 @@ type PendingProposalsData = {
 };
 
 export const SettingsAiApprovals = () => {
-  const { data, loading, refetch } = useQuery<PendingProposalsData>(PENDING_PROPOSALS);
+  const { data, loading, refetch } =
+    useQuery<PendingProposalsData>(PENDING_PROPOSALS);
   const [approveProposal] = useMutation(APPROVE_PROPOSAL);
   const [rejectProposal] = useMutation(REJECT_PROPOSAL);
 

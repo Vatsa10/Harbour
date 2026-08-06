@@ -242,9 +242,7 @@ export class ProposalGateService {
     toolId: string,
     args: Record<string, unknown>,
   ): boolean {
-    if (
-      UNGATED_STATIC_TOOL_IDS.some((ungatedId) => ungatedId === toolId)
-    ) {
+    if (UNGATED_STATIC_TOOL_IDS.some((ungatedId) => ungatedId === toolId)) {
       return false;
     }
 
@@ -252,9 +250,7 @@ export class ProposalGateService {
       const method =
         typeof args.method === 'string' ? args.method.toUpperCase() : 'GET';
 
-      return !UNGATED_HTTP_METHODS.some(
-        (readMethod) => readMethod === method,
-      );
+      return !UNGATED_HTTP_METHODS.some((readMethod) => readMethod === method);
     }
 
     return true;

@@ -55,8 +55,10 @@ const post = (
 
 // Record CRUD lives on the core schema; the proposal and policy resolvers are
 // @MetadataResolver()s and are served from /metadata.
-const graphqlRequest = (query: string, variables: Record<string, unknown> = {}) =>
-  post('/graphql', query, variables);
+const graphqlRequest = (
+  query: string,
+  variables: Record<string, unknown> = {},
+) => post('/graphql', query, variables);
 
 const metadataRequest = (
   query: string,
@@ -130,9 +132,8 @@ describe('proposal approval (e2e)', () => {
       'ToolExecutorService',
     );
 
-    const userRoleService = getAppProviderByClassName<UserRoleService>(
-      'UserRoleService',
-    );
+    const userRoleService =
+      getAppProviderByClassName<UserRoleService>('UserRoleService');
 
     const [adminUserWorkspace] = await global.testDataSource.query(
       `SELECT uw.id AS "userWorkspaceId", u.id AS "userId"
@@ -203,9 +204,9 @@ describe('proposal approval (e2e)', () => {
     expect(pending.body.errors).toBeUndefined();
 
     const proposals = pending.body.data.pendingProposals;
-    const proposal = proposals.find((candidate: { id: string }) =>
-      candidate.id ===
-      (output.result as { proposalId: string }).proposalId,
+    const proposal = proposals.find(
+      (candidate: { id: string }) =>
+        candidate.id === (output.result as { proposalId: string }).proposalId,
     );
 
     expect(proposal).toBeDefined();
@@ -300,7 +301,9 @@ describe('proposal approval (e2e)', () => {
     const output = await dispatchUpdateJobTitle('Head of Sales');
 
     expect(output.success).toBe(true);
-    expect((output.result as { proposalId?: string }).proposalId).toBeUndefined();
+    expect(
+      (output.result as { proposalId?: string }).proposalId,
+    ).toBeUndefined();
 
     const jobTitle = await findPersonJobTitle(personId);
 

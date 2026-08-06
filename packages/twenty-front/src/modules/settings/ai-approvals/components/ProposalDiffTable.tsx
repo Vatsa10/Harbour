@@ -152,8 +152,12 @@ export const ProposalDiffTable = ({
                 <StyledFieldRow key={`${item.id}-${fieldName}`}>
                   <StyledCell />
                   <StyledCell>{fieldName}</StyledCell>
-                  <StyledCell>{formatValue(item.baseline[fieldName])}</StyledCell>
-                  <StyledCell>{formatValue(item.payload[fieldName])}</StyledCell>
+                  <StyledCell>
+                    {formatValue(item.baseline[fieldName])}
+                  </StyledCell>
+                  <StyledCell>
+                    {formatValue(item.payload[fieldName])}
+                  </StyledCell>
                 </StyledFieldRow>
               )),
             ];
