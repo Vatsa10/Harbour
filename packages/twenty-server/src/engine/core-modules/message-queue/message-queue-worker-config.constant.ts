@@ -177,4 +177,15 @@ export const MESSAGE_QUEUE_WORKER_CONFIG: Record<
       boundedShutdownDrain: true,
     },
   },
+  [MessageQueue.agentTaskQueue]: {
+    priority: 5,
+    workerOptions: {
+      concurrency: 1,
+      // A research run makes multiple model round trips up to its step
+      // budget, so it needs headroom well beyond the 30s default lock.
+      lockDuration: 600_000,
+      maxStalledCount: 1,
+      boundedShutdownDrain: false,
+    },
+  },
 };
