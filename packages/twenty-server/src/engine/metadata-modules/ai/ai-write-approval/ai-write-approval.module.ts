@@ -4,6 +4,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { KeyValuePairModule } from 'src/engine/core-modules/key-value-pair/key-value-pair.module';
 import { RecordCrudModule } from 'src/engine/core-modules/record-crud/record-crud.module';
 import { ToolModule } from 'src/engine/core-modules/tool/tool.module';
+import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
+import { UserEntity } from 'src/engine/core-modules/user/user.entity';
+import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
+import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
 import { AiWritePolicyResolver } from 'src/engine/metadata-modules/ai/ai-write-approval/resolvers/ai-write-policy.resolver';
@@ -15,10 +19,17 @@ import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ProposalEntity, ProposalItemEntity], 'core'),
+    TypeOrmModule.forFeature([
+      ProposalEntity,
+      ProposalItemEntity,
+      UserEntity,
+      UserWorkspaceEntity,
+    ]),
     KeyValuePairModule,
     RecordCrudModule,
     UserRoleModule,
+    PermissionsModule,
+    WorkspaceCacheModule,
     ToolModule,
   ],
   providers: [

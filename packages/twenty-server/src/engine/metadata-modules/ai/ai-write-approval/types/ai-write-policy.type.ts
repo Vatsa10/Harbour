@@ -1,6 +1,18 @@
 export const AI_WRITE_APPROVAL_POLICY_KEY = 'AI_WRITE_APPROVAL_POLICY';
 
-export type AiWriteMode = 'AUTO' | 'PROPOSE' | 'FORBID';
+export const AI_WRITE_MODES = ['AUTO', 'PROPOSE', 'FORBID'] as const;
+
+export type AiWriteMode = (typeof AI_WRITE_MODES)[number];
+
+export const isAiWriteMode = (value: unknown): value is AiWriteMode =>
+  typeof value === 'string' &&
+  (AI_WRITE_MODES as readonly string[]).includes(value);
+
+// What a single gated call targets. Record writes resolve per field so the
+// most specific override wins; static tools resolve on their tool id.
+export type AiWritePolicyTarget =
+  | { kind: 'record'; objectNameSingular: string; fieldNames: string[] }
+  | { kind: 'tool'; toolId: string };
 
 // One blob per workspace. Override keys are `<objectNameSingular>.<fieldName>`,
 // `<objectNameSingular>`, or a static tool id such as `send_email`.

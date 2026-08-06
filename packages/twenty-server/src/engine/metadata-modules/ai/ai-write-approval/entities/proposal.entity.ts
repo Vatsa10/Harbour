@@ -42,9 +42,6 @@ export class ProposalEntity {
   @Index()
   threadId: string | null;
 
-  @Column({ type: 'text', nullable: true })
-  reason: string | null;
-
   @Column({ type: 'timestamptz', nullable: false })
   expiresAt: Date;
 

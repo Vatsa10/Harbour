@@ -40,6 +40,14 @@ export class ProposalItemEntity {
   @Column({ type: 'uuid', nullable: true })
   recordId: string | null;
 
+  // Set for static-tool items so approval can replay the call through the
+  // provider that owns it.
+  @Column({ type: 'varchar', nullable: true })
+  toolId: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  toolCategory: string | null;
+
   // Proposed values for a record write, or the message payload for a send.
   @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
   payload: Record<string, unknown>;

@@ -5,6 +5,7 @@ import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-ap
 import {
   DEFAULT_AI_WRITE_POLICY,
   type AiWritePolicy,
+  type AiWritePolicyTarget,
 } from 'src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type';
 
 describe('AiWritePolicyService', () => {
@@ -66,6 +67,16 @@ describe('AiWritePolicyService', () => {
 
       expect(policy).toEqual(DEFAULT_AI_WRITE_POLICY);
     });
+
+    it('should drop override values that are not modes', async () => {
+      keyValuePairService.get.mockResolvedValue([
+        { value: { default: 'OOPS', overrides: { person: 42, company: 'AUTO' } } },
+      ]);
+
+      const policy = await service.getPolicy('workspace-1');
+
+      expect(policy).toEqual({ default: 'PROPOSE', overrides: { company: 'AUTO' } });
+    });
   });
 
   describe('resolveMode', () => {
@@ -78,28 +89,77 @@ describe('AiWritePolicyService', () => {
       },
     };
 
-    it('should fall back to the default when no key matches', () => {
-      expect(service.resolveMode(policy, ['person.jobTitle'])).toBe('PROPOSE');
+    const recordTarget = (
+      objectNameSingular: string,
+      fieldNames: string[],
+    ): AiWritePolicyTarget => ({
+      kind: 'record',
+      objectNameSingular,
+      fieldNames,
     });
 
-    it('should use an exact override when one matches', () => {
-      expect(service.resolveMode(policy, ['person.linkedinLink'])).toBe('AUTO');
+    it('should fall back to the default when nothing matches', () => {
+      expect(service.resolveMode(policy, recordTarget('person', ['jobTitle']))).toBe(
+        'PROPOSE',
+      );
     });
 
-    it('should return the most restrictive mode across several keys', () => {
+    // The bug: the object key used to be unioned in and dragged the default
+    // into every resolution, so a field-level AUTO could never win.
+    it('should let a field override win over the workspace default', () => {
       expect(
-        service.resolveMode(policy, ['person.linkedinLink', 'person.email']),
+        service.resolveMode(policy, recordTarget('person', ['linkedinLink'])),
+      ).toBe('AUTO');
+    });
+
+    it('should let an object override win over the workspace default', () => {
+      expect(service.resolveMode(policy, recordTarget('company', ['name']))).toBe(
+        'AUTO',
+      );
+    });
+
+    it('should prefer the more specific field override over the object override', () => {
+      expect(
+        service.resolveMode(
+          { default: 'AUTO', overrides: { person: 'AUTO', 'person.email': 'FORBID' } },
+          recordTarget('person', ['email']),
+        ),
       ).toBe('FORBID');
     });
 
-    it('should prefer PROPOSE over AUTO when keys disagree', () => {
+    it('should cover every field of a write through its object override', () => {
       expect(
-        service.resolveMode(policy, ['person.linkedinLink', 'person.jobTitle']),
-      ).toBe('PROPOSE');
+        service.resolveMode(
+          { default: 'PROPOSE', overrides: { person: 'AUTO' } },
+          recordTarget('person', ['linkedinLink', 'jobTitle']),
+        ),
+      ).toBe('AUTO');
     });
 
-    it('should return the default when no keys are supplied', () => {
-      expect(service.resolveMode(policy, [])).toBe('PROPOSE');
+    it('should return the most restrictive mode across several fields', () => {
+      expect(
+        service.resolveMode(policy, recordTarget('person', ['linkedinLink', 'email'])),
+      ).toBe('FORBID');
+    });
+
+    it('should fall to the object override when a write names no fields', () => {
+      expect(service.resolveMode(policy, recordTarget('company', []))).toBe('AUTO');
+      expect(service.resolveMode(policy, recordTarget('person', []))).toBe('PROPOSE');
+    });
+
+    it('should resolve a static tool on its tool id', () => {
+      expect(
+        service.resolveMode(
+          { default: 'PROPOSE', overrides: { send_email: 'FORBID' } },
+          { kind: 'tool', toolId: 'send_email' },
+        ),
+      ).toBe('FORBID');
+      expect(
+        service.resolveMode(
+          { default: 'PROPOSE', overrides: {} },
+          { kind: 'tool', toolId: 'send_email' },
+        ),
+      ).toBe('PROPOSE');
     });
   });
 });

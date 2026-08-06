@@ -1,16 +1,32 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { InjectRepository } from '@nestjs/typeorm';
 
+import { PermissionFlagType } from 'twenty-shared/constants';
+import { FieldActorSource, type ActorMetadata } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { In, Repository } from 'typeorm';
 
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { buildUserAuthContext } from 'src/engine/core-modules/auth/utils/build-user-auth-context.util';
+import { CreateManyRecordsService } from 'src/engine/core-modules/record-crud/services/create-many-records.service';
 import { CreateRecordService } from 'src/engine/core-modules/record-crud/services/create-record.service';
+import { DeleteManyRecordsService } from 'src/engine/core-modules/record-crud/services/delete-many-records.service';
 import { DeleteRecordService } from 'src/engine/core-modules/record-crud/services/delete-record.service';
 import { FindRecordsService } from 'src/engine/core-modules/record-crud/services/find-records.service';
+import { UpdateManyRecordsService } from 'src/engine/core-modules/record-crud/services/update-many-records.service';
 import { UpdateRecordService } from 'src/engine/core-modules/record-crud/services/update-record.service';
+import { UpsertManyRecordsService } from 'src/engine/core-modules/record-crud/services/upsert-many-records.service';
+import { TOOL_PROVIDERS } from 'src/engine/core-modules/tool-provider/constants/tool-providers.token';
+import { type ToolProviderContext } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider-context.type';
+import { type ToolProvider } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider.interface';
 import { CreateCalendarEventTool } from 'src/engine/core-modules/tool/tools/calendar-tool/create-calendar-event-tool';
 import { SendEmailTool } from 'src/engine/core-modules/tool/tools/email-tool/send-email-tool';
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
+import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
+import { UserEntity } from 'src/engine/core-modules/user/user.entity';
+import { fromUserEntityToFlat } from 'src/engine/core-modules/user/utils/from-user-entity-to-flat.util';
+import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
 import {
@@ -18,9 +34,10 @@ import {
   ProposalItemStatus,
   ProposalStatus,
 } from 'src/engine/metadata-modules/ai/ai-write-approval/types/proposal-status.type';
+import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
-import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 export type ApprovalResult = {
   proposalId: string;
@@ -30,6 +47,25 @@ export type ApprovalResult = {
   aborted: boolean;
 };
 
+// Everything an item needs to be applied as the approver rather than as SYSTEM.
+type ApproverContext = {
+  authContext: WorkspaceAuthContext;
+  rolePermissionConfig: RolePermissionConfig;
+  actorMetadata: ActorMetadata;
+  workspaceId: string;
+  userId: string;
+  userWorkspaceId: string;
+  roleId: string;
+};
+
+const OUTBOUND_TOOL_PERMISSION_FLAGS: Partial<
+  Record<ProposalActionType, PermissionFlagType>
+> = {
+  [ProposalActionType.SEND_EMAIL]: PermissionFlagType.SEND_EMAIL_TOOL,
+  [ProposalActionType.CREATE_CALENDAR_EVENT]:
+    PermissionFlagType.CREATE_CALENDAR_EVENT_TOOL,
+};
+
 @Injectable()
 export class ProposalExecutionService {
   private readonly logger = new Logger(ProposalExecutionService.name);
@@ -37,19 +73,35 @@ export class ProposalExecutionService {
   constructor(
     private readonly findRecordsService: FindRecordsService,
     private readonly createRecordService: CreateRecordService,
+    private readonly createManyRecordsService: CreateManyRecordsService,
     private readonly updateRecordService: UpdateRecordService,
+    private readonly updateManyRecordsService: UpdateManyRecordsService,
+    private readonly upsertManyRecordsService: UpsertManyRecordsService,
     private readonly deleteRecordService: DeleteRecordService,
+    private readonly deleteManyRecordsService: DeleteManyRecordsService,
     private readonly userRoleService: UserRoleService,
+    private readonly permissionsService: PermissionsService,
+    private readonly workspaceCacheService: WorkspaceCacheService,
     private readonly sendEmailTool: SendEmailTool,
     private readonly createCalendarEventTool: CreateCalendarEventTool,
+    // Static-tool items are replayed through the provider that owns them.
+    // ToolProviderModule imports this module, so the provider list is resolved
+    // lazily rather than injected, which would close a module cycle.
+    private readonly moduleRef: ModuleRef,
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    @InjectRepository(UserEntity)
+    private readonly userRepository: Repository<UserEntity>,
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    @InjectRepository(UserWorkspaceEntity)
+    private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
     // Proposals are looked up by (id, workspaceId) as a single composite
     // condition, not workspaceId-then-filter, so the scoped wrapper's
     // "workspaceId first, merge rest" shape doesn't fit this access pattern.
     // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
-    @InjectRepository(ProposalEntity, 'core')
+    @InjectRepository(ProposalEntity)
     private readonly proposalRepository: Repository<ProposalEntity>,
     // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
-    @InjectRepository(ProposalItemEntity, 'core')
+    @InjectRepository(ProposalItemEntity)
     private readonly proposalItemRepository: Repository<ProposalItemEntity>,
   ) {}
 
@@ -75,13 +127,56 @@ export class ProposalExecutionService {
     }
 
     if (proposal.expiresAt.getTime() < Date.now()) {
-      await this.proposalRepository.save({
-        ...proposal,
-        status: ProposalStatus.EXPIRED,
-      });
+      await this.proposalRepository.update(
+        { id: proposalId, workspaceId, status: ProposalStatus.PENDING },
+        { status: ProposalStatus.EXPIRED },
+      );
 
       return this.emptyResult(proposalId, true);
     }
+
+    // Claim the proposal before doing any work. A concurrent approval finds
+    // the row no longer PENDING, updates zero rows, and bails — so an item is
+    // never applied (or an email sent) twice.
+    const claim = await this.proposalRepository.update(
+      { id: proposalId, workspaceId, status: ProposalStatus.PENDING },
+      { status: ProposalStatus.APPLYING },
+    );
+
+    if (claim.affected === 0) {
+      return this.emptyResult(proposalId, true);
+    }
+
+    try {
+      return await this.applyClaimedProposal({
+        proposalId,
+        selectedItemIds,
+        workspaceId,
+        approverUserWorkspaceId,
+      });
+    } catch (error) {
+      // Never leave a proposal stuck in APPLYING because of an unexpected throw.
+      await this.proposalRepository.update(
+        { id: proposalId, workspaceId, status: ProposalStatus.APPLYING },
+        { status: ProposalStatus.FAILED },
+      );
+
+      throw error;
+    }
+  }
+
+  private async applyClaimedProposal(params: {
+    proposalId: string;
+    selectedItemIds: string[];
+    workspaceId: string;
+    approverUserWorkspaceId: string;
+  }): Promise<ApprovalResult> {
+    const {
+      proposalId,
+      selectedItemIds,
+      workspaceId,
+      approverUserWorkspaceId,
+    } = params;
 
     const items = await this.proposalItemRepository.find({
       where: { proposalId },
@@ -90,12 +185,17 @@ export class ProposalExecutionService {
       selectedItemIds.includes(item.id),
     );
 
+    const approver = await this.buildApproverContext(
+      workspaceId,
+      approverUserWorkspaceId,
+    );
+
     // Validate every selected item before writing anything. One stale baseline
     // aborts the batch — a partially applied change set is worse than none.
     const conflictedItemIds: string[] = [];
 
     for (const item of selectedItems) {
-      const hasConflict = await this.hasBaselineConflict(item, workspaceId);
+      const hasConflict = await this.hasBaselineConflict(item, approver);
 
       if (hasConflict) {
         conflictedItemIds.push(item.id);
@@ -103,83 +203,86 @@ export class ProposalExecutionService {
     }
 
     if (conflictedItemIds.length > 0) {
-      await this.proposalItemRepository.save(
-        selectedItems.map((item) => ({
-          ...item,
-          status: ProposalItemStatus.CONFLICTED,
-        })),
+      // Only the items that actually went stale are marked, so the reviewer
+      // sees exactly what changed. The proposal returns to PENDING so the
+      // clean items stay reviewable.
+      await this.proposalItemRepository.update(
+        { id: In(conflictedItemIds) },
+        { status: ProposalItemStatus.CONFLICTED },
+      );
+
+      await this.proposalRepository.update(
+        { id: proposalId, workspaceId, status: ProposalStatus.APPLYING },
+        { status: ProposalStatus.PENDING },
       );
 
       return {
         proposalId,
         appliedItemIds: [],
-        conflictedItemIds: selectedItems.map((item) => item.id),
+        conflictedItemIds,
         failedItemIds: [],
         aborted: true,
       };
     }
 
-    const roleId = await this.userRoleService.getRoleIdForUserWorkspace({
-      userWorkspaceId: approverUserWorkspaceId,
-      workspaceId,
-    });
-
-    const rolePermissionConfig: RolePermissionConfig = { unionOf: [roleId] };
     const appliedItemIds: string[] = [];
     const failedItemIds: string[] = [];
 
     // Record writes first. An outbound send cannot be undone, so it must never
     // fire ahead of a record write that might still fail.
-    const isOutboundSend = (item: ProposalItemEntity) =>
+    const isExternalCall = (item: ProposalItemEntity) =>
       item.actionType === ProposalActionType.SEND_EMAIL ||
-      item.actionType === ProposalActionType.CREATE_CALENDAR_EVENT;
+      item.actionType === ProposalActionType.CREATE_CALENDAR_EVENT ||
+      item.actionType === ProposalActionType.STATIC_TOOL;
 
     const orderedItems = [
-      ...selectedItems.filter((item) => !isOutboundSend(item)),
-      ...selectedItems.filter(isOutboundSend),
+      ...selectedItems.filter((item) => !isExternalCall(item)),
+      ...selectedItems.filter(isExternalCall),
     ];
 
     for (const item of orderedItems) {
-      const output = await this.applyItem(
-        item,
-        workspaceId,
-        rolePermissionConfig,
-        approverUserWorkspaceId,
-      );
+      const output = await this.applyItem(item, approver);
 
       if (output.success) {
         appliedItemIds.push(item.id);
-        await this.proposalItemRepository.save({
-          ...item,
-          status: ProposalItemStatus.APPLIED,
-        });
+        await this.proposalItemRepository.update(
+          { id: item.id },
+          {
+            status: ProposalItemStatus.APPLIED,
+            resultRecordId: this.extractResultRecordId(output),
+          },
+        );
       } else {
         failedItemIds.push(item.id);
-        await this.proposalItemRepository.save({
-          ...item,
-          status: ProposalItemStatus.FAILED,
-          error: output.error ?? output.message,
-        });
+        await this.proposalItemRepository.update(
+          { id: item.id },
+          {
+            status: ProposalItemStatus.FAILED,
+            error: output.error ?? output.message,
+          },
+        );
       }
     }
 
-    const unselectedItems = items.filter(
-      (item) => !selectedItemIds.includes(item.id),
-    );
+    const unselectedItemIds = items
+      .filter((item) => !selectedItemIds.includes(item.id))
+      .map((item) => item.id);
 
-    for (const item of unselectedItems) {
-      await this.proposalItemRepository.save({
-        ...item,
-        status: ProposalItemStatus.REJECTED,
-      });
+    if (unselectedItemIds.length > 0) {
+      await this.proposalItemRepository.update(
+        { id: In(unselectedItemIds) },
+        { status: ProposalItemStatus.REJECTED },
+      );
     }
 
-    await this.proposalRepository.save({
-      ...proposal,
-      status: ProposalStatus.APPLIED,
-      reviewedByUserWorkspaceId: approverUserWorkspaceId,
-      reviewedAt: new Date(),
-    });
+    await this.proposalRepository.update(
+      { id: proposalId, workspaceId },
+      {
+        status: this.resolveFinalStatus(appliedItemIds, failedItemIds),
+        reviewedByUserWorkspaceId: approverUserWorkspaceId,
+        reviewedAt: new Date(),
+      },
+    );
 
     return {
       proposalId,
@@ -190,6 +293,30 @@ export class ProposalExecutionService {
     };
   }
 
+  // The stored status must describe what actually happened: a batch whose every
+  // item failed is not APPLIED, and one nobody selected is REJECTED.
+  private resolveFinalStatus(
+    appliedItemIds: string[],
+    failedItemIds: string[],
+  ): ProposalStatus {
+    if (failedItemIds.length === 0) {
+      return appliedItemIds.length > 0
+        ? ProposalStatus.APPLIED
+        : ProposalStatus.REJECTED;
+    }
+
+    return appliedItemIds.length > 0
+      ? ProposalStatus.PARTIALLY_APPLIED
+      : ProposalStatus.FAILED;
+  }
+
+  private extractResultRecordId(output: ToolOutput): string | null {
+    const record = (output.result as { record?: { id?: unknown } } | undefined)
+      ?.record;
+
+    return typeof record?.id === 'string' ? record.id : null;
+  }
+
   async reject(params: {
     proposalId: string;
     workspaceId: string;
@@ -197,40 +324,105 @@ export class ProposalExecutionService {
   }): Promise<ApprovalResult> {
     const { proposalId, workspaceId, approverUserWorkspaceId } = params;
 
-    const proposal = await this.proposalRepository.findOne({
-      where: { id: proposalId, workspaceId },
-    });
+    const rejection = await this.proposalRepository.update(
+      { id: proposalId, workspaceId, status: ProposalStatus.PENDING },
+      {
+        status: ProposalStatus.REJECTED,
+        reviewedByUserWorkspaceId: approverUserWorkspaceId,
+        reviewedAt: new Date(),
+      },
+    );
 
-    if (!isDefined(proposal) || proposal.status !== ProposalStatus.PENDING) {
+    if (rejection.affected === 0) {
       return this.emptyResult(proposalId, true);
     }
 
-    const items = await this.proposalItemRepository.find({
-      where: { proposalId, status: In([ProposalItemStatus.PENDING]) },
-    });
-
-    for (const item of items) {
-      await this.proposalItemRepository.save({
-        ...item,
-        status: ProposalItemStatus.REJECTED,
-      });
-    }
-
-    await this.proposalRepository.save({
-      ...proposal,
-      status: ProposalStatus.REJECTED,
-      reviewedByUserWorkspaceId: approverUserWorkspaceId,
-      reviewedAt: new Date(),
-    });
+    // CONFLICTED items are rejectable too: an aborted batch left them in a
+    // terminal-looking state that reject() previously could never clear.
+    await this.proposalItemRepository.update(
+      {
+        proposalId,
+        status: In([
+          ProposalItemStatus.PENDING,
+          ProposalItemStatus.CONFLICTED,
+        ]),
+      },
+      { status: ProposalItemStatus.REJECTED },
+    );
 
     return this.emptyResult(proposalId, false);
+  }
+
+  // Runs as the approver so object and field permissions are enforced by the
+  // ordinary ORM path, and so createdBy/updatedBy names the human who approved.
+  private async buildApproverContext(
+    workspaceId: string,
+    approverUserWorkspaceId: string,
+  ): Promise<ApproverContext> {
+    const userWorkspace = await this.userWorkspaceRepository.findOne({
+      where: { id: approverUserWorkspaceId, workspaceId },
+    });
+
+    if (!isDefined(userWorkspace)) {
+      throw new Error(
+        `Approver user workspace ${approverUserWorkspaceId} not found`,
+      );
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { id: userWorkspace.userId },
+    });
+
+    if (!isDefined(user)) {
+      throw new Error(`Approver user ${userWorkspace.userId} not found`);
+    }
+
+    const { flatWorkspaceMemberMaps } =
+      await this.workspaceCacheService.getOrRecompute(workspaceId, [
+        'flatWorkspaceMemberMaps',
+      ]);
+
+    const workspaceMemberId = flatWorkspaceMemberMaps.idByUserId[user.id];
+    const workspaceMember = isDefined(workspaceMemberId)
+      ? flatWorkspaceMemberMaps.byId[workspaceMemberId]
+      : undefined;
+
+    if (!isDefined(workspaceMemberId) || !isDefined(workspaceMember)) {
+      throw new Error(`Approver workspace member not found for user ${user.id}`);
+    }
+
+    const roleId = await this.userRoleService.getRoleIdForUserWorkspace({
+      userWorkspaceId: approverUserWorkspaceId,
+      workspaceId,
+    });
+
+    return {
+      authContext: buildUserAuthContext({
+        workspace: { id: workspaceId } as FlatWorkspace,
+        userWorkspaceId: approverUserWorkspaceId,
+        user: fromUserEntityToFlat(user),
+        workspaceMemberId,
+        workspaceMember,
+      }),
+      rolePermissionConfig: { unionOf: [roleId] },
+      actorMetadata: {
+        source: FieldActorSource.MANUAL,
+        workspaceMemberId,
+        name: [user.firstName, user.lastName].filter(Boolean).join(' '),
+        context: {},
+      },
+      workspaceId,
+      userId: user.id,
+      userWorkspaceId: approverUserWorkspaceId,
+      roleId,
+    };
   }
 
   // Compares the values captured when the proposal was made against the record
   // as it stands now. A human edit in between must not be silently overwritten.
   private async hasBaselineConflict(
     item: ProposalItemEntity,
-    workspaceId: string,
+    approver: ApproverContext,
   ): Promise<boolean> {
     const baselineFieldNames = Object.keys(item.baseline);
 
@@ -248,8 +440,10 @@ export class ProposalExecutionService {
       limit: 1,
       select: baselineFieldNames,
       shouldBuildEffectiveSelectFields: true,
-      authContext: buildSystemAuthContext(workspaceId),
-      rolePermissionConfig: { shouldBypassPermissionChecks: true },
+      authContext: approver.authContext,
+      // Same role config on both sides of the comparison. Re-reading under a
+      // wider config than the baseline was captured with flips the comparison.
+      rolePermissionConfig: approver.rolePermissionConfig,
     });
 
     const record = (output.result as { records?: Record<string, unknown>[] })
@@ -268,12 +462,14 @@ export class ProposalExecutionService {
 
   private async applyItem(
     item: ProposalItemEntity,
-    workspaceId: string,
-    rolePermissionConfig: RolePermissionConfig,
-    approverUserWorkspaceId: string,
+    approver: ApproverContext,
   ): Promise<ToolOutput> {
-    const authContext = buildSystemAuthContext(workspaceId);
     const objectName = item.objectNameSingular ?? '';
+    const { authContext, rolePermissionConfig, actorMetadata } = approver;
+    const records = Array.isArray(item.payload.records)
+      ? (item.payload.records as Record<string, unknown>[])
+      : [];
+    const filter = (item.payload.filter ?? {}) as Record<string, unknown>;
 
     switch (item.actionType) {
       case ProposalActionType.CREATE_RECORD:
@@ -282,6 +478,27 @@ export class ProposalExecutionService {
           objectRecord: item.payload,
           authContext,
           rolePermissionConfig,
+          createdBy: actorMetadata,
+          slimResponse: true,
+        });
+
+      case ProposalActionType.CREATE_RECORDS:
+        return this.createManyRecordsService.execute({
+          objectName,
+          objectRecords: records,
+          authContext,
+          rolePermissionConfig,
+          createdBy: actorMetadata,
+          slimResponse: true,
+        });
+
+      case ProposalActionType.UPSERT_RECORDS:
+        return this.upsertManyRecordsService.execute({
+          objectName,
+          objectRecords: records,
+          authContext,
+          rolePermissionConfig,
+          createdBy: actorMetadata,
           slimResponse: true,
         });
 
@@ -290,6 +507,17 @@ export class ProposalExecutionService {
           objectName,
           objectRecordId: item.recordId ?? '',
           objectRecord: item.payload,
+          authContext,
+          rolePermissionConfig,
+          updatedBy: actorMetadata,
+          slimResponse: true,
+        });
+
+      case ProposalActionType.UPDATE_RECORDS:
+        return this.updateManyRecordsService.execute({
+          objectName,
+          filter,
+          data: (item.payload.data ?? {}) as Record<string, unknown>,
           authContext,
           rolePermissionConfig,
           slimResponse: true,
@@ -304,20 +532,117 @@ export class ProposalExecutionService {
           soft: true,
         });
 
+      case ProposalActionType.DELETE_RECORDS:
+        return this.deleteManyRecordsService.execute({
+          objectName,
+          filter,
+          authContext,
+          rolePermissionConfig,
+        });
+
       // Outbound sends are external calls that cannot be rolled back, so the
       // apply loop orders them after every record write in the batch.
       case ProposalActionType.SEND_EMAIL:
-        return this.sendEmailTool.execute(item.payload as never, {
-          workspaceId,
-          userWorkspaceId: approverUserWorkspaceId,
-        });
-
       case ProposalActionType.CREATE_CALENDAR_EVENT:
-        return this.createCalendarEventTool.execute(item.payload as never, {
-          workspaceId,
-          userWorkspaceId: approverUserWorkspaceId,
-        });
+        return this.applyOutboundSend(item, approver);
+
+      case ProposalActionType.STATIC_TOOL:
+        return this.applyStaticTool(item, approver);
     }
+  }
+
+  // The dispatch path re-checks tool permissions before every static tool.
+  // Approval must do the same, or an approver without the tool permission
+  // dispatches a send the agent proposed.
+  private async applyOutboundSend(
+    item: ProposalItemEntity,
+    approver: ApproverContext,
+  ): Promise<ToolOutput> {
+    const flag = OUTBOUND_TOOL_PERMISSION_FLAGS[item.actionType];
+
+    if (isDefined(flag)) {
+      const isPermitted = await this.permissionsService.hasToolPermission(
+        approver.rolePermissionConfig,
+        approver.workspaceId,
+        flag,
+      );
+
+      if (!isPermitted) {
+        return {
+          success: false,
+          message: 'Approver lacks permission for this tool',
+          error: `The approver does not hold the ${flag} permission required to execute this item.`,
+        };
+      }
+    }
+
+    const tool =
+      item.actionType === ProposalActionType.SEND_EMAIL
+        ? this.sendEmailTool
+        : this.createCalendarEventTool;
+
+    // These tools accept no idempotency key; the single-claim guard on the
+    // proposal is what prevents a double send.
+    return tool.execute(item.payload as never, {
+      workspaceId: approver.workspaceId,
+      userId: approver.userId,
+      userWorkspaceId: approver.userWorkspaceId,
+    });
+  }
+
+  private async applyStaticTool(
+    item: ProposalItemEntity,
+    approver: ApproverContext,
+  ): Promise<ToolOutput> {
+    if (!isDefined(item.toolId) || !isDefined(item.toolCategory)) {
+      return {
+        success: false,
+        message: 'Static tool item is missing its tool identity',
+        error: `Proposal item ${item.id} cannot be replayed: no toolId/toolCategory was recorded.`,
+      };
+    }
+
+    const providers = this.moduleRef.get<ToolProvider[]>(TOOL_PROVIDERS, {
+      strict: false,
+    });
+
+    const provider = providers.find(
+      (candidate) => candidate.category === item.toolCategory,
+    );
+
+    if (!isDefined(provider)) {
+      return {
+        success: false,
+        message: 'No provider for this proposed tool',
+        error: `No tool provider is registered for category "${item.toolCategory}".`,
+      };
+    }
+
+    const context: ToolProviderContext = {
+      workspaceId: approver.workspaceId,
+      roleId: approver.roleId,
+      rolePermissionConfig: approver.rolePermissionConfig,
+      authContext: approver.authContext,
+      actorContext: approver.actorMetadata,
+      userId: approver.userId,
+      userWorkspaceId: approver.userWorkspaceId,
+    };
+
+    // The same availability re-check the dispatch path performs, evaluated
+    // against the approver rather than the agent that proposed the call.
+    if (!(await provider.isAvailable(context))) {
+      return {
+        success: false,
+        message: `Tool "${item.toolId}" is not available to the approver`,
+        error: `Tool "${item.toolId}" is not available in the approver's context.`,
+      };
+    }
+
+    this.logger.log(
+      `Replaying approved static tool ${item.toolId} for proposal item ${item.id}`,
+    );
+
+    return provider.executeStaticTool(item.toolId, item.payload, context);
   }
 
   private emptyResult(proposalId: string, aborted: boolean): ApprovalResult {

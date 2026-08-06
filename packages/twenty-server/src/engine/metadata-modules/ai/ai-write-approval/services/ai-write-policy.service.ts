@@ -7,12 +7,15 @@ import { KeyValuePairService } from 'src/engine/core-modules/key-value-pair/key-
 import {
   AI_WRITE_APPROVAL_POLICY_KEY,
   DEFAULT_AI_WRITE_POLICY,
+  isAiWriteMode,
   type AiWriteMode,
   type AiWritePolicy,
   type AiWritePolicyKeyValueTypeMap,
+  type AiWritePolicyTarget,
 } from 'src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type';
 
-// Most restrictive mode wins when several keys apply to one write.
+// Only used to combine the per-field results of one write. Specificity, not
+// severity, decides which override applies to a given field.
 const MODE_SEVERITY: Record<AiWriteMode, number> = {
   AUTO: 0,
   PROPOSE: 1,
@@ -40,7 +43,24 @@ export class AiWritePolicyService {
       ? (result[0] as { value?: AiWritePolicy } | undefined)?.value
       : result;
 
-    return isDefined(stored) ? stored : DEFAULT_AI_WRITE_POLICY;
+    return isDefined(stored)
+      ? this.sanitize(stored as Partial<AiWritePolicy>)
+      : DEFAULT_AI_WRITE_POLICY;
+  }
+
+  // A policy blob written before input validation existed can hold values that
+  // are not modes. Drop them rather than let `undefined` leak into comparisons.
+  private sanitize(stored: Partial<AiWritePolicy>): AiWritePolicy {
+    const overrides = Object.entries(stored.overrides ?? {}).filter(
+      (entry): entry is [string, AiWriteMode] => isAiWriteMode(entry[1]),
+    );
+
+    return {
+      default: isAiWriteMode(stored.default)
+        ? stored.default
+        : DEFAULT_AI_WRITE_POLICY.default,
+      overrides: Object.fromEntries(overrides),
+    };
   }
 
   async setPolicy(workspaceId: string, policy: AiWritePolicy): Promise<void> {
@@ -53,20 +73,31 @@ export class AiWritePolicyService {
     });
   }
 
-  resolveMode(policy: AiWritePolicy, keys: string[]): AiWriteMode {
-    // Seeding the reduce with policy.default would let the default outrank a
-    // less restrictive override (a lone 'AUTO' override must stay 'AUTO'), so
-    // the default only applies when a key has no override, or when no keys
-    // are supplied at all.
-    const modes =
-      keys.length === 0
-        ? [policy.default]
-        : keys.map((key) => policy.overrides[key] ?? policy.default);
+  // Most specific match wins: `<object>.<field>`, then `<object>`, then the
+  // workspace default. A write touching several fields resolves each field
+  // independently and the most restrictive result governs the whole call.
+  resolveMode(policy: AiWritePolicy, target: AiWritePolicyTarget): AiWriteMode {
+    if (target.kind === 'tool') {
+      return policy.overrides[target.toolId] ?? policy.default;
+    }
 
-    return modes.reduce((mostRestrictive, mode) =>
-      MODE_SEVERITY[mode] > MODE_SEVERITY[mostRestrictive]
-        ? mode
-        : mostRestrictive,
-    );
+    const { objectNameSingular, fieldNames } = target;
+
+    if (fieldNames.length === 0) {
+      return policy.overrides[objectNameSingular] ?? policy.default;
+    }
+
+    return fieldNames
+      .map(
+        (fieldName) =>
+          policy.overrides[`${objectNameSingular}.${fieldName}`] ??
+          policy.overrides[objectNameSingular] ??
+          policy.default,
+      )
+      .reduce((mostRestrictive, mode) =>
+        MODE_SEVERITY[mode] > MODE_SEVERITY[mostRestrictive]
+          ? mode
+          : mostRestrictive,
+      );
   }
 }
