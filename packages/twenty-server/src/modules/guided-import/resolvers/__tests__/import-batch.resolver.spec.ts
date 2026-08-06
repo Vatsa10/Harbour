@@ -1,38 +1,27 @@
-import { Test, type TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
-
-import { ImportBatchEntity } from 'src/modules/guided-import/entities/import-batch.entity';
-import { ImportRowEntity } from 'src/modules/guided-import/entities/import-row.entity';
 import { ImportBatchResolver } from 'src/modules/guided-import/resolvers/import-batch.resolver';
 
+// Instantiated directly (not via Test.createTestingModule) because the
+// resolver is class-decorated with SettingsPermissionGuard, which Nest's
+// TestingModule eagerly tries to resolve dependencies for even though guards
+// never run when a resolver method is invoked directly, same pattern as
+// workspace-setup-chat.resolver.spec.ts.
 describe('ImportBatchResolver', () => {
   let resolver: ImportBatchResolver;
 
   const importBatchRepository = { save: jest.fn(), findOne: jest.fn() };
   const importRowRepository = { insert: jest.fn() };
 
-  beforeEach(async () => {
+  beforeEach(() => {
     jest.clearAllMocks();
     importBatchRepository.save.mockImplementation(async (entity) => ({
       ...entity,
       id: 'batch-1',
     }));
 
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        ImportBatchResolver,
-        {
-          provide: getRepositoryToken(ImportBatchEntity),
-          useValue: importBatchRepository,
-        },
-        {
-          provide: getRepositoryToken(ImportRowEntity),
-          useValue: importRowRepository,
-        },
-      ],
-    }).compile();
-
-    resolver = module.get<ImportBatchResolver>(ImportBatchResolver);
+    resolver = new ImportBatchResolver(
+      importBatchRepository as never,
+      importRowRepository as never,
+    );
   });
 
   it('should create a PENDING batch and stage every row', async () => {
