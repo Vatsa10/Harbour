@@ -142,9 +142,24 @@ export default defineObject({
       icon: 'IconMessage',
       defaultValue: `'${TicketChannel.EMAIL}'`,
       options: [
-        { value: TicketChannel.EMAIL, label: 'Email', position: 0, color: 'blue' },
-        { value: TicketChannel.CHAT, label: 'Chat', position: 1, color: 'green' },
-        { value: TicketChannel.PHONE, label: 'Phone', position: 2, color: 'orange' },
+        {
+          value: TicketChannel.EMAIL,
+          label: 'Email',
+          position: 0,
+          color: 'blue',
+        },
+        {
+          value: TicketChannel.CHAT,
+          label: 'Chat',
+          position: 1,
+          color: 'green',
+        },
+        {
+          value: TicketChannel.PHONE,
+          label: 'Phone',
+          position: 2,
+          color: 'orange',
+        },
         {
           value: TicketChannel.WEB_FORM,
           label: 'Web form',
