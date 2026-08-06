@@ -1,3 +1,4 @@
+import { buildToolFailure } from 'src/engine/core-modules/tool/utils/build-tool-failure.util';
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
 
 export const wrapWithErrorHandler = (
@@ -15,6 +16,13 @@ export const wrapWithErrorHandler = (
         success: false,
         message: `Failed to execute ${toolName}`,
         error: errorMessage,
+        failure: buildToolFailure({
+          code: 'INTERNAL_ERROR',
+          message: `Failed to execute ${toolName}: ${errorMessage}`,
+          hint: 'This looks like a transient failure. Retry once; if it persists, tell the user what you were trying to do.',
+          retryable: true,
+          allowedActions: ['retry'],
+        }),
       };
     }
   };

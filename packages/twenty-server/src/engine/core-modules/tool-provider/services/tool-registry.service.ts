@@ -18,6 +18,10 @@ import { findSimilarToolNames } from 'src/engine/core-modules/tool-provider/util
 import { wrapWithErrorHandler } from 'src/engine/core-modules/tool-provider/utils/tool-error.util';
 import { ToolOutputSpillService } from 'src/engine/core-modules/tool/services/tool-output-spill.service';
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
+import {
+  buildToolFailure,
+  toFailedToolOutput,
+} from 'src/engine/core-modules/tool/utils/build-tool-failure.util';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 
 @Injectable()
@@ -293,16 +297,22 @@ export class ToolRegistryService {
           toolName,
           index.map((indexEntry) => indexEntry.name),
         );
-        const suggestionHint =
-          similarToolNames.length > 0
-            ? ` Did you mean: ${similarToolNames.join(', ')}?`
-            : '';
 
-        return {
-          success: false,
-          message: `Tool "${toolName}" not found`,
-          error: `Tool "${toolName}" not found.${suggestionHint} Use learn_tools to discover available tools.`,
-        };
+        return toFailedToolOutput(
+          buildToolFailure({
+            code: 'UNKNOWN_TOOL',
+            message: `Tool "${toolName}" not found.`,
+            hint:
+              similarToolNames.length > 0
+                ? `Did you mean: ${similarToolNames.join(', ')}? Call learn_tools with the correct name, or call get_tool_catalog to browse all tools.`
+                : 'Call get_tool_catalog to discover available tools.',
+            retryable: false,
+            allowedActions:
+              similarToolNames.length > 0
+                ? similarToolNames
+                : ['get_tool_catalog'],
+          }),
+        );
       }
 
       const result = await this.toolExecutorService.dispatch(
@@ -328,11 +338,15 @@ export class ToolRegistryService {
 
       this.logger.error(`Error executing tool "${toolName}": ${errorMessage}`);
 
-      return {
-        success: false,
-        message: `Failed to execute ${toolName}`,
-        error: errorMessage,
-      };
+      return toFailedToolOutput(
+        buildToolFailure({
+          code: 'INTERNAL_ERROR',
+          message: `Failed to execute ${toolName}: ${errorMessage}`,
+          hint: 'This looks like a transient failure. Retry once; if it persists, tell the user what you were trying to do.',
+          retryable: true,
+          allowedActions: ['retry'],
+        }),
+      );
     }
   }
 

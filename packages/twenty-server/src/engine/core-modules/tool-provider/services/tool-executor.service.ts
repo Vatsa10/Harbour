@@ -85,17 +85,7 @@ export class ToolExecutorService {
     }
 
     if (decision.kind === 'FORBID') {
-      return toFailedToolOutput(
-        buildToolFailure({
-          code: 'FORBIDDEN_BY_POLICY',
-          message: decision.message,
-          // Retrying a forbidden write can only fail again; the unblock is a
-          // human policy change, so say that instead of letting the agent loop.
-          hint: 'This workspace forbids this action for AI. Do not retry. Report it to the user and ask a workspace admin to change the AI write policy.',
-          retryable: false,
-          allowedActions: ['get_tool_catalog'],
-        }),
-      );
+      return toFailedToolOutput(decision.failure);
     }
 
     switch (descriptor.executionRef.kind) {

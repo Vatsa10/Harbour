@@ -127,10 +127,16 @@ describe('ToolExecutorService gating', () => {
     expect(result).toEqual(proposedOutput);
   });
 
-  it('should return an error output when the gate forbids the write', async () => {
+  it('should return a structured failure when the gate forbids the write', async () => {
     gateService.evaluate.mockResolvedValue({
       kind: 'FORBID',
-      message: 'Not permitted',
+      failure: {
+        code: 'FORBIDDEN_BY_POLICY',
+        message: 'Not permitted',
+        hint: 'Ask a workspace admin.',
+        retryable: false,
+        allowedActions: ['ask_admin_to_change_policy'],
+      },
     });
 
     const result = await service.dispatch(
@@ -141,10 +147,10 @@ describe('ToolExecutorService gating', () => {
 
     expect(updateRecordService.execute).not.toHaveBeenCalled();
     expect(result.success).toBe(false);
-    expect(result.message).toBe('Not permitted');
-    expect(result.error).toContain('Not permitted');
     expect(result.failure?.code).toBe('FORBIDDEN_BY_POLICY');
-    expect(result.failure?.retryable).toBe(false);
+    // error carries message + hint per toFailedToolOutput, not the bare message
+    expect(result.error).toBe('Not permitted Ask a workspace admin.');
+    expect(result.message).toBe('Not permitted');
   });
 
   it('should still execute reads', async () => {
