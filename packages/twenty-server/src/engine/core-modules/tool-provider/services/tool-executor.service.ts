@@ -35,6 +35,7 @@ import { type ToolExecutionRef } from 'src/engine/core-modules/tool-provider/typ
 import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types/tool-index-entry.type';
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
+import { ProposalGateService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 @Injectable()
@@ -57,6 +58,7 @@ export class ToolExecutorService {
     private readonly workspaceCacheService: WorkspaceCacheService,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
+    private readonly proposalGateService: ProposalGateService,
   ) {}
 
   async dispatch(
@@ -65,6 +67,26 @@ export class ToolExecutorService {
     context: ToolProviderContext,
   ): Promise<ToolOutput> {
     const safeArgs = args ?? {};
+
+    // Every AI write in the product funnels through here, so the approval gate
+    // sits above the tool layer — a new write tool is gated by default.
+    const decision = await this.proposalGateService.evaluate({
+      descriptor,
+      args: safeArgs,
+      context,
+    });
+
+    if (decision.kind === 'PROPOSED') {
+      return decision.output;
+    }
+
+    if (decision.kind === 'FORBID') {
+      return {
+        success: false,
+        message: decision.message,
+        error: decision.message,
+      };
+    }
 
     switch (descriptor.executionRef.kind) {
       case 'database_crud':

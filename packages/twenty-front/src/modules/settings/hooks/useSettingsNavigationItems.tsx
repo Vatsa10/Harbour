@@ -19,6 +19,7 @@ import {
   IconApps,
   IconAt,
   IconCalendarEvent,
+  IconCheckbox,
   IconColorSwatch,
   type IconComponent,
   IconCurrencyDollar,
@@ -172,6 +173,12 @@ const useSettingsNavigationItems = (): SettingsNavigationSection[] => {
           path: SettingsPath.AI,
           Icon: IconSparkles,
           isHidden: !permissionMap[PermissionFlagType.AI_SETTINGS],
+        },
+        {
+          label: t`AI approvals`,
+          path: SettingsPath.AiApprovals,
+          Icon: IconCheckbox,
+          isHidden: !permissionMap[PermissionFlagType.AI],
         },
         {
           label: t`Communication`,

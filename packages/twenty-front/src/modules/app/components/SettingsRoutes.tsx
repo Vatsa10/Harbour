@@ -250,6 +250,12 @@ const SettingsAI = lazy(() =>
   })),
 );
 
+const SettingsAiApprovals = lazy(() =>
+  import('~/pages/settings/ai/SettingsAiApprovals').then((module) => ({
+    default: module.SettingsAiApprovals,
+  })),
+);
+
 const SettingsAiUsageUserDetail = lazy(() =>
   import('~/pages/settings/ai/SettingsAiUsageUserDetail').then((module) => ({
     default: module.SettingsAiUsageUserDetail,
@@ -762,6 +768,20 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
         <Route
           path={SettingsPath.LegalDpaNew}
           element={<SettingsLegalDpaNew />}
+        />
+      </Route>
+      {/* Reviewing proposals needs the AI permission, not AI settings admin —
+          it must match the server guard on ProposalResolver. */}
+      <Route
+        element={
+          <SettingsProtectedRouteWrapper
+            settingsPermission={PermissionFlagType.AI}
+          />
+        }
+      >
+        <Route
+          path={SettingsPath.AiApprovals}
+          element={<SettingsAiApprovals />}
         />
       </Route>
       <Route

@@ -46,6 +46,7 @@ export enum SettingsPath {
   AiNewSkill = 'ai/new-skill',
   AiSkillDetail = 'ai/skills/:skillId',
   AiToolDetail = 'ai/tools/:toolIdentifier',
+  AiApprovals = 'ai/approvals',
   Applications = 'applications',
   ApplicationDetail = 'applications/:applicationId',
   ApplicationConnectionDetail = 'applications/:applicationId/connections/:connectedAccountId',
