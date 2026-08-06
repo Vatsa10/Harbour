@@ -32,11 +32,11 @@ export type CreateAgentTaskParams = {
 @Injectable()
 export class AgentTaskService {
   constructor(
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     // The lease claim needs a query builder for FOR UPDATE SKIP LOCKED and a
     // compare-and-set guard, which the scoped wrapper does not express. Every
     // query below therefore filters workspaceId explicitly — see the
     // `"workspaceId" = :workspaceId` clause on each builder.
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(AgentTaskEntity)
     private readonly agentTaskRepository: Repository<AgentTaskEntity>,
   ) {}
