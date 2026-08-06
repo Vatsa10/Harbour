@@ -140,11 +140,13 @@ export class AgentAsyncExecutorService {
     agentRoleId,
     authContext,
     actorContext,
+    threadId,
   }: {
     agent: AgentEntity;
     agentRoleId: string;
     authContext?: WorkspaceAuthContext;
     actorContext?: ActorMetadata;
+    threadId?: string;
   }): Promise<ToolSet> {
     const { userId, userWorkspaceId } = this.resolveUserIdentity(authContext);
 
@@ -157,6 +159,9 @@ export class AgentAsyncExecutorService {
       actorContext,
       userId,
       userWorkspaceId,
+      // Batches every write this run proposes into one Proposal, reusing the
+      // field chat already batches on rather than inventing a second one.
+      threadId,
     };
 
     return this.toolRegistry.getToolsByCategories(toolProviderContext, {
@@ -175,11 +180,13 @@ export class AgentAsyncExecutorService {
     agentRoleId,
     authContext,
     actorContext,
+    threadId,
   }: {
     agent: AgentEntity;
     agentRoleId: string;
     authContext?: WorkspaceAuthContext;
     actorContext?: ActorMetadata;
+    threadId?: string;
   }): Promise<{ tools: ToolSet; catalogSection: string }> {
     const { userId, userWorkspaceId } = this.resolveUserIdentity(authContext);
 
@@ -190,6 +197,9 @@ export class AgentAsyncExecutorService {
       actorContext,
       userId,
       userWorkspaceId,
+      // The research worker uses this lazy path, so dropping threadId here
+      // would scatter one run's writes across a proposal per tool call.
+      threadId,
     };
 
     const fullCatalog = await this.toolRegistry.buildToolIndex(
@@ -240,6 +250,8 @@ export class AgentAsyncExecutorService {
     userWorkspaceId,
     operationType = UsageOperationType.AI_WORKFLOW_TOKEN,
     toolLoadingStrategy = 'preload',
+    threadId,
+    maxSteps,
   }: {
     agent: AgentEntity | null;
     userPrompt: string;
@@ -250,6 +262,12 @@ export class AgentAsyncExecutorService {
     userWorkspaceId?: string | null;
     operationType?: UsageOperationType;
     toolLoadingStrategy?: AgentToolLoadingStrategy;
+    // Correlates a run's tool calls into one Proposal. Optional: chat and
+    // workflow nodes pass nothing and behave exactly as before.
+    threadId?: string;
+    // A research task's step budget. Falls back to the global cap, so an
+    // unbudgeted caller is unaffected.
+    maxSteps?: number;
   }): Promise<AgentExecutionResult> {
     await this.billingUsageService.hasAvailableCreditsOrThrow(workspaceId);
 
@@ -306,6 +324,7 @@ export class AgentAsyncExecutorService {
               agentRoleId,
               authContext,
               actorContext,
+              threadId,
             });
 
             registryTools = lazyToolset.tools;
@@ -316,6 +335,7 @@ export class AgentAsyncExecutorService {
               agentRoleId,
               authContext,
               actorContext,
+              threadId,
             });
           }
         }
@@ -350,8 +370,14 @@ export class AgentAsyncExecutorService {
         model: registeredModel.model,
         prompt: userPrompt,
         stopWhen: (step) =>
-          stepCountIs(AGENT_CONFIG.MAX_STEPS)(step) ||
-          hasNoMoreAvailableCredits,
+          // A task-supplied budget may only tighten the global cap, never
+          // raise it — otherwise a scheduled task could outspend the ceiling.
+          stepCountIs(
+            Math.min(
+              maxSteps ?? AGENT_CONFIG.MAX_STEPS,
+              AGENT_CONFIG.MAX_STEPS,
+            ),
+          )(step) || hasNoMoreAvailableCredits,
         providerOptions,
         experimental_telemetry: AI_TELEMETRY_CONFIG,
         experimental_onToolCallFinish: (event) => {

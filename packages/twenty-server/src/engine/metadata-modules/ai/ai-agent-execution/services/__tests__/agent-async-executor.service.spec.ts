@@ -2,6 +2,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { generateText } from 'ai';
+import { createExecuteToolTool } from 'src/engine/core-modules/tool-provider/tools';
 import { ToolCategory } from 'twenty-shared/ai';
 
 import { BillingUsageService } from 'src/engine/core-modules/billing/services/billing-usage.service';
@@ -19,6 +20,21 @@ import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models
 import { NativeToolBinderService } from 'src/engine/metadata-modules/ai/ai-models/services/native-tool-binder.service';
 import { RoleTargetEntity } from 'src/engine/metadata-modules/role-target/role-target.entity';
 import { getWorkspaceScopedRepositoryToken } from 'src/engine/twenty-orm/workspace-scoped-repository/get-workspace-scoped-repository-token.util';
+
+// Captures the ToolContext the lazy path hands the meta-tools. Without this
+// the lazy branch is untestable from outside, and it is the branch the
+// research worker actually uses.
+jest.mock('src/engine/core-modules/tool-provider/tools', () => {
+  const actual = jest.requireActual(
+    'src/engine/core-modules/tool-provider/tools',
+  );
+
+  return {
+    ...actual,
+    createLearnToolsTool: jest.fn(() => ({ description: 'learn' })),
+    createExecuteToolTool: jest.fn(() => ({ description: 'execute' })),
+  };
+});
 
 jest.mock('ai', () => ({
   ...jest.requireActual('ai'),
@@ -176,6 +192,39 @@ describe('AgentAsyncExecutorService — workflow agent role-scoped tool resoluti
     expect(toolRegistry.buildToolIndex).not.toHaveBeenCalled();
   });
 
+  it('threads threadId into the preloaded tool context so a run batches its writes into one proposal', async () => {
+    roleTargetRepository.findOne.mockResolvedValueOnce({ roleId: agentRoleId });
+
+    await service.executeAgent({
+      agent: buildAgent(),
+      userPrompt: 'test',
+      baseSystemPrompt: 'base system prompt',
+      workspaceId,
+      threadId: 'run-1',
+    });
+
+    expect(toolRegistry.getToolsByCategories).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 'run-1' }),
+      expect.anything(),
+    );
+  });
+
+  it('leaves threadId undefined when the caller does not supply one', async () => {
+    roleTargetRepository.findOne.mockResolvedValueOnce({ roleId: agentRoleId });
+
+    await service.executeAgent({
+      agent: buildAgent(),
+      userPrompt: 'test',
+      baseSystemPrompt: 'base system prompt',
+      workspaceId,
+    });
+
+    const [toolProviderContext] =
+      toolRegistry.getToolsByCategories.mock.calls[0];
+
+    expect(toolProviderContext.threadId).toBeUndefined();
+  });
+
   it('loads tools lazily via a category-scoped catalog when toolLoadingStrategy is "lazy" (runAgent)', async () => {
     roleTargetRepository.findOne.mockResolvedValueOnce({ roleId: agentRoleId });
     toolRegistry.buildToolIndex.mockResolvedValueOnce([
@@ -209,6 +258,28 @@ describe('AgentAsyncExecutorService — workflow agent role-scoped tool resoluti
     expect(system).toContain('person');
     expect(system).not.toContain('Workflow Tools');
     expect(system).not.toContain('create_one_workflow');
+  });
+
+  it('threads threadId into the lazy tool context, the path the research worker uses', async () => {
+    roleTargetRepository.findOne.mockResolvedValueOnce({ roleId: agentRoleId });
+    toolRegistry.buildToolIndex.mockResolvedValueOnce([]);
+
+    await service.executeAgent({
+      agent: buildAgent(),
+      userPrompt: 'test',
+      baseSystemPrompt: 'base system prompt',
+      workspaceId,
+      toolLoadingStrategy: 'lazy',
+      threadId: 'run-1',
+    });
+
+    const [, executeToolContext] = (
+      createExecuteToolTool as unknown as jest.Mock
+    ).mock.calls[0];
+
+    expect(executeToolContext).toEqual(
+      expect.objectContaining({ threadId: 'run-1' }),
+    );
   });
 
   it('does not resolve registry tools when the agent has no role (fail-closed)', async () => {
