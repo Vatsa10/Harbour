@@ -10,6 +10,7 @@ import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service'
 import { ToolRegistryService } from 'src/engine/core-modules/tool-provider/services/tool-registry.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AgentAsyncExecutorService } from 'src/engine/metadata-modules/ai/ai-agent-execution/services/agent-async-executor.service';
+import { AGENT_CONFIG } from 'src/engine/metadata-modules/ai/ai-agent/constants/agent-config.const';
 import { AGENT_RUN_BASE_SYSTEM_PROMPT } from 'src/engine/metadata-modules/ai/ai-agent/constants/agent-run-base-system-prompt.const';
 import { STRUCTURED_OUTPUT_SYSTEM_PROMPT } from 'src/engine/metadata-modules/ai/ai-agent/constants/structured-output-system-prompt.const';
 import { type AgentEntity } from 'src/engine/metadata-modules/ai/ai-agent/entities/agent.entity';
@@ -58,6 +59,11 @@ jest.mock('ai', () => ({
 const generateTextMock = generateText as jest.MockedFunction<
   typeof generateText
 >;
+
+// generateText's stopWhen option accepts a predicate or an array of them;
+// this suite only ever passes a single predicate, so narrow it for the tests
+// that invoke it directly.
+type StopWhenPredicate = (step: never) => boolean | Promise<boolean>;
 
 describe('AgentAsyncExecutorService — workflow agent role-scoped tool resolution', () => {
   let service: AgentAsyncExecutorService;
@@ -280,6 +286,78 @@ describe('AgentAsyncExecutorService — workflow agent role-scoped tool resoluti
     expect(executeToolContext).toEqual(
       expect.objectContaining({ threadId: 'run-1' }),
     );
+  });
+
+  it('caps the run at the caller-supplied maxSteps rather than the global default', async () => {
+    roleTargetRepository.findOne.mockResolvedValueOnce({ roleId: agentRoleId });
+
+    await service.executeAgent({
+      agent: buildAgent(),
+      userPrompt: 'test',
+      baseSystemPrompt: 'base system prompt',
+      workspaceId,
+      maxSteps: 3,
+    });
+
+    const [{ stopWhen }] = generateTextMock.mock.calls[0] as [
+      { stopWhen: StopWhenPredicate },
+    ];
+
+    // stopWhen is a predicate, not a number, so assert its behaviour: it must
+    // stop at the caller's cap and not at AGENT_CONFIG.MAX_STEPS.
+    expect(await stopWhen({ steps: new Array(3).fill({}) } as never)).toBe(
+      true,
+    );
+    expect(await stopWhen({ steps: new Array(2).fill({}) } as never)).toBe(
+      false,
+    );
+  });
+
+  it('falls back to the global step cap when no maxSteps is supplied', async () => {
+    roleTargetRepository.findOne.mockResolvedValueOnce({ roleId: agentRoleId });
+
+    await service.executeAgent({
+      agent: buildAgent(),
+      userPrompt: 'test',
+      baseSystemPrompt: 'base system prompt',
+      workspaceId,
+    });
+
+    const [{ stopWhen }] = generateTextMock.mock.calls[0] as [
+      { stopWhen: StopWhenPredicate },
+    ];
+
+    expect(await stopWhen({ steps: new Array(3).fill({}) } as never)).toBe(
+      false,
+    );
+    expect(
+      await stopWhen({
+        steps: new Array(AGENT_CONFIG.MAX_STEPS).fill({}),
+      } as never),
+    ).toBe(true);
+  });
+
+  it('clamps a caller-supplied maxSteps above the global cap, never raising the ceiling', async () => {
+    roleTargetRepository.findOne.mockResolvedValueOnce({ roleId: agentRoleId });
+
+    await service.executeAgent({
+      agent: buildAgent(),
+      userPrompt: 'test',
+      baseSystemPrompt: 'base system prompt',
+      workspaceId,
+      maxSteps: AGENT_CONFIG.MAX_STEPS + 100,
+    });
+
+    const [{ stopWhen }] = generateTextMock.mock.calls[0] as [
+      { stopWhen: StopWhenPredicate },
+    ];
+
+    // A scheduled task could otherwise outspend the global ceiling.
+    expect(
+      await stopWhen({
+        steps: new Array(AGENT_CONFIG.MAX_STEPS).fill({}),
+      } as never),
+    ).toBe(true);
   });
 
   it('does not resolve registry tools when the agent has no role (fail-closed)', async () => {
