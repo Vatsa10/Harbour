@@ -12,6 +12,7 @@ import { FactEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/
 import { AgentTaskService } from 'src/engine/metadata-modules/ai/ai-research/services/agent-task.service';
 import { EvidenceRecordingService } from 'src/engine/metadata-modules/ai/ai-research/services/evidence-recording.service';
 import { FactDerivationService } from 'src/engine/metadata-modules/ai/ai-research/services/fact-derivation.service';
+import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services/fact.service';
 import { ResearchAgentService } from 'src/engine/metadata-modules/ai/ai-research/services/research-agent.service';
 import { RoleTargetEntity } from 'src/engine/metadata-modules/role-target/role-target.entity';
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
@@ -37,6 +38,7 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     RecordEvidenceTool,
     EvidenceRecordingService,
     FactDerivationService,
+    FactService,
     provideWorkspaceScopedRepository(EvidenceEntity),
     provideWorkspaceScopedRepository(FactEntity),
   ],
@@ -52,6 +54,10 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     CreateAgentTaskTool,
     RecordEvidenceTool,
     EvidenceRecordingService,
+    // The one sanctioned way another module reaches Fact. Owner Decision 1:
+    // Fact stays core-schema, but only behind this boundary, so promoting it
+    // to a standard object later is a one-module change.
+    FactService,
   ],
 })
 export class AiResearchModule {}

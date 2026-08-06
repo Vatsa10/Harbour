@@ -7,6 +7,7 @@ import { type ToolProviderContext } from 'src/engine/core-modules/tool-provider/
 import { type ToolDescriptor } from 'src/engine/core-modules/tool-provider/types/tool-descriptor.type';
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
+import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services/fact.service';
 import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service';
 import { ProposalGateService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service';
 import { type AiWritePolicy } from 'src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type';
@@ -55,6 +56,7 @@ describe('ProposalGateService', () => {
   // never match and every test agreed with the mock.
   const keyValuePairService = { get: jest.fn(), set: jest.fn() };
   const findRecordsService = { execute: jest.fn() };
+  const factService = { findCurrentFactIdsForFields: jest.fn() };
   const proposalRepository = { findOne: jest.fn(), save: jest.fn() };
   const proposalItemRepository = { save: jest.fn() };
 
@@ -67,6 +69,7 @@ describe('ProposalGateService', () => {
 
     setPolicy({ default: 'PROPOSE', overrides: {} });
     proposalRepository.findOne.mockResolvedValue(null);
+    factService.findCurrentFactIdsForFields.mockResolvedValue([]);
     proposalRepository.save.mockImplementation(async (entity) => ({
       ...entity,
       id: 'proposal-1',
@@ -87,6 +90,7 @@ describe('ProposalGateService', () => {
         AiWritePolicyService,
         { provide: KeyValuePairService, useValue: keyValuePairService },
         { provide: FindRecordsService, useValue: findRecordsService },
+        { provide: FactService, useValue: factService },
         {
           provide: getRepositoryToken(ProposalEntity),
           useValue: proposalRepository,
@@ -308,6 +312,49 @@ describe('ProposalGateService', () => {
   });
 
   // I6: the gate is a denylist. Anything not classified read-only is gated.
+  // The citation link: a reviewer must be able to see WHY a change was
+  // proposed. Without this the approval screen shows a diff with no provenance,
+  // which is the product's entire differentiator missing.
+  describe('fact citations', () => {
+    it('should attach the facts standing for the touched fields', async () => {
+      setPolicy({ default: 'PROPOSE', overrides: {} });
+      factService.findCurrentFactIdsForFields.mockResolvedValue([
+        'fact-1',
+        'fact-2',
+      ]);
+
+      await service.evaluate({
+        descriptor: crudDescriptor('update_one'),
+        args: { id: 'record-1', jobTitle: 'Head of Sales' },
+        context,
+      });
+
+      expect(factService.findCurrentFactIdsForFields).toHaveBeenCalledWith({
+        workspaceId: 'workspace-1',
+        objectNameSingular: 'person',
+        recordId: 'record-1',
+        fieldNames: ['jobTitle'],
+      });
+      expect(proposalItemRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ factIds: ['fact-1', 'fact-2'] }),
+      );
+    });
+
+    it('should store an empty citation list for a write with no research behind it', async () => {
+      setPolicy({ default: 'PROPOSE', overrides: {} });
+
+      await service.evaluate({
+        descriptor: crudDescriptor('update_one'),
+        args: { id: 'record-1', jobTitle: 'Head of Sales' },
+        context,
+      });
+
+      expect(proposalItemRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ factIds: [] }),
+      );
+    });
+  });
+
   // These two tools write platform tables, never a CRM record. If the gate
   // catches them, the agent is asked to approve the act of writing down an
   // observation, no evidence is ever recorded, and the whole evidence → fact →

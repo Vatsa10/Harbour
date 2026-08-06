@@ -11,6 +11,7 @@ import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
+import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services/fact.service';
 import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service';
 import { type AiWritePolicyTarget } from 'src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type';
 import {
@@ -123,6 +124,7 @@ export class ProposalGateService {
   constructor(
     private readonly aiWritePolicyService: AiWritePolicyService,
     private readonly findRecordsService: FindRecordsService,
+    private readonly factService: FactService,
     // Proposals are looked up by (workspaceId, threadId, status) as a single
     // composite condition, not workspaceId-then-filter, so the scoped wrapper's
     // "workspaceId first, merge rest" shape doesn't fit this access pattern.
@@ -173,6 +175,18 @@ export class ProposalGateService {
       context,
     });
 
+    // The facts standing for these fields right now. This is a read: it
+    // attaches justification to an item the gate was already creating, and
+    // opens no second write path. Static-tool items pass null object/record,
+    // so this resolves to [] — an outbound send carries no fact-backed
+    // justification, which is the honest answer rather than a fabricated one.
+    const factIds = await this.factService.findCurrentFactIdsForFields({
+      workspaceId: context.workspaceId,
+      objectNameSingular: gateInput.objectNameSingular ?? '',
+      recordId: gateInput.recordId ?? '',
+      fieldNames: Object.keys(gateInput.payload),
+    });
+
     const proposal = await this.getOrCreatePendingProposal(context);
 
     const item = await this.proposalItemRepository.save({
@@ -184,6 +198,7 @@ export class ProposalGateService {
       toolCategory: gateInput.toolCategory,
       payload: gateInput.payload,
       baseline,
+      factIds,
       status: ProposalItemStatus.PENDING,
     });
 

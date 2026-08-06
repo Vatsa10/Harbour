@@ -8,6 +8,7 @@ import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
+import { AiResearchModule } from 'src/engine/metadata-modules/ai/ai-research/ai-research.module';
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
 import { AiWritePolicyResolver } from 'src/engine/metadata-modules/ai/ai-write-approval/resolvers/ai-write-policy.resolver';
@@ -19,6 +20,8 @@ import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.
 
 @Module({
   imports: [
+    // FactService only — the module exports no Fact repository.
+    AiResearchModule,
     TypeOrmModule.forFeature([
       ProposalEntity,
       ProposalItemEntity,

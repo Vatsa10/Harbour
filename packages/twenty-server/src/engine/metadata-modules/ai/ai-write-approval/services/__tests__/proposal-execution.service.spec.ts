@@ -16,6 +16,7 @@ import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
+import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services/fact.service';
 import { ProposalExecutionService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-execution.service';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
@@ -32,6 +33,7 @@ const buildItem = (overrides: Record<string, unknown> = {}) => ({
   payload: { jobTitle: 'New title' },
   baseline: { jobTitle: 'Old title' },
   status: 'PENDING',
+  factIds: [],
   ...overrides,
 });
 
@@ -69,6 +71,7 @@ describe('ProposalExecutionService', () => {
     executeStaticTool: jest.fn(),
   };
   const moduleRef = { get: jest.fn() };
+  const factService = { markDismissed: jest.fn() };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -181,6 +184,7 @@ describe('ProposalExecutionService', () => {
           provide: getRepositoryToken(ProposalItemEntity),
           useValue: proposalItemRepository,
         },
+        { provide: FactService, useValue: factService },
       ],
     }).compile();
 
@@ -401,6 +405,49 @@ describe('ProposalExecutionService', () => {
     expect(itemStatusWrite('item-2')).toMatchObject({ status: 'REJECTED' });
   });
 
+  it('should dismiss the facts behind an item the reviewer deselected', async () => {
+    proposalItemRepository.find.mockResolvedValue([
+      buildItem({ factIds: ['fact-1'] }),
+      buildItem({ id: 'item-2', factIds: ['fact-2'] }),
+    ]);
+
+    await approve(['item-1']);
+
+    // Only the deselected item's facts. Approving item-1 is a "yes" to its
+    // facts, not a "no".
+    expect(factService.markDismissed).toHaveBeenCalledWith(['fact-2']);
+  });
+
+  it('should not dismiss anything when every item was selected', async () => {
+    proposalItemRepository.find.mockResolvedValue([
+      buildItem({ factIds: ['fact-1'] }),
+    ]);
+
+    await approve(['item-1']);
+
+    expect(factService.markDismissed).toHaveBeenCalledWith([]);
+  });
+
+  it('should dismiss the facts behind every still-open item in a whole-proposal reject', async () => {
+    proposalItemRepository.find.mockResolvedValue([
+      buildItem({ factIds: ['fact-1'] }),
+      // reject() clears CONFLICTED items too — their facts are dismissed with
+      // the rest, which an earlier draft of this task silently dropped.
+      buildItem({ id: 'item-2', status: 'CONFLICTED', factIds: ['fact-2'] }),
+    ]);
+
+    await service.reject({
+      proposalId: 'proposal-1',
+      workspaceId: 'workspace-1',
+      approverUserWorkspaceId: 'user-workspace-1',
+    });
+
+    expect(factService.markDismissed).toHaveBeenCalledWith([
+      'fact-1',
+      'fact-2',
+    ]);
+  });
+
   // I5: a batch that wrote nothing successfully is not APPLIED.
   describe('final status reflects the real outcome', () => {
     it('should mark a fully failed batch FAILED', async () => {
@@ -583,6 +630,8 @@ describe('ProposalExecutionService', () => {
 
   describe('reject', () => {
     it('should reject pending and conflicted items', async () => {
+      proposalItemRepository.find.mockResolvedValue([]);
+
       const result = await service.reject({
         proposalId: 'proposal-1',
         workspaceId: 'workspace-1',
@@ -607,6 +656,7 @@ describe('ProposalExecutionService', () => {
 
       expect(result.aborted).toBe(true);
       expect(proposalItemRepository.update).not.toHaveBeenCalled();
+      expect(factService.markDismissed).not.toHaveBeenCalled();
     });
   });
 });

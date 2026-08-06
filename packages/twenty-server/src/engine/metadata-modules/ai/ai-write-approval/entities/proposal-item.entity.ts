@@ -66,6 +66,12 @@ export class ProposalItemEntity {
   @Column({ type: 'uuid', nullable: true })
   resultRecordId: string | null;
 
+  // Fact rows current for the touched fields when this item was created.
+  // Empty for writes with no research behind them (chat, manual tool calls) —
+  // the honest state: no evidence backs those.
+  @Column({ type: 'jsonb', default: () => "'[]'::jsonb" })
+  factIds: string[];
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 

@@ -27,6 +27,7 @@ import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { fromUserEntityToFlat } from 'src/engine/core-modules/user/utils/from-user-entity-to-flat.util';
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
+import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services/fact.service';
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
 import {
@@ -80,6 +81,7 @@ export class ProposalExecutionService {
     private readonly deleteRecordService: DeleteRecordService,
     private readonly deleteManyRecordsService: DeleteManyRecordsService,
     private readonly userRoleService: UserRoleService,
+    private readonly factService: FactService,
     private readonly permissionsService: PermissionsService,
     private readonly workspaceCacheService: WorkspaceCacheService,
     private readonly sendEmailTool: SendEmailTool,
@@ -264,16 +266,24 @@ export class ProposalExecutionService {
       }
     }
 
-    const unselectedItemIds = items
-      .filter((item) => !selectedItemIds.includes(item.id))
-      .map((item) => item.id);
+    const unselectedItems = items.filter(
+      (item) => !selectedItemIds.includes(item.id),
+    );
 
-    if (unselectedItemIds.length > 0) {
+    if (unselectedItems.length > 0) {
       await this.proposalItemRepository.update(
-        { id: In(unselectedItemIds) },
+        { id: In(unselectedItems.map((item) => item.id)) },
         { status: ProposalItemStatus.REJECTED },
       );
     }
+
+    // A reviewer deselecting an item is an explicit "no" to that exact
+    // value — the facts that justified it must not be re-proposed. The
+    // entities are kept (rather than mapping straight to ids) because
+    // factIds lives on them and re-querying would be a second round trip.
+    await this.factService.markDismissed(
+      unselectedItems.flatMap((item) => item.factIds),
+    );
 
     await this.proposalRepository.update(
       { id: proposalId, workspaceId },
@@ -339,12 +349,25 @@ export class ProposalExecutionService {
 
     // CONFLICTED items are rejectable too: an aborted batch left them in a
     // terminal-looking state that reject() previously could never clear.
+    const openStatuses = [
+      ProposalItemStatus.PENDING,
+      ProposalItemStatus.CONFLICTED,
+    ];
+
+    // Load before updating: after the update nothing is PENDING or
+    // CONFLICTED any more, and factIds only exists on the rows themselves.
+    // This is a read reject() did not previously do.
+    const rejectedItems = await this.proposalItemRepository.find({
+      where: { proposalId, status: In(openStatuses) },
+    });
+
     await this.proposalItemRepository.update(
-      {
-        proposalId,
-        status: In([ProposalItemStatus.PENDING, ProposalItemStatus.CONFLICTED]),
-      },
+      { proposalId, status: In(openStatuses) },
       { status: ProposalItemStatus.REJECTED },
+    );
+
+    await this.factService.markDismissed(
+      rejectedItems.flatMap((item) => item.factIds),
     );
 
     return this.emptyResult(proposalId, false);
