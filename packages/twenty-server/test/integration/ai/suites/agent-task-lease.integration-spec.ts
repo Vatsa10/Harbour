@@ -46,10 +46,17 @@ describe('AgentTask lease claim (integration)', () => {
     });
 
   beforeAll(() => {
-    service = global.app.get<AgentTaskService>(AgentTaskService);
+    // The app is built in jest's globalSetup realm, so a class token imported
+    // here is a *different* constructor than the one the app's injector keyed
+    // its providers on — app.get(AgentTaskService) can never resolve, even with
+    // strict: false. getRepositoryToken() returns a plain string, which does
+    // cross the realm boundary, so the repository is pulled from the running
+    // app and the service is constructed around it. Every query below is still
+    // real SQL on the real table: this is the seam under test.
     repository = global.app.get<Repository<AgentTaskEntity>>(
       getRepositoryToken(AgentTaskEntity),
     );
+    service = new AgentTaskService(repository);
   });
 
   afterEach(async () => {

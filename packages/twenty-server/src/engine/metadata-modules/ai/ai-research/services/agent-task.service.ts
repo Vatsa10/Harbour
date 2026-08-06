@@ -125,9 +125,14 @@ export class AgentTaskService {
 
     const leasedUntil = new Date(now.getTime() + AGENT_TASK_LEASE_DURATION_MS);
 
+    // update() takes no explicit target: the repository's own query builder
+    // already carries the entity metadata, and passing the imported class
+    // breaks whenever the class identity differs from the one the running
+    // DataSource registered (which is exactly the case in the integration
+    // suite, where the app is built in jest's globalSetup realm).
     const updateResult = await this.agentTaskRepository
       .createQueryBuilder()
-      .update(AgentTaskEntity)
+      .update()
       .set({
         status: AgentTaskStatus.LEASED,
         leasedUntil,
@@ -164,7 +169,7 @@ export class AgentTaskService {
   async reapAbandonedTasks(): Promise<number> {
     const result = await this.agentTaskRepository
       .createQueryBuilder()
-      .update(AgentTaskEntity)
+      .update()
       .set({
         status: AgentTaskStatus.FAILED,
         leasedUntil: null,
@@ -189,7 +194,7 @@ export class AgentTaskService {
   }): Promise<void> {
     await this.agentTaskRepository
       .createQueryBuilder()
-      .update(AgentTaskEntity)
+      .update()
       .set({
         status: AgentTaskStatus.SUCCEEDED,
         lastRunId: params.runId,
@@ -243,7 +248,7 @@ export class AgentTaskService {
   }): Promise<boolean> {
     const result = await this.agentTaskRepository
       .createQueryBuilder()
-      .update(AgentTaskEntity)
+      .update()
       .set({
         status: AgentTaskStatus.CANCELLED,
         cancelledAt: new Date(),
