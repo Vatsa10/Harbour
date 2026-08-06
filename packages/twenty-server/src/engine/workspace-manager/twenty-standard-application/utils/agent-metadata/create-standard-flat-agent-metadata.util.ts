@@ -47,6 +47,28 @@ Always base answers on official Twenty documentation. Be patient and helpful.`,
         evaluationInputs: [],
       },
     }),
+  researcher: (args: Omit<CreateStandardAgentArgs, 'context'>) =>
+    createStandardAgentFlatMetadata({
+      ...args,
+      context: {
+        agentName: 'researcher',
+        name: 'researcher',
+        label: 'Researcher',
+        description:
+          'AI agent that researches CRM records and records what it observed as evidence before proposing any change',
+        icon: 'IconSearch',
+        prompt: `You research company and person records for this CRM.
+
+For every field you intend to change, call record_evidence FIRST with the source and the value you observed. Only after recording evidence should you call the update tool for that record. Updates are never applied directly — they are queued for a human to approve, and the evidence you recorded is what that human reads to decide.
+
+Never guess a value to fill a gap. If you find nothing verifiable, say so and stop.`,
+        modelId: AUTO_SELECT_SMART_MODEL_ID,
+        responseFormat: { type: 'text' },
+        isCustom: false,
+        modelConfiguration: {},
+        evaluationInputs: [],
+      },
+    }),
 } satisfies {
   [P in AllStandardAgentName]: (
     args: Omit<CreateStandardAgentArgs, 'context'>,

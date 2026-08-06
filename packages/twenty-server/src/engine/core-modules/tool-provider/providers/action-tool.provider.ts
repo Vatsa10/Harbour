@@ -23,6 +23,7 @@ import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types
 import { CodeInterpreterService } from 'src/engine/core-modules/code-interpreter/code-interpreter.service';
 import { CreateCalendarEventTool } from 'src/engine/core-modules/tool/tools/calendar-tool/create-calendar-event-tool';
 import { CodeInterpreterTool } from 'src/engine/core-modules/tool/tools/code-interpreter-tool/code-interpreter-tool';
+import { CreateAgentTaskTool } from 'src/engine/core-modules/tool/tools/create-agent-task-tool/create-agent-task-tool';
 import { DraftEmailTool } from 'src/engine/core-modules/tool/tools/email-tool/draft-email-tool';
 import { SendEmailTool } from 'src/engine/core-modules/tool/tools/email-tool/send-email-tool';
 import { HttpTool } from 'src/engine/core-modules/tool/tools/http-tool/http-tool';
@@ -50,6 +51,7 @@ export class ActionToolProvider implements ToolProvider {
     private readonly navigateAppTool: NavigateAppTool,
     private readonly extractJsonPathsTool: ExtractJsonPathsTool,
     private readonly searchOutputTool: SearchOutputTool,
+    private readonly createAgentTaskTool: CreateAgentTaskTool,
     private readonly codeInterpreterService: CodeInterpreterService,
     private readonly permissionsService: PermissionsService,
     private readonly i18nService: I18nService,
@@ -64,6 +66,7 @@ export class ActionToolProvider implements ToolProvider {
       ['navigate_app', this.navigateAppTool],
       ['extract_json_paths', this.extractJsonPathsTool],
       ['search_output', this.searchOutputTool],
+      ['create_agent_task', this.createAgentTaskTool],
     ]);
   }
 
@@ -169,6 +172,19 @@ export class ActionToolProvider implements ToolProvider {
         'search_output',
         this.searchOutputTool,
         includeSchemas,
+      ),
+    );
+
+    // Unconditional, like search_help_center/navigate_app. Not behind a
+    // PermissionFlagType: the seeded research role's rolePermissionFlagIds are
+    // hard-coded to [] by the standard-role builder, so a flag would make the
+    // tool unreachable for the one agent that needs it.
+    descriptors.push(
+      this.buildDescriptor(
+        'create_agent_task',
+        this.createAgentTaskTool,
+        includeSchemas,
+        context.locale,
       ),
     );
 
