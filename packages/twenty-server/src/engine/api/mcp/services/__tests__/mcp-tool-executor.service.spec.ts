@@ -104,8 +104,52 @@ describe('McpToolExecutorService', () => {
         error: {
           code: JSON_RPC_ERROR_CODE.INVALID_PARAMS,
           message: 'Unknown tool: nonexistent_tool',
+          data: {
+            failure: expect.objectContaining({
+              code: 'UNKNOWN_TOOL',
+              retryable: false,
+            }),
+          },
         },
       });
+    });
+
+    it('should include a structured failure in error.data for an unknown tool name', async () => {
+      const response = await service.handleToolCall(1, {}, { name: 'nope' });
+
+      const error = (response as { error?: Record<string, unknown> }).error;
+      const data = error?.data as
+        | { failure?: { code?: string; retryable?: boolean } }
+        | undefined;
+
+      expect(data?.failure?.code).toBe('UNKNOWN_TOOL');
+      expect(data?.failure?.retryable).toBe(false);
+    });
+
+    it('should JSON-encode a structured failure in content[0].text when execution throws', async () => {
+      const toolSet = {
+        broken_tool: {
+          inputSchema: {},
+          execute: jest.fn().mockRejectedValue(new Error('downstream boom')),
+        },
+      };
+
+      const response = await service.handleToolCall(1, toolSet as any, {
+        name: 'broken_tool',
+        arguments: {},
+      });
+
+      const resultBody = (
+        response as {
+          result?: { content: { text: string }[]; isError: boolean };
+        }
+      ).result;
+      const parsed = JSON.parse(resultBody?.content[0].text ?? '{}');
+
+      expect(resultBody?.isError).toBe(true);
+      expect(parsed.success).toBe(false);
+      expect(parsed.failure.code).toBe('INTERNAL_ERROR');
+      expect(parsed.failure.retryable).toBe(true);
     });
 
     it('should return result with isError: false on success', async () => {
@@ -146,14 +190,15 @@ describe('McpToolExecutorService', () => {
         arguments: {},
       });
 
-      expect(result).toEqual({
-        id: '123',
-        jsonrpc: '2.0',
-        result: {
-          content: [{ type: 'text', text: 'API rate limited' }],
-          isError: true,
-        },
-      });
+      const resultBody = (
+        result as { result?: { content: { text: string }[]; isError: boolean } }
+      ).result;
+      const parsedText = JSON.parse(resultBody?.content[0].text ?? '{}');
+
+      expect(resultBody?.isError).toBe(true);
+      expect(parsedText.success).toBe(false);
+      expect(parsedText.message).toBe('API rate limited');
+      expect(parsedText.failure.code).toBe('INTERNAL_ERROR');
     });
 
     it('should emit progress notification via sseWriter before execution', async () => {

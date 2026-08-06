@@ -20,6 +20,10 @@ import {
 } from 'src/engine/api/mcp/constants/mcp-progress-notification.const';
 import { type McpToolAnnotations } from 'src/engine/api/mcp/types/mcp-tool-annotations.type';
 import { wrapJsonRpcResponse } from 'src/engine/api/mcp/utils/wrap-jsonrpc-response.util';
+import {
+  buildToolFailure,
+  toFailedToolOutput,
+} from 'src/engine/core-modules/tool/utils/build-tool-failure.util';
 
 type McpToolDefinition = ToolSet[string] & {
   annotations?: McpToolAnnotations;
@@ -41,10 +45,18 @@ export class McpToolExecutorService {
     sseWriter?: (data: Record<string, unknown>) => void,
   ) {
     if (!isNonEmptyString(params.name)) {
+      const failure = buildToolFailure({
+        code: 'INVALID_ARGUMENTS',
+        message: 'Tool name is required',
+        hint: 'Call tools/list first to see available tool names.',
+        retryable: false,
+      });
+
       return wrapJsonRpcResponse(id, {
         error: {
           code: JSON_RPC_ERROR_CODE.INVALID_PARAMS,
-          message: 'Tool name is required',
+          message: failure.message,
+          data: { failure },
         },
       });
     }
@@ -53,10 +65,18 @@ export class McpToolExecutorService {
     const tool = toolSet[toolName];
 
     if (!isDefined(tool) || !isDefined(tool.execute)) {
+      const failure = buildToolFailure({
+        code: 'UNKNOWN_TOOL',
+        message: `Unknown tool: ${toolName}`,
+        hint: 'Call tools/list to see the tools available to this session.',
+        retryable: false,
+      });
+
       return wrapJsonRpcResponse(id, {
         error: {
           code: JSON_RPC_ERROR_CODE.INVALID_PARAMS,
-          message: `Unknown tool: ${toolName}`,
+          message: failure.message,
+          data: { failure },
         },
       });
     }
@@ -135,17 +155,24 @@ export class McpToolExecutorService {
         attributes: { tool: metricToolName },
       });
 
+      const errorMessage =
+        executionError instanceof Error
+          ? executionError.message
+          : 'Tool execution failed';
+
+      const failedOutput = toFailedToolOutput(
+        buildToolFailure({
+          code: 'INTERNAL_ERROR',
+          message: errorMessage,
+          hint: 'This looks like a transient failure. Retry once; if it persists, stop and report it.',
+          retryable: true,
+          allowedActions: ['retry'],
+        }),
+      );
+
       return wrapJsonRpcResponse(id, {
         result: {
-          content: [
-            {
-              type: 'text',
-              text:
-                executionError instanceof Error
-                  ? executionError.message
-                  : 'Tool execution failed',
-            },
-          ],
+          content: [{ type: 'text', text: JSON.stringify(failedOutput) }],
           isError: true,
         },
       });
