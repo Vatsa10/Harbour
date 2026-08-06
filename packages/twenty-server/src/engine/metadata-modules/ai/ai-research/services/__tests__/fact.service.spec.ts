@@ -1,6 +1,6 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 
+import { getWorkspaceScopedRepositoryToken } from 'src/engine/twenty-orm/workspace-scoped-repository/get-workspace-scoped-repository-token.util';
 import { EvidenceEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/evidence.entity';
 import { FactEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/fact.entity';
 import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services/fact.service';
@@ -18,9 +18,12 @@ describe('FactService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         FactService,
-        { provide: getRepositoryToken(FactEntity), useValue: factRepository },
         {
-          provide: getRepositoryToken(EvidenceEntity),
+          provide: getWorkspaceScopedRepositoryToken(FactEntity),
+          useValue: factRepository,
+        },
+        {
+          provide: getWorkspaceScopedRepositoryToken(EvidenceEntity),
           useValue: evidenceRepository,
         },
       ],
@@ -51,22 +54,26 @@ describe('FactService', () => {
       fieldNames: ['jobTitle', 'city'],
     });
 
-    expect(factRepository.find).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          workspaceId: 'workspace-1',
-          objectNameSingular: 'person',
-          recordId: 'record-1',
-          status: FactStatus.CURRENT,
+    // Asserted exactly, not with objectContaining: an implementation that
+    // dropped the fieldName or status filter would leak facts from other
+    // fields (or DISMISSED ones) into a proposal's citations, and an
+    // objectContaining assertion would still go green on it.
+    expect(factRepository.find).toHaveBeenCalledWith('workspace-1', {
+      where: {
+        objectNameSingular: 'person',
+        recordId: 'record-1',
+        fieldName: expect.objectContaining({
+          _value: ['jobTitle', 'city'],
         }),
-      }),
-    );
+        status: FactStatus.CURRENT,
+      },
+    });
     expect(ids).toEqual(['fact-1', 'fact-2']);
   });
 
   describe('findProposalItemFacts', () => {
     it('should return an empty array without querying for no ids', async () => {
-      const facts = await service.findProposalItemFacts([]);
+      const facts = await service.findProposalItemFacts('workspace-1', []);
 
       expect(facts).toEqual([]);
       expect(factRepository.find).not.toHaveBeenCalled();
@@ -92,10 +99,12 @@ describe('FactService', () => {
         },
       ]);
 
-      const facts = await service.findProposalItemFacts(['fact-1']);
+      const facts = await service.findProposalItemFacts('workspace-1', [
+        'fact-1',
+      ]);
 
       // Only the primary evidence id is fetched — not evidence-2.
-      expect(evidenceRepository.find).toHaveBeenCalledWith({
+      expect(evidenceRepository.find).toHaveBeenCalledWith('workspace-1', {
         where: { id: expect.objectContaining({ _value: ['evidence-1'] }) },
       });
       expect(facts).toEqual([
@@ -122,7 +131,9 @@ describe('FactService', () => {
         },
       ]);
 
-      const facts = await service.findProposalItemFacts(['fact-1']);
+      const facts = await service.findProposalItemFacts('workspace-1', [
+        'fact-1',
+      ]);
 
       expect(evidenceRepository.find).not.toHaveBeenCalled();
       expect(facts[0]).toMatchObject({
@@ -136,15 +147,16 @@ describe('FactService', () => {
 
   describe('markDismissed', () => {
     it('should not issue an update for an empty id list', async () => {
-      await service.markDismissed([]);
+      await service.markDismissed('workspace-1', []);
 
       expect(factRepository.update).not.toHaveBeenCalled();
     });
 
     it('should set every named fact to DISMISSED', async () => {
-      await service.markDismissed(['fact-1', 'fact-2']);
+      await service.markDismissed('workspace-1', ['fact-1', 'fact-2']);
 
       expect(factRepository.update).toHaveBeenCalledWith(
+        'workspace-1',
         { id: expect.objectContaining({ _value: ['fact-1', 'fact-2'] }) },
         { status: FactStatus.DISMISSED },
       );

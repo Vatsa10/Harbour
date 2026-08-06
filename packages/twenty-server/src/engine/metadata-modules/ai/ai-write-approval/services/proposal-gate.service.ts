@@ -8,10 +8,12 @@ import { FindRecordsService } from 'src/engine/core-modules/record-crud/services
 import { type ToolProviderContext } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider-context.type';
 import { type ToolDescriptor } from 'src/engine/core-modules/tool-provider/types/tool-descriptor.type';
 import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types/tool-index-entry.type';
+import { buildToolFailure } from 'src/engine/core-modules/tool/utils/build-tool-failure.util';
+import { type ToolFailure } from 'src/engine/core-modules/tool/types/tool-failure.type';
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
+import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services/fact.service';
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
-import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services/fact.service';
 import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service';
 import { type AiWritePolicyTarget } from 'src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type';
 import {
@@ -24,7 +26,7 @@ import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system
 
 export type GateDecision =
   | { kind: 'ALLOW' }
-  | { kind: 'FORBID'; message: string }
+  | { kind: 'FORBID'; failure: ToolFailure }
   | { kind: 'PROPOSED'; output: ToolOutput };
 
 type GateInput = {
@@ -164,7 +166,13 @@ export class ProposalGateService {
     if (mode === 'FORBID') {
       return {
         kind: 'FORBID',
-        message: `This workspace does not permit AI to perform "${descriptor.name}". Ask a workspace admin to change the AI write policy.`,
+        failure: buildToolFailure({
+          code: 'FORBIDDEN_BY_POLICY',
+          message: `This workspace does not permit AI to perform "${descriptor.name}".`,
+          hint: 'Ask a workspace admin to change the AI write policy for this object or tool, or ask a human to make this change directly.',
+          retryable: false,
+          allowedActions: ['ask_admin_to_change_policy'],
+        }),
       };
     }
 

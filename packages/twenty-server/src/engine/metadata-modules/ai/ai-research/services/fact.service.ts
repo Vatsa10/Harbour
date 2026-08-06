@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 
 import { isDefined } from 'twenty-shared/utils';
-import { In, Repository } from 'typeorm';
+import { In } from 'typeorm';
 
 import { EvidenceEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/evidence.entity';
 import { FactEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/fact.entity';
 import { FactStatus } from 'src/engine/metadata-modules/ai/ai-research/types/fact-status.type';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 
 // The flat citation projection the approval UI renders. Deliberately not
 // FactEntity and not EvidenceEntity: this is the whole contract other modules
@@ -26,10 +27,13 @@ export type ProposalItemFact = {
 @Injectable()
 export class FactService {
   constructor(
-    @InjectRepository(FactEntity)
-    private readonly factRepository: Repository<FactEntity>,
-    @InjectRepository(EvidenceEntity)
-    private readonly evidenceRepository: Repository<EvidenceEntity>,
+    // Scoped wrappers, not raw repositories: every read below is keyed by ids
+    // supplied by a caller, and without the workspace guard a caller holding
+    // another tenant's fact id would be handed that tenant's citation.
+    @InjectWorkspaceScopedRepository(FactEntity)
+    private readonly factRepository: WorkspaceScopedRepository<FactEntity>,
+    @InjectWorkspaceScopedRepository(EvidenceEntity)
+    private readonly evidenceRepository: WorkspaceScopedRepository<EvidenceEntity>,
   ) {}
 
   async findCurrentFactIdsForFields(params: {
@@ -42,9 +46,8 @@ export class FactService {
       return [];
     }
 
-    const facts = await this.factRepository.find({
+    const facts = await this.factRepository.find(params.workspaceId, {
       where: {
-        workspaceId: params.workspaceId,
         objectNameSingular: params.objectNameSingular,
         recordId: params.recordId,
         fieldName: In(params.fieldNames),
@@ -59,12 +62,17 @@ export class FactService {
   // whole proposal item, not one per fact and one per evidence row: the
   // earlier design nested a FactDTO.evidence resolve field inside a
   // ProposalItemDTO.facts resolve field, an N+1 pair rendering one line.
-  async findProposalItemFacts(ids: string[]): Promise<ProposalItemFact[]> {
+  async findProposalItemFacts(
+    workspaceId: string,
+    ids: string[],
+  ): Promise<ProposalItemFact[]> {
     if (ids.length === 0) {
       return [];
     }
 
-    const facts = await this.factRepository.find({ where: { id: In(ids) } });
+    const facts = await this.factRepository.find(workspaceId, {
+      where: { id: In(ids) },
+    });
 
     // Only the first evidence row per fact is cited, so only those are
     // fetched. evidenceIds[0] is the observation that created the fact;
@@ -76,7 +84,7 @@ export class FactService {
     const evidence =
       primaryEvidenceIds.length === 0
         ? []
-        : await this.evidenceRepository.find({
+        : await this.evidenceRepository.find(workspaceId, {
             where: { id: In(primaryEvidenceIds) },
           });
 
@@ -99,12 +107,13 @@ export class FactService {
 
   // Permanently dismisses the facts behind a rejected proposal item, so a
   // later run does not re-propose a value a human already refused.
-  async markDismissed(ids: string[]): Promise<void> {
+  async markDismissed(workspaceId: string, ids: string[]): Promise<void> {
     if (ids.length === 0) {
       return;
     }
 
     await this.factRepository.update(
+      workspaceId,
       { id: In(ids) },
       { status: FactStatus.DISMISSED },
     );

@@ -5,9 +5,13 @@ import { KeyValuePairService } from 'src/engine/core-modules/key-value-pair/key-
 import { FindRecordsService } from 'src/engine/core-modules/record-crud/services/find-records.service';
 import { type ToolProviderContext } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider-context.type';
 import { type ToolDescriptor } from 'src/engine/core-modules/tool-provider/types/tool-descriptor.type';
+import { getWorkspaceScopedRepositoryToken } from 'src/engine/twenty-orm/workspace-scoped-repository/get-workspace-scoped-repository-token.util';
+import { EvidenceEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/evidence.entity';
+import { FactEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/fact.entity';
+import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services/fact.service';
+import { FactStatus } from 'src/engine/metadata-modules/ai/ai-research/types/fact-status.type';
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
-import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services/fact.service';
 import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service';
 import { ProposalGateService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service';
 import { type AiWritePolicy } from 'src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type';
@@ -170,17 +174,19 @@ describe('ProposalGateService', () => {
     });
 
     it('should forbid a write when the policy resolves to FORBID', async () => {
-      setPolicy({
-        default: 'PROPOSE',
-        overrides: { 'person.email': 'FORBID' },
-      });
+      setPolicy({ default: 'FORBID', overrides: {} });
 
       const decision = await evaluate(crudDescriptor('update_one'), {
         id: 'record-1',
-        email: 'a@example.com',
+        jobTitle: 'New title',
       });
 
       expect(decision.kind).toBe('FORBID');
+      if (decision.kind !== 'FORBID') {
+        throw new Error('expected a forbid decision');
+      }
+      expect(decision.failure.code).toBe('FORBIDDEN_BY_POLICY');
+      expect(decision.failure.retryable).toBe(false);
       expect(proposalItemRepository.save).not.toHaveBeenCalled();
     });
   });
@@ -461,6 +467,119 @@ describe('ProposalGateService', () => {
 
       expect(decision.kind).toBe('PROPOSED');
       expect(savedItem()).toMatchObject({ actionType: 'SEND_EMAIL' });
+    });
+  });
+
+  // Everything above mocks FactService, so it doubles the very seam this task
+  // adds. These run the gate against the REAL FactService with only the
+  // repositories stubbed, which is what catches a param-name or short-circuit
+  // mismatch between the two sides.
+  describe('fact citations through the real fact service', () => {
+    const factRepository = { find: jest.fn(), update: jest.fn() };
+    const evidenceRepository = { find: jest.fn() };
+    let realGate: ProposalGateService;
+
+    beforeEach(async () => {
+      // Stands in for the database rather than returning a fixed row: a
+      // repository that answers every query would make the "no citations for
+      // an outbound send" case below pass against a gate that cited facts
+      // from an unrelated record.
+      factRepository.find.mockImplementation(
+        async (
+          workspaceId: string,
+          options: {
+            where: {
+              objectNameSingular: string;
+              recordId: string;
+              fieldName: { _value: string[] };
+              status: FactStatus;
+            };
+          },
+        ) => {
+          const { where } = options;
+          const matches =
+            workspaceId === 'workspace-1' &&
+            where.objectNameSingular === 'person' &&
+            where.recordId === 'record-1' &&
+            where.status === FactStatus.CURRENT &&
+            where.fieldName._value.includes('jobTitle');
+
+          return matches ? [{ id: 'fact-1' }] : [];
+        },
+      );
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          ProposalGateService,
+          AiWritePolicyService,
+          FactService,
+          { provide: KeyValuePairService, useValue: keyValuePairService },
+          { provide: FindRecordsService, useValue: findRecordsService },
+          {
+            provide: getRepositoryToken(ProposalEntity),
+            useValue: proposalRepository,
+          },
+          {
+            provide: getRepositoryToken(ProposalItemEntity),
+            useValue: proposalItemRepository,
+          },
+          {
+            provide: getWorkspaceScopedRepositoryToken(FactEntity),
+            useValue: factRepository,
+          },
+          {
+            provide: getWorkspaceScopedRepositoryToken(EvidenceEntity),
+            useValue: evidenceRepository,
+          },
+        ],
+      }).compile();
+
+      realGate = module.get<ProposalGateService>(ProposalGateService);
+    });
+
+    it('should query facts scoped to the workspace, record and touched fields', async () => {
+      await realGate.evaluate({
+        descriptor: crudDescriptor('update_one'),
+        args: { id: 'record-1', jobTitle: 'Head of Sales' },
+        context,
+      });
+
+      expect(factRepository.find).toHaveBeenCalledWith('workspace-1', {
+        where: {
+          objectNameSingular: 'person',
+          recordId: 'record-1',
+          fieldName: expect.objectContaining({ _value: ['jobTitle'] }),
+          status: FactStatus.CURRENT,
+        },
+      });
+      expect(savedItem()).toMatchObject({ factIds: ['fact-1'] });
+    });
+
+    // An outbound send has no record to cite facts against. It must store an
+    // empty list rather than fabricate a justification — and must not run a
+    // query with an empty object/record key either.
+    it('should store no citations for an outbound send', async () => {
+      const decision = await realGate.evaluate({
+        descriptor: staticDescriptor('send_email'),
+        args: { to: 'a@example.com', subject: 'Hi' },
+        context,
+      });
+
+      expect(decision.kind).toBe('PROPOSED');
+      expect(savedItem()).toMatchObject({ factIds: [] });
+    });
+
+    // A delete proposes no field values, so there is nothing to cite. The
+    // short-circuit must keep this off the database entirely.
+    it('should not query at all for a delete', async () => {
+      await realGate.evaluate({
+        descriptor: crudDescriptor('delete_one'),
+        args: { id: 'record-1' },
+        context,
+      });
+
+      expect(factRepository.find).not.toHaveBeenCalled();
+      expect(savedItem()).toMatchObject({ factIds: [] });
     });
   });
 });

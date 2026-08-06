@@ -1,14 +1,18 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { CreateAgentTaskTool } from 'src/engine/core-modules/tool/tools/create-agent-task-tool/create-agent-task-tool';
 import { RecordEvidenceTool } from 'src/engine/core-modules/tool/tools/record-evidence-tool/record-evidence-tool';
 import { AgentEntity } from 'src/engine/metadata-modules/ai/ai-agent/entities/agent.entity';
 import { AiAgentRoleModule } from 'src/engine/metadata-modules/ai/ai-agent-role/ai-agent-role.module';
+import { AiAgentExecutionModule } from 'src/engine/metadata-modules/ai/ai-agent-execution/ai-agent-execution.module';
+import { AgentTaskDispatchCronCommand } from 'src/engine/metadata-modules/ai/ai-research/crons/commands/agent-task-dispatch.cron.command';
+import { AgentTaskDispatchCronJob } from 'src/engine/metadata-modules/ai/ai-research/crons/jobs/agent-task-dispatch.cron.job';
 import { AgentRunEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/agent-run.entity';
 import { AgentTaskEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/agent-task.entity';
 import { EvidenceEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/evidence.entity';
 import { FactEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/fact.entity';
+import { AgentTaskRunJob } from 'src/engine/metadata-modules/ai/ai-research/jobs/agent-task-run.job';
 import { AgentTaskService } from 'src/engine/metadata-modules/ai/ai-research/services/agent-task.service';
 import { EvidenceRecordingService } from 'src/engine/metadata-modules/ai/ai-research/services/evidence-recording.service';
 import { FactDerivationService } from 'src/engine/metadata-modules/ai/ai-research/services/fact-derivation.service';
@@ -30,6 +34,11 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
       RoleTargetEntity,
     ]),
     AiAgentRoleModule,
+    // forwardRef: ToolProviderModule imports AiResearchModule directly, and
+    // AiAgentExecutionModule forwardRef's back into ToolProviderModule
+    // (tool-provider.module.ts:58-59) — this edge closes the same 3-module
+    // cycle, so it needs the same treatment.
+    forwardRef(() => AiAgentExecutionModule),
   ],
   providers: [
     AgentTaskService,
@@ -39,6 +48,9 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     EvidenceRecordingService,
     FactDerivationService,
     FactService,
+    AgentTaskDispatchCronJob,
+    AgentTaskDispatchCronCommand,
+    AgentTaskRunJob,
     provideWorkspaceScopedRepository(EvidenceEntity),
     provideWorkspaceScopedRepository(FactEntity),
   ],
@@ -58,6 +70,9 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     // Fact stays core-schema, but only behind this boundary, so promoting it
     // to a standard object later is a one-module change.
     FactService,
+    // cron-register-all.command.ts injects this to register the dispatch
+    // cron at bootstrap — the only reason it needs to leave this module.
+    AgentTaskDispatchCronCommand,
   ],
 })
 export class AiResearchModule {}
