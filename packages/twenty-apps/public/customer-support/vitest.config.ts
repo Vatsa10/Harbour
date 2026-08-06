@@ -3,17 +3,24 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   resolve: {
     tsconfigPaths: true,
+    alias: {
+      src: new URL('./src/', import.meta.url).pathname,
+    },
   },
   test: {
     testTimeout: 120_000,
     hookTimeout: 120_000,
-    include: ['src/**/*.integration-test.ts'],
-    setupFiles: ['src/__tests__/setup-test.ts'],
+    // Unit tests over the manifest run everywhere with no server.
+    // *.integration-test.ts require a live instance and are opt-in.
+    include: ['src/**/*.test.ts'],
     env: {
       TWENTY_API_URL: process.env.TWENTY_API_URL ?? 'http://localhost:2020',
-      TWENTY_API_KEY:
-        process.env.TWENTY_API_KEY ??
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMDIwMjAyMC0xYzI1LTRkMDItYmYyNS02YWVjY2Y3ZWE0MTkiLCJ0eXBlIjoiQVBJX0tFWSIsIndvcmtzcGFjZUlkIjoiMjAyMDIwMjAtMWMyNS00ZDAyLWJmMjUtNmFlY2NmN2VhNDE5IiwiaWF0IjoxNzM1Njg5NjAwLCJleHAiOjQ4OTE0NDk2MDAsImp0aSI6IjIwMjAyMDIwLWY0MDEtNGQ4YS1hNzMxLTY0ZDAwN2MyN2JhZCJ9.bfQjfyN0NEtTCLE_xPyNcwonDzlSXFoP8kdCQTdnuDc',
+      // No default. Integration tests must be handed a key by the
+      // environment; a committed bearer token is a credential in a public
+      // package, dev-seeded or not.
+      ...(process.env.TWENTY_API_KEY
+        ? { TWENTY_API_KEY: process.env.TWENTY_API_KEY }
+        : {}),
     },
   },
 });

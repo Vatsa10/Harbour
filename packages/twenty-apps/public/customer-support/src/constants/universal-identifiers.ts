@@ -98,6 +98,12 @@ export const SUPPORT_TRIAGE_AGENT_UNIVERSAL_IDENTIFIER =
 export const SUPPORT_TRIAGE_SKILL_UNIVERSAL_IDENTIFIER =
   'b15fb25c-208d-4324-9362-aa850ef08080';
 
+// RESERVED — not referenced by any source file yet, and deliberately not
+// deleted (identifiers are permanent once committed; regenerating one would
+// orphan whatever a prior install created). This one is claimed by Task 9
+// (workflow templates + seed data), which is blocked on Phase 4 Task 10's
+// installWorkflowDefinition mutation — that mutation does not exist in the
+// generated clients today, so Task 9 cannot be written, stubbed, or faked.
 export const POST_INSTALL_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER =
   '28557ec1-4c0b-43a8-9157-f7e7016c80d3';
 export const UNINSTALL_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER =
@@ -112,6 +118,9 @@ export const SUPPORT_OVERVIEW_KANBAN_WIDGET_UNIVERSAL_IDENTIFIER =
 export const SUPPORT_OVERVIEW_QUEUE_WIDGET_UNIVERSAL_IDENTIFIER =
   '68cb86c9-aea9-4ab0-a85a-2a273b714de0';
 
+// RESERVED — same status as POST_INSTALL_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER
+// above: claimed by Task 9, blocked on Phase 4 Task 10's
+// installWorkflowDefinition. Do not delete, do not regenerate.
 // Workflow step ids (repair pass, C13) — WorkflowAction.id is a real,
 // required UUID field, not a free-form string. Fixed and hand-assigned like
 // every other identifier in this file.

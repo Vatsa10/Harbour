@@ -1,9 +1,17 @@
 import { defineAgent } from 'twenty-sdk/define';
 
-import { SUPPORT_TRIAGE_AGENT_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identifiers';
+import {
+  SUPPORT_AGENT_ROLE_UNIVERSAL_IDENTIFIER,
+  SUPPORT_TRIAGE_AGENT_UNIVERSAL_IDENTIFIER,
+} from 'src/constants/universal-identifiers';
 
 export default defineAgent({
   universalIdentifier: SUPPORT_TRIAGE_AGENT_UNIVERSAL_IDENTIFIER,
+  // Without this the manifest converter skips the role-target row and the
+  // agent gets no registry tools at all (agent-async-executor.service.ts:
+  // "No role means no registry tools"). See src/roles/support-agent.role.ts
+  // for what it grants.
+  roleUniversalIdentifier: SUPPORT_AGENT_ROLE_UNIVERSAL_IDENTIFIER,
   name: 'support-triage-agent',
   label: 'Support triage agent',
   description:
