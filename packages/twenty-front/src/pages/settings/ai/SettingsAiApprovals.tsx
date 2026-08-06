@@ -26,7 +26,6 @@ const StyledHeading = styled.h2`
 type Proposal = {
   id: string;
   status: string;
-  reason: string;
   expiresAt: string;
   createdAt: string;
   items: Array<{
@@ -34,6 +33,7 @@ type Proposal = {
     actionType: string;
     objectNameSingular: string | null;
     recordId: string | null;
+    toolId: string | null;
     payload: Record<string, unknown>;
     baseline: Record<string, unknown>;
     status: string;

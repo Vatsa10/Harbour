@@ -5,7 +5,6 @@ export const PENDING_PROPOSALS = gql`
     pendingProposals {
       id
       status
-      reason
       expiresAt
       createdAt
       items {
@@ -13,6 +12,7 @@ export const PENDING_PROPOSALS = gql`
         actionType
         objectNameSingular
         recordId
+        toolId
         payload
         baseline
         status
