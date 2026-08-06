@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { CreateAgentTaskTool } from 'src/engine/core-modules/tool/tools/create-agent-task-tool/create-agent-task-tool';
+import { RecordEvidenceTool } from 'src/engine/core-modules/tool/tools/record-evidence-tool/record-evidence-tool';
 import { AgentEntity } from 'src/engine/metadata-modules/ai/ai-agent/entities/agent.entity';
 import { AiAgentRoleModule } from 'src/engine/metadata-modules/ai/ai-agent-role/ai-agent-role.module';
 import { AgentRunEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/agent-run.entity';
@@ -33,6 +34,7 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     AgentTaskService,
     ResearchAgentService,
     CreateAgentTaskTool,
+    RecordEvidenceTool,
     EvidenceRecordingService,
     FactDerivationService,
     provideWorkspaceScopedRepository(EvidenceEntity),
@@ -48,6 +50,7 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     AgentTaskService,
     ResearchAgentService,
     CreateAgentTaskTool,
+    RecordEvidenceTool,
     EvidenceRecordingService,
   ],
 })

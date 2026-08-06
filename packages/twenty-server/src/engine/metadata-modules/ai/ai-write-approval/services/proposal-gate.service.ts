@@ -53,6 +53,11 @@ const UNGATED_STATIC_TOOL_IDS = [
   'navigate_app',
   'extract_json_paths',
   'search_output',
+  // record_evidence writes only to core."evidence" and the facts derived from
+  // it. It never touches a CRM record and never sends anything outbound. Gating
+  // it would ask a human to approve the act of writing down an observation, and
+  // no evidence would ever be recorded — the whole pipeline goes inert.
+  'record_evidence',
   // create_agent_task writes only to core."agentTask" — it schedules research,
   // it never touches a CRM record and never sends anything outbound. The
   // research run it schedules is itself dispatched through this same gate, so

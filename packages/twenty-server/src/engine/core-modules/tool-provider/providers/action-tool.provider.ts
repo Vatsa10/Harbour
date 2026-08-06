@@ -24,6 +24,7 @@ import { CodeInterpreterService } from 'src/engine/core-modules/code-interpreter
 import { CreateCalendarEventTool } from 'src/engine/core-modules/tool/tools/calendar-tool/create-calendar-event-tool';
 import { CodeInterpreterTool } from 'src/engine/core-modules/tool/tools/code-interpreter-tool/code-interpreter-tool';
 import { CreateAgentTaskTool } from 'src/engine/core-modules/tool/tools/create-agent-task-tool/create-agent-task-tool';
+import { RecordEvidenceTool } from 'src/engine/core-modules/tool/tools/record-evidence-tool/record-evidence-tool';
 import { DraftEmailTool } from 'src/engine/core-modules/tool/tools/email-tool/draft-email-tool';
 import { SendEmailTool } from 'src/engine/core-modules/tool/tools/email-tool/send-email-tool';
 import { HttpTool } from 'src/engine/core-modules/tool/tools/http-tool/http-tool';
@@ -52,6 +53,7 @@ export class ActionToolProvider implements ToolProvider {
     private readonly extractJsonPathsTool: ExtractJsonPathsTool,
     private readonly searchOutputTool: SearchOutputTool,
     private readonly createAgentTaskTool: CreateAgentTaskTool,
+    private readonly recordEvidenceTool: RecordEvidenceTool,
     private readonly codeInterpreterService: CodeInterpreterService,
     private readonly permissionsService: PermissionsService,
     private readonly i18nService: I18nService,
@@ -67,6 +69,7 @@ export class ActionToolProvider implements ToolProvider {
       ['extract_json_paths', this.extractJsonPathsTool],
       ['search_output', this.searchOutputTool],
       ['create_agent_task', this.createAgentTaskTool],
+      ['record_evidence', this.recordEvidenceTool],
     ]);
   }
 
@@ -183,6 +186,18 @@ export class ActionToolProvider implements ToolProvider {
       this.buildDescriptor(
         'create_agent_task',
         this.createAgentTaskTool,
+        includeSchemas,
+        context.locale,
+      ),
+    );
+
+    // Same reasoning as create_agent_task: unconditional, no permission flag.
+    // The seeded research role carries no rolePermissionFlagIds, so gating this
+    // behind a flag would hide it from the only agent that must call it.
+    descriptors.push(
+      this.buildDescriptor(
+        'record_evidence',
+        this.recordEvidenceTool,
         includeSchemas,
         context.locale,
       ),

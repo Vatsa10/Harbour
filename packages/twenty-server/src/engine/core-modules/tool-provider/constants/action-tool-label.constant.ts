@@ -12,6 +12,7 @@ export const ACTION_TOOL_IDS = [
   'code_interpreter',
   'navigate_app',
   'create_agent_task',
+  'record_evidence',
 ] as const;
 
 export type ActionToolId = (typeof ACTION_TOOL_IDS)[number];
@@ -40,5 +41,8 @@ export const ACTION_TOOL_LABELS: Record<ActionToolId, ActionToolLabel> = {
   },
   create_agent_task: {
     label: i18nLabel(msg`Create Agent Task`),
+  },
+  record_evidence: {
+    label: i18nLabel(msg`Record Evidence`),
   },
 };

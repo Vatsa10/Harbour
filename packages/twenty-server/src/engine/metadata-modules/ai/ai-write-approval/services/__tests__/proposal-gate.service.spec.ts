@@ -308,6 +308,40 @@ describe('ProposalGateService', () => {
   });
 
   // I6: the gate is a denylist. Anything not classified read-only is gated.
+  // These two tools write platform tables, never a CRM record. If the gate
+  // catches them, the agent is asked to approve the act of writing down an
+  // observation, no evidence is ever recorded, and the whole evidence → fact →
+  // proposal chain goes inert while every other test stays green.
+  describe('platform-table tools stay ungated', () => {
+    it.each(['record_evidence', 'create_agent_task'])(
+      'should not gate %s even when the policy says PROPOSE',
+      async (toolId) => {
+        setPolicy({ default: 'PROPOSE', overrides: {} });
+
+        const decision = await service.evaluate({
+          descriptor: staticDescriptor(toolId),
+          args: { recordId: 'record-1', fieldName: 'employees', value: 250 },
+          context,
+        });
+
+        expect(decision.kind).toBe('ALLOW');
+        expect(proposalItemRepository.save).not.toHaveBeenCalled();
+      },
+    );
+
+    it('should still gate an unenumerated static tool under the same policy', async () => {
+      setPolicy({ default: 'PROPOSE', overrides: {} });
+
+      const decision = await service.evaluate({
+        descriptor: staticDescriptor('some_future_write_tool'),
+        args: { to: 'a@example.com' },
+        context,
+      });
+
+      expect(decision.kind).toBe('PROPOSED');
+    });
+  });
+
   describe('denylist', () => {
     it('should gate a CRUD operation nobody has classified', async () => {
       const decision = await evaluate(crudDescriptor('merge_many'), {
