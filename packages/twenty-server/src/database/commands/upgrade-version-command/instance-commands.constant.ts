@@ -136,6 +136,8 @@ import { AddOpenRecordInToObjectMetadataFastInstanceCommand } from 'src/database
 import { CreateUserSessionCoreTableFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-27/2-27-instance-command-fast-1785518325511-create-user-session-core-table';
 import { CreateApplicationAuthorizationCoreTableFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-27/2-27-instance-command-fast-1785681272278-create-application-authorization-core-table';
 import { AddAiWriteApprovalFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1785950948000-add-ai-write-approval';
+import { AddAiResearchEvidenceAndFactFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1785950949000-add-ai-research-evidence-and-fact';
+import { AddAiResearchAgentTaskAndRunFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1785988945212-add-ai-research-agent-task-and-run';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
@@ -274,4 +276,6 @@ export const INSTANCE_COMMANDS = [
   CreateUserSessionCoreTableFastInstanceCommand,
   CreateApplicationAuthorizationCoreTableFastInstanceCommand,
   AddAiWriteApprovalFastInstanceCommand,
+  AddAiResearchAgentTaskAndRunFastInstanceCommand,
+  AddAiResearchEvidenceAndFactFastInstanceCommand,
 ];
