@@ -25,6 +25,9 @@ export class ProposalItemDTO {
   @Field(() => ID, { nullable: true })
   recordId: string | null;
 
+  @Field(() => String, { nullable: true })
+  toolId: string | null;
+
   @Field(() => GraphQLJSON)
   payload: Record<string, unknown>;
 
@@ -45,9 +48,6 @@ export class ProposalDTO {
 
   @Field(() => ProposalStatus)
   status: ProposalStatus;
-
-  @Field(() => String, { nullable: true })
-  reason: string | null;
 
   @Field(() => Date)
   expiresAt: Date;

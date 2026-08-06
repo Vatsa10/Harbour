@@ -31,7 +31,7 @@ export class ProposalResolver {
     // Proposals are looked up by (workspaceId, status) as a composite filter,
     // not workspaceId-then-merge, so the scoped wrapper doesn't fit here.
     // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
-    @InjectRepository(ProposalEntity, 'core')
+    @InjectRepository(ProposalEntity)
     private readonly proposalRepository: Repository<ProposalEntity>,
   ) {}
 
@@ -51,9 +51,25 @@ export class ProposalResolver {
 
     const now = new Date();
 
-    return proposals.filter(
-      (proposal) => proposal.expiresAt > now,
-    ) as unknown as ProposalDTO[];
+    return proposals
+      .filter((proposal) => proposal.expiresAt > now)
+      .map((proposal) => ({
+        id: proposal.id,
+        status: proposal.status,
+        expiresAt: proposal.expiresAt,
+        createdAt: proposal.createdAt,
+        items: proposal.items.map((item) => ({
+          id: item.id,
+          actionType: item.actionType,
+          objectNameSingular: item.objectNameSingular,
+          recordId: item.recordId,
+          toolId: item.toolId,
+          payload: item.payload,
+          baseline: item.baseline,
+          status: item.status,
+          error: item.error,
+        })),
+      }));
   }
 
   @Mutation(() => ApprovalResultDTO)

@@ -1,4 +1,4 @@
-import { UseGuards } from '@nestjs/common';
+import { UseGuards, UsePipes } from '@nestjs/common';
 import { Args, Mutation, Query } from '@nestjs/graphql';
 
 import { PermissionFlagType } from 'twenty-shared/constants';
@@ -13,7 +13,12 @@ import {
   UpdateAiWritePolicyInput,
 } from 'src/engine/metadata-modules/ai/ai-write-approval/dtos/ai-write-policy.dto';
 import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service';
-import { type AiWritePolicy } from 'src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type';
+import {
+  isAiWriteMode,
+  type AiWriteMode,
+  type AiWritePolicy,
+} from 'src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type';
+import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
 
 // The policy is deliberately not a workspace record: a user with record write
 // permissions must not be able to disable the gate on themselves.
@@ -21,6 +26,7 @@ import { type AiWritePolicy } from 'src/engine/metadata-modules/ai/ai-write-appr
   WorkspaceAuthGuard,
   SettingsPermissionGuard(PermissionFlagType.AI_SETTINGS),
 )
+@UsePipes(ResolverValidationPipe)
 @MetadataResolver()
 export class AiWritePolicyResolver {
   constructor(private readonly aiWritePolicyService: AiWritePolicyService) {}
@@ -37,7 +43,16 @@ export class AiWritePolicyResolver {
     @Args('input') input: UpdateAiWritePolicyInput,
     @AuthWorkspace() workspace: FlatWorkspace,
   ): Promise<AiWritePolicyDTO> {
-    const policy = input as AiWritePolicy;
+    // The pipe has already rejected anything that is not a mode; narrowing
+    // here keeps the stored blob typed rather than cast.
+    const policy: AiWritePolicy = {
+      default: input.default as AiWriteMode,
+      overrides: Object.fromEntries(
+        Object.entries(input.overrides).filter(
+          (entry): entry is [string, AiWriteMode] => isAiWriteMode(entry[1]),
+        ),
+      ),
+    };
 
     await this.aiWritePolicyService.setPolicy(workspace.id, policy);
 
