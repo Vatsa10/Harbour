@@ -34,6 +34,10 @@ import { type ToolDescriptor } from 'src/engine/core-modules/tool-provider/types
 import { type ToolExecutionRef } from 'src/engine/core-modules/tool-provider/types/tool-execution-ref.type';
 import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types/tool-index-entry.type';
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
+import {
+  buildToolFailure,
+  toFailedToolOutput,
+} from 'src/engine/core-modules/tool/utils/build-tool-failure.util';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { ProposalGateService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
@@ -81,11 +85,17 @@ export class ToolExecutorService {
     }
 
     if (decision.kind === 'FORBID') {
-      return {
-        success: false,
-        message: decision.message,
-        error: decision.message,
-      };
+      return toFailedToolOutput(
+        buildToolFailure({
+          code: 'FORBIDDEN_BY_POLICY',
+          message: decision.message,
+          // Retrying a forbidden write can only fail again; the unblock is a
+          // human policy change, so say that instead of letting the agent loop.
+          hint: 'This workspace forbids this action for AI. Do not retry. Report it to the user and ask a workspace admin to change the AI write policy.',
+          retryable: false,
+          allowedActions: ['get_tool_catalog'],
+        }),
+      );
     }
 
     switch (descriptor.executionRef.kind) {
@@ -268,11 +278,15 @@ export class ToolExecutorService {
     // `isAvailable`, but re-verify at dispatch so the gate is enforced in
     // one place regardless of how the descriptor reached us.
     if (!(await provider.isAvailable(context))) {
-      return {
-        success: false,
-        message: `Tool "${descriptor.name}" is not available`,
-        error: `Tool "${descriptor.name}" is not available in this context. Use get_tool_catalog to see available tools.`,
-      };
+      return toFailedToolOutput(
+        buildToolFailure({
+          code: 'PERMISSION_DENIED',
+          message: `Tool "${descriptor.name}" is not available in this context.`,
+          hint: 'Use get_tool_catalog to see the tools you may call here.',
+          retryable: false,
+          allowedActions: ['get_tool_catalog'],
+        }),
+      );
     }
 
     return provider.executeStaticTool(
@@ -294,11 +308,16 @@ export class ToolExecutorService {
     });
 
     if (result.error) {
-      return {
-        success: false,
-        message: 'Logic function execution failed',
-        error: result.error.errorMessage,
-      };
+      return toFailedToolOutput(
+        buildToolFailure({
+          code: 'INTERNAL_ERROR',
+          message: `Logic function execution failed: ${result.error.errorMessage}`,
+          // A logic function failure is usually the arguments or a transient
+          // runtime fault, so one informed retry is legitimate here.
+          hint: 'Check the arguments against the tool schema and try once more; if it fails again, report the error to the user.',
+          retryable: true,
+        }),
+      );
     }
 
     return {

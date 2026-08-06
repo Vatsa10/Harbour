@@ -141,7 +141,10 @@ describe('ToolExecutorService gating', () => {
 
     expect(updateRecordService.execute).not.toHaveBeenCalled();
     expect(result.success).toBe(false);
-    expect(result.error).toBe('Not permitted');
+    expect(result.message).toBe('Not permitted');
+    expect(result.error).toContain('Not permitted');
+    expect(result.failure?.code).toBe('FORBIDDEN_BY_POLICY');
+    expect(result.failure?.retryable).toBe(false);
   });
 
   it('should still execute reads', async () => {
