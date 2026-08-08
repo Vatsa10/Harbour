@@ -140,6 +140,7 @@ import { AddAiWriteApprovalFastInstanceCommand } from 'src/database/commands/upg
 import { AddAiResearchEvidenceAndFactFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1785950949000-add-ai-research-evidence-and-fact';
 import { AddAiResearchAgentTaskAndRunFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1785988945212-add-ai-research-agent-task-and-run';
 import { AddGuidedImportFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1785994046918-add-guided-import';
+import { AddConnectedAccountExcludeFromAiExtractionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1786100000000-add-connected-account-exclude-from-ai-extraction';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
@@ -282,4 +283,5 @@ export const INSTANCE_COMMANDS = [
   AddAiResearchAgentTaskAndRunFastInstanceCommand,
   AddAiResearchEvidenceAndFactFastInstanceCommand,
   AddGuidedImportFastInstanceCommand,
+  AddConnectedAccountExcludeFromAiExtractionFastInstanceCommand,
 ];

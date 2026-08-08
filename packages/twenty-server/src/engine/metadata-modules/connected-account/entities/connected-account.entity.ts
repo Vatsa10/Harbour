@@ -113,6 +113,15 @@ export class ConnectedAccountEntity extends WorkspaceRelatedEntity {
   @Column({ type: 'varchar', nullable: false, default: 'user' })
   visibility: ConnectedAccountVisibility;
 
+  // Owner Decision 3: message and call-recording content is sent to a
+  // third-party LLM for structured extraction with no redaction. A workspace
+  // that does not want a specific mailbox or calendar's content to leave the
+  // instance sets this true, and every extraction path skips that account
+  // BEFORE any content is read for a model call — the exclusion gates the
+  // egress, not merely the resulting write.
+  @Column({ type: 'boolean', nullable: false, default: false })
+  excludeFromAiExtraction: boolean;
+
   @OneToMany(
     'MessageChannelEntity',
     (messageChannel: MessageChannelEntity) => messageChannel.connectedAccount,
