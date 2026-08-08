@@ -1,5 +1,5 @@
 import { BadRequestException, UseGuards } from '@nestjs/common';
-import { Args, Mutation } from '@nestjs/graphql';
+import { Args, Mutation, Query } from '@nestjs/graphql';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { PermissionFlagType } from 'twenty-shared/constants';
@@ -13,10 +13,16 @@ import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorat
 import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { CreateImportBatchInput } from 'src/modules/guided-import/dtos/create-import-batch.input';
+import { ImportBatchPreviewDTO } from 'src/modules/guided-import/dtos/import-batch-preview.dto';
 import { ImportBatchDTO } from 'src/modules/guided-import/dtos/import-batch.dto';
 import { ImportBatchEntity } from 'src/modules/guided-import/entities/import-batch.entity';
 import { ImportRowEntity } from 'src/modules/guided-import/entities/import-row.entity';
-import { ImportBatchStatus } from 'src/modules/guided-import/types/import-batch-status.type';
+import { ImportMatchResolutionService } from 'src/modules/guided-import/services/import-match-resolution.service';
+import { ImportValidationService } from 'src/modules/guided-import/services/import-validation.service';
+import {
+  ImportBatchStatus,
+  ImportRowMatchAction,
+} from 'src/modules/guided-import/types/import-batch-status.type';
 
 @UseGuards(
   WorkspaceAuthGuard,
@@ -33,6 +39,8 @@ export class ImportBatchResolver {
     // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(ImportRowEntity)
     private readonly importRowRepository: Repository<ImportRowEntity>,
+    private readonly importMatchResolutionService: ImportMatchResolutionService,
+    private readonly importValidationService: ImportValidationService,
   ) {}
 
   @Mutation(() => ImportBatchDTO)
@@ -73,5 +81,84 @@ export class ImportBatchResolver {
     );
 
     return batch as unknown as ImportBatchDTO;
+  }
+
+  // Runs match resolution then validation so the reviewer's preview reflects
+  // a batch where every row already has a matchAction and a
+  // validationErrors verdict.
+  @Mutation(() => ImportBatchDTO)
+  async prepareImportBatch(
+    @Args('importBatchId') importBatchId: string,
+    @AuthWorkspace() workspace: FlatWorkspace,
+  ): Promise<ImportBatchDTO> {
+    const batch = await this.importBatchRepository.findOne({
+      where: { id: importBatchId, workspaceId: workspace.id },
+    });
+
+    if (!batch) {
+      throw new BadRequestException('Import batch not found.');
+    }
+
+    await this.importMatchResolutionService.resolveBatch(importBatchId);
+    await this.importValidationService.validateBatch(importBatchId);
+
+    const readyBatch = await this.importBatchRepository.save({
+      ...batch,
+      status: ImportBatchStatus.READY,
+    });
+
+    return readyBatch as unknown as ImportBatchDTO;
+  }
+
+  @Query(() => ImportBatchPreviewDTO)
+  async importBatchPreview(
+    @Args('importBatchId') importBatchId: string,
+    @AuthWorkspace() workspace: FlatWorkspace,
+  ): Promise<ImportBatchPreviewDTO> {
+    const batch = await this.importBatchRepository.findOne({
+      where: { id: importBatchId, workspaceId: workspace.id },
+    });
+
+    if (!batch) {
+      throw new BadRequestException('Import batch not found.');
+    }
+
+    const [
+      createCount,
+      updateCount,
+      proposeCount,
+      skipCount,
+      rowsWithErrorsCount,
+    ] = await Promise.all([
+      this.importRowRepository.count({
+        where: { importBatchId, matchAction: ImportRowMatchAction.CREATE },
+      }),
+      this.importRowRepository.count({
+        where: { importBatchId, matchAction: ImportRowMatchAction.UPDATE },
+      }),
+      this.importRowRepository.count({
+        where: { importBatchId, matchAction: ImportRowMatchAction.PROPOSE },
+      }),
+      this.importRowRepository.count({
+        where: { importBatchId, matchAction: ImportRowMatchAction.SKIP },
+      }),
+      // TypeORM's Not(Equal({})) doesn't reliably express "not an empty
+      // jsonb object" against Postgres - a raw text cast comparison is the
+      // explicit, working form.
+      this.importRowRepository
+        .createQueryBuilder('row')
+        .where('row.importBatchId = :importBatchId', { importBatchId })
+        .andWhere("row.validationErrors::text != '{}'")
+        .getCount(),
+    ]);
+
+    return {
+      totalRows: batch.totalRows,
+      createCount,
+      updateCount,
+      proposeCount,
+      skipCount,
+      rowsWithErrorsCount,
+    };
   }
 }
