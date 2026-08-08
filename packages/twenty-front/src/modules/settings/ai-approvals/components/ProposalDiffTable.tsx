@@ -4,6 +4,19 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { Button } from 'twenty-ui/input';
 
+// Matches ProposalItemFact from the metadata schema (Task 11). Flat by
+// design: the whole citation is one row, so there is no nested evidence
+// array to traverse here.
+type ProposalItemFact = {
+  id: string;
+  fieldName: string;
+  strength: string;
+  hasConflict: boolean;
+  sourceType: string | null;
+  sourceLocator: string | null;
+  observedAt: string | null;
+};
+
 type ProposalItem = {
   id: string;
   actionType: string;
@@ -14,6 +27,9 @@ type ProposalItem = {
   baseline: Record<string, unknown>;
   status: string;
   error: string | null;
+  // Optional: a proposal item created before Task 8 shipped has none, and
+  // every unit test fixture in this file that predates this task omits it.
+  facts?: ProposalItemFact[];
 };
 
 type ProposalDiffTableProps = {
@@ -43,6 +59,16 @@ const StyledNote = styled.div`
 `;
 
 const StyledConflict = styled.span`
+  color: ${themeCssVariables.font.color.danger};
+`;
+
+const StyledCitation = styled.div`
+  color: ${themeCssVariables.font.color.tertiary};
+  font-size: ${themeCssVariables.font.size.xs};
+  margin-top: ${themeCssVariables.spacing[1]};
+`;
+
+const StyledConflictBadge = styled.span`
   color: ${themeCssVariables.font.color.danger};
 `;
 
@@ -90,6 +116,12 @@ const describeItem = (item: ProposalItem): string => {
 };
 
 const FIELD_DIFF_ACTION_TYPES = ['CREATE_RECORD', 'UPDATE_RECORD'];
+
+const findFactForField = (
+  item: ProposalItem,
+  fieldName: string,
+): ProposalItemFact | undefined =>
+  item.facts?.find((fact) => fact.fieldName === fieldName);
 
 export const ProposalDiffTable = ({
   items,
@@ -148,18 +180,38 @@ export const ProposalDiffTable = ({
                     )}
                 </StyledCell>
               </tr>,
-              ...fieldNames.map((fieldName) => (
-                <StyledFieldRow key={`${item.id}-${fieldName}`}>
-                  <StyledCell />
-                  <StyledCell>{fieldName}</StyledCell>
-                  <StyledCell>
-                    {formatValue(item.baseline[fieldName])}
-                  </StyledCell>
-                  <StyledCell>
-                    {formatValue(item.payload[fieldName])}
-                  </StyledCell>
-                </StyledFieldRow>
-              )),
+              ...fieldNames.map((fieldName) => {
+                const fact = findFactForField(item, fieldName);
+
+                return (
+                  <StyledFieldRow key={`${item.id}-${fieldName}`}>
+                    <StyledCell />
+                    <StyledCell>
+                      {fieldName}
+                      {/* No fact, or a fact whose evidence row is gone, means
+                          no citation — a blank line here is the honest state
+                          for a chat-originated write, not an error. */}
+                      {fact !== undefined && fact.sourceType !== null && (
+                        <StyledCitation>
+                          {fact.hasConflict && (
+                            <StyledConflictBadge>
+                              Conflicting sources —{' '}
+                            </StyledConflictBadge>
+                          )}
+                          {fact.strength} · {fact.sourceType} ·{' '}
+                          {fact.sourceLocator}
+                        </StyledCitation>
+                      )}
+                    </StyledCell>
+                    <StyledCell>
+                      {formatValue(item.baseline[fieldName])}
+                    </StyledCell>
+                    <StyledCell>
+                      {formatValue(item.payload[fieldName])}
+                    </StyledCell>
+                  </StyledFieldRow>
+                );
+              }),
             ];
           })}
         </tbody>

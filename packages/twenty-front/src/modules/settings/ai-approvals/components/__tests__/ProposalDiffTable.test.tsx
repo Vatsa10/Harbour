@@ -14,6 +14,19 @@ const items = [
     baseline: { jobTitle: 'Sales Rep', city: 'Munich' },
     status: 'PENDING',
     error: null,
+    // jobTitle is fact-backed; city deliberately is not, so one item covers
+    // both the citation and the no-citation case on adjacent rows.
+    facts: [
+      {
+        id: 'fact-1',
+        fieldName: 'jobTitle',
+        strength: 'WEAK',
+        hasConflict: false,
+        sourceType: 'WEB_SEARCH',
+        sourceLocator: 'https://example.com/about',
+        observedAt: '2026-08-01T00:00:00.000Z',
+      },
+    ],
   },
   {
     id: 'item-2',
@@ -25,6 +38,7 @@ const items = [
     baseline: { updatedAt: '2026-01-01' },
     status: 'PENDING',
     error: null,
+    facts: [],
   },
 ];
 
@@ -125,5 +139,60 @@ describe('ProposalDiffTable', () => {
     expect(
       screen.getByText(/This record changed since it was proposed/),
     ).toBeInTheDocument();
+  });
+
+  it('should show the strength and source for a fact-backed field', () => {
+    render(
+      <ProposalDiffTable
+        items={items}
+        onApprove={jest.fn()}
+        onReject={jest.fn()}
+      />,
+    );
+
+    const citation = screen.getByText(/WEAK/);
+
+    expect(citation).toHaveTextContent('WEB_SEARCH');
+    expect(citation).toHaveTextContent('https://example.com/about');
+    // The citation belongs to the jobTitle row, not the city row.
+    expect(citation.closest('tr')).toHaveTextContent('jobTitle');
+  });
+
+  // I7: the earlier version of this test asserted `.not.toHaveTextContent('WEAK')`
+  // on the Berlin row, which passed against the unmodified component because
+  // nothing rendered 'WEAK' anywhere — a test that could never go red. Assert
+  // instead that exactly one citation exists and it is not on the city row.
+  it('should show no citation on a field with no backing fact', () => {
+    render(
+      <ProposalDiffTable
+        items={items}
+        onApprove={jest.fn()}
+        onReject={jest.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText(/WEAK|STRONG/)).toHaveLength(1);
+
+    const cityRow = screen.getByText('Berlin').closest('tr');
+
+    expect(cityRow).not.toBeNull();
+    expect(cityRow).not.toHaveTextContent('WEB_SEARCH');
+  });
+
+  it('should flag a fact whose sources disagree', () => {
+    render(
+      <ProposalDiffTable
+        items={[
+          {
+            ...items[0],
+            facts: [{ ...items[0].facts[0], hasConflict: true }],
+          },
+        ]}
+        onApprove={jest.fn()}
+        onReject={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/Conflicting sources/)).toBeInTheDocument();
   });
 });

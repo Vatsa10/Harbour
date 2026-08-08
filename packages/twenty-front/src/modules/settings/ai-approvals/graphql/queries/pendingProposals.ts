@@ -17,6 +17,15 @@ export const PENDING_PROPOSALS = gql`
         baseline
         status
         error
+        facts {
+          id
+          fieldName
+          strength
+          hasConflict
+          sourceType
+          sourceLocator
+          observedAt
+        }
       }
     }
   }
