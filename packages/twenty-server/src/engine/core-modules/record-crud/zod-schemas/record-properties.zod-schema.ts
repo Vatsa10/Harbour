@@ -11,6 +11,7 @@ import { RelationType } from 'src/engine/metadata-modules/field-metadata/interfa
 
 import { filesFieldSchema } from 'src/engine/api/common/common-args-processors/data-arg-processor/validator-utils/validate-files-field-or-throw.util';
 import { type ObjectMetadataForToolSchema } from 'src/engine/core-modules/record-crud/types/object-metadata-for-tool-schema.type';
+import { describeCustomFieldForToolSchema } from 'src/engine/core-modules/record-crud/utils/describe-custom-field-for-tool-schema.util';
 import {
   AddressValueOptionalSchema,
   AddressValueSchema,
@@ -301,6 +302,10 @@ export const generateRecordPropertiesZodSchema = (
 
       fieldSchema = fieldSchema.describe(
         'Use "first" to insert at the top, "last" for the bottom, or a number for explicit ordering. Leave empty to place at the top (recommended).',
+      );
+    } else if (field.isCustom) {
+      fieldSchema = fieldSchema.describe(
+        describeCustomFieldForToolSchema(field),
       );
     } else if (field.description) {
       fieldSchema = fieldSchema.describe(field.description);
