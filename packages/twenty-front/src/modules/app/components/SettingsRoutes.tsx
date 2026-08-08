@@ -256,6 +256,12 @@ const SettingsAiApprovals = lazy(() =>
   })),
 );
 
+const SettingsWorkflowTemplates = lazy(() =>
+  import('~/pages/settings/ai/SettingsWorkflowTemplates').then((module) => ({
+    default: module.SettingsWorkflowTemplates,
+  })),
+);
+
 const SettingsAiUsageUserDetail = lazy(() =>
   import('~/pages/settings/ai/SettingsAiUsageUserDetail').then((module) => ({
     default: module.SettingsAiUsageUserDetail,
@@ -793,6 +799,10 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
       >
         <Route path={SettingsPath.AI} element={<SettingsAI />} />
         <Route path={SettingsPath.AiPrompts} element={<SettingsAiPrompts />} />
+        <Route
+          path={SettingsPath.WorkflowTemplates}
+          element={<SettingsWorkflowTemplates />}
+        />
         <Route
           path={SettingsPath.AiNewAgent}
           element={<SettingsAgentForm mode="create" />}
