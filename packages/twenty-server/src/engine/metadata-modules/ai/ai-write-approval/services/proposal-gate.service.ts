@@ -216,6 +216,32 @@ export class ProposalGateService {
       };
     }
 
+    const proposal = await this.getOrCreatePendingProposal(context);
+
+    const existingItem = await this.findDuplicatePendingItem({
+      proposalId: proposal.id,
+      actionType: gateInput.actionType,
+      objectNameSingular: gateInput.objectNameSingular,
+      recordId: gateInput.recordId,
+      payload: gateInput.payload,
+    });
+
+    if (isDefined(existingItem)) {
+      return {
+        kind: 'PROPOSED',
+        output: {
+          success: true,
+          message:
+            'This exact change is already awaiting human approval from an earlier call in this turn. Do not retry.',
+          result: {
+            proposalId: proposal.id,
+            proposalItemId: existingItem.id,
+            status: existingItem.status,
+          },
+        },
+      };
+    }
+
     const baseline = await this.readBaseline({
       objectNameSingular: gateInput.objectNameSingular,
       recordId: gateInput.recordId,
@@ -234,8 +260,6 @@ export class ProposalGateService {
       recordId: gateInput.recordId ?? '',
       fieldNames: Object.keys(gateInput.payload),
     });
-
-    const proposal = await this.getOrCreatePendingProposal(context);
 
     const item = await this.proposalItemRepository.save({
       proposalId: proposal.id,
@@ -508,6 +532,32 @@ export class ProposalGateService {
 
     return Object.fromEntries(
       fieldNames.map((fieldName) => [fieldName, record[fieldName]]),
+    );
+  }
+
+  // A retried tool call inside the same turn must not create a second
+  // reviewable item for the same intended change. Deep-equal payload is
+  // enough here because the batch is already scoped to one proposal.
+  private async findDuplicatePendingItem(params: {
+    proposalId: string;
+    actionType: ProposalActionType;
+    objectNameSingular: string | null;
+    recordId: string | null;
+    payload: Record<string, unknown>;
+  }): Promise<ProposalItemEntity | undefined> {
+    const items = await this.proposalItemRepository.find({
+      where: {
+        proposalId: params.proposalId,
+        status: ProposalItemStatus.PENDING,
+      },
+    });
+
+    return items.find(
+      (item) =>
+        item.actionType === params.actionType &&
+        item.objectNameSingular === params.objectNameSingular &&
+        item.recordId === params.recordId &&
+        JSON.stringify(item.payload) === JSON.stringify(params.payload),
     );
   }
 

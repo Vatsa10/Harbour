@@ -62,7 +62,7 @@ describe('ProposalGateService', () => {
   const findRecordsService = { execute: jest.fn() };
   const factService = { findCurrentFactIdsForFields: jest.fn() };
   const proposalRepository = { findOne: jest.fn(), save: jest.fn() };
-  const proposalItemRepository = { save: jest.fn() };
+  const proposalItemRepository = { save: jest.fn(), find: jest.fn() };
 
   const setPolicy = (policy: AiWritePolicy) => {
     keyValuePairService.get.mockResolvedValue([{ value: policy }]);
@@ -82,6 +82,7 @@ describe('ProposalGateService', () => {
       ...entity,
       id: 'item-1',
     }));
+    proposalItemRepository.find.mockResolvedValue([]);
     findRecordsService.execute.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -580,6 +581,60 @@ describe('ProposalGateService', () => {
 
       expect(factRepository.find).not.toHaveBeenCalled();
       expect(savedItem()).toMatchObject({ factIds: [] });
+    });
+  });
+
+  describe('duplicate write detection', () => {
+    it('should reuse an existing pending item instead of creating a duplicate', async () => {
+      proposalRepository.findOne.mockResolvedValue({ id: 'proposal-existing' });
+      proposalItemRepository.find.mockResolvedValue([
+        {
+          id: 'item-existing',
+          proposalId: 'proposal-existing',
+          actionType: 'UPDATE_RECORD',
+          objectNameSingular: 'person',
+          recordId: 'record-1',
+          payload: { jobTitle: 'New title' },
+          status: 'PENDING',
+        },
+      ]);
+
+      const decision = await evaluate(crudDescriptor('update_one'), {
+        id: 'record-1',
+        jobTitle: 'New title',
+      });
+
+      expect(decision.kind).toBe('PROPOSED');
+      if (decision.kind !== 'PROPOSED') {
+        throw new Error('expected a proposed decision');
+      }
+      expect(decision.output.result).toMatchObject({
+        proposalItemId: 'item-existing',
+      });
+      expect(proposalItemRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should still create a new item when the payload differs', async () => {
+      proposalRepository.findOne.mockResolvedValue({ id: 'proposal-existing' });
+      proposalItemRepository.find.mockResolvedValue([
+        {
+          id: 'item-existing',
+          proposalId: 'proposal-existing',
+          actionType: 'UPDATE_RECORD',
+          objectNameSingular: 'person',
+          recordId: 'record-1',
+          payload: { jobTitle: 'A different title' },
+          status: 'PENDING',
+        },
+      ]);
+
+      const decision = await evaluate(crudDescriptor('update_one'), {
+        id: 'record-1',
+        jobTitle: 'New title',
+      });
+
+      expect(decision.kind).toBe('PROPOSED');
+      expect(proposalItemRepository.save).toHaveBeenCalled();
     });
   });
 });
