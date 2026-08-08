@@ -52,6 +52,7 @@ import { WorkspaceCleanerModule } from 'src/engine/workspace-manager/workspace-c
 import { CalendarEventParticipantManagerModule } from 'src/modules/calendar/calendar-event-participant-manager/calendar-event-participant-manager.module';
 import { CalendarModule } from 'src/modules/calendar/calendar.module';
 import { AutoCompaniesAndContactsCreationJobModule } from 'src/modules/contact-creation-manager/jobs/auto-companies-and-contacts-creation-job.module';
+import { ImportExecutionJobModule } from 'src/modules/guided-import/jobs/import-execution-job.module';
 import { MessagingModule } from 'src/modules/messaging/messaging.module';
 import { TimelineJobModule } from 'src/modules/timeline/jobs/timeline-job.module';
 import { TimelineActivityModule } from 'src/modules/timeline/timeline-activity.module';
@@ -81,6 +82,7 @@ import { WorkflowModule } from 'src/modules/workflow/workflow.module';
     StripeModule,
     FeatureFlagModule,
     AutoCompaniesAndContactsCreationJobModule,
+    ImportExecutionJobModule,
     TimelineJobModule,
     WebhookJobModule,
     WorkflowModule,

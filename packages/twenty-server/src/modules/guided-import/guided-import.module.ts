@@ -1,6 +1,13 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
+import { UserEntity } from 'src/engine/core-modules/user/user.entity';
+import { RecordCrudModule } from 'src/engine/core-modules/record-crud/record-crud.module';
+import { AiWriteApprovalModule } from 'src/engine/metadata-modules/ai/ai-write-approval/ai-write-approval.module';
+import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.module';
+import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
+import { ImportExecutionService } from 'src/modules/guided-import/services/import-execution.service';
 import { ImportBatchEntity } from 'src/modules/guided-import/entities/import-batch.entity';
 import { ImportRowEntity } from 'src/modules/guided-import/entities/import-row.entity';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
@@ -15,6 +22,11 @@ import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata
   // cannot resolve it and the whole application fails to boot.
   imports: [
     TypeOrmModule.forFeature([ImportBatchEntity, ImportRowEntity]),
+    TypeOrmModule.forFeature([UserEntity, UserWorkspaceEntity]),
+    RecordCrudModule,
+    AiWriteApprovalModule,
+    UserRoleModule,
+    WorkspaceCacheModule,
     PermissionsModule,
     MatchParticipantModule,
     WorkspaceManyOrAllFlatEntityMapsCacheModule,
@@ -23,6 +35,8 @@ import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata
     ImportBatchResolver,
     ImportMatchResolutionService,
     ImportValidationService,
+    ImportExecutionService,
   ],
+  exports: [ImportExecutionService],
 })
 export class GuidedImportModule {}

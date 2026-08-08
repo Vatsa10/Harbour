@@ -188,4 +188,17 @@ export const MESSAGE_QUEUE_WORKER_CONFIG: Record<
       boundedShutdownDrain: false,
     },
   },
+  [MessageQueue.importQueue]: {
+    priority: 5,
+    workerOptions: {
+      // A guided import walks thousands of rows one write at a time; the
+      // default 30s lock would mark a healthy job stalled mid-batch.
+      concurrency: 1,
+      lockDuration: 600_000,
+      // Resumable by construction (only PENDING rows are re-read), so a
+      // stalled batch is safe to re-queue exactly once.
+      maxStalledCount: 1,
+      boundedShutdownDrain: false,
+    },
+  },
 };

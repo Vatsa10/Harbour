@@ -7,6 +7,9 @@ import { type Repository } from 'typeorm';
 import { type QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
+import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
+import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
+import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
 import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
@@ -17,6 +20,10 @@ import { ImportBatchPreviewDTO } from 'src/modules/guided-import/dtos/import-bat
 import { ImportBatchDTO } from 'src/modules/guided-import/dtos/import-batch.dto';
 import { ImportBatchEntity } from 'src/modules/guided-import/entities/import-batch.entity';
 import { ImportRowEntity } from 'src/modules/guided-import/entities/import-row.entity';
+import {
+  ImportExecutionJob,
+  type ImportExecutionJobData,
+} from 'src/modules/guided-import/jobs/import-execution.job';
 import { ImportMatchResolutionService } from 'src/modules/guided-import/services/import-match-resolution.service';
 import { ImportValidationService } from 'src/modules/guided-import/services/import-validation.service';
 import {
@@ -41,6 +48,8 @@ export class ImportBatchResolver {
     private readonly importRowRepository: Repository<ImportRowEntity>,
     private readonly importMatchResolutionService: ImportMatchResolutionService,
     private readonly importValidationService: ImportValidationService,
+    @InjectMessageQueue(MessageQueue.importQueue)
+    private readonly messageQueueService: MessageQueueService,
   ) {}
 
   @Mutation(() => ImportBatchDTO)
@@ -108,6 +117,36 @@ export class ImportBatchResolver {
     });
 
     return readyBatch as unknown as ImportBatchDTO;
+  }
+
+  // Enqueues rather than executing inline: the batch may be tens of thousands
+  // of rows, and the job is resumable, so a crashed worker retry is safe.
+  @Mutation(() => ImportBatchDTO)
+  async startImportBatch(
+    @Args('importBatchId') importBatchId: string,
+    @AuthWorkspace() workspace: FlatWorkspace,
+  ): Promise<ImportBatchDTO> {
+    const batch = await this.importBatchRepository.findOne({
+      where: { id: importBatchId, workspaceId: workspace.id },
+    });
+
+    if (!batch || batch.status !== ImportBatchStatus.READY) {
+      throw new BadRequestException(
+        'Import batch must be prepared (READY) before it can start.',
+      );
+    }
+
+    const runningBatch = await this.importBatchRepository.save({
+      ...batch,
+      status: ImportBatchStatus.RUNNING,
+    });
+
+    await this.messageQueueService.add<ImportExecutionJobData>(
+      ImportExecutionJob.name,
+      { workspaceId: workspace.id, importBatchId },
+    );
+
+    return runningBatch as unknown as ImportBatchDTO;
   }
 
   @Query(() => ImportBatchPreviewDTO)

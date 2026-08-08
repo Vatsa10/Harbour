@@ -12,6 +12,7 @@ describe('ImportBatchResolver', () => {
   const importRowRepository = { insert: jest.fn(), count: jest.fn() };
   const matchResolutionService = { resolveBatch: jest.fn() };
   const validationService = { validateBatch: jest.fn() };
+  const messageQueueService = { add: jest.fn() };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -25,6 +26,7 @@ describe('ImportBatchResolver', () => {
       importRowRepository as never,
       matchResolutionService as never,
       validationService as never,
+      messageQueueService as never,
     );
   });
 
@@ -114,6 +116,7 @@ describe('prepareImportBatch', () => {
   const importRowRepository = { insert: jest.fn(), count: jest.fn() };
   const matchResolutionService = { resolveBatch: jest.fn() };
   const validationService = { validateBatch: jest.fn() };
+  const messageQueueService = { add: jest.fn() };
   let resolver: ImportBatchResolver;
 
   beforeEach(() => {
@@ -123,6 +126,7 @@ describe('prepareImportBatch', () => {
       importRowRepository as never,
       matchResolutionService as never,
       validationService as never,
+      messageQueueService as never,
     );
   });
 
@@ -165,6 +169,7 @@ describe('importBatchPreview', () => {
   };
   const matchResolutionService = { resolveBatch: jest.fn() };
   const validationService = { validateBatch: jest.fn() };
+  const messageQueueService = { add: jest.fn() };
   let resolver: ImportBatchResolver;
 
   beforeEach(() => {
@@ -174,6 +179,7 @@ describe('importBatchPreview', () => {
       importRowRepository as never,
       matchResolutionService as never,
       validationService as never,
+      messageQueueService as never,
     );
   });
 
@@ -224,5 +230,55 @@ describe('importBatchPreview', () => {
         id: 'workspace-1',
       } as never),
     ).rejects.toThrow();
+  });
+});
+
+describe('startImportBatch', () => {
+  const importBatchRepository = { save: jest.fn(), findOne: jest.fn() };
+  const messageQueueService = { add: jest.fn() };
+  let resolver: ImportBatchResolver;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    importBatchRepository.save.mockImplementation(async (entity) => entity);
+    resolver = new ImportBatchResolver(
+      importBatchRepository as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      messageQueueService as never,
+    );
+  });
+
+  it('should enqueue execution and mark the batch RUNNING when READY', async () => {
+    importBatchRepository.findOne.mockResolvedValue({
+      id: 'batch-1',
+      workspaceId: 'workspace-1',
+      status: 'READY',
+    });
+
+    await resolver.startImportBatch('batch-1', { id: 'workspace-1' } as never);
+
+    expect(messageQueueService.add).toHaveBeenCalledWith(
+      'ImportExecutionJob',
+      { workspaceId: 'workspace-1', importBatchId: 'batch-1' },
+    );
+    expect(importBatchRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'batch-1', status: 'RUNNING' }),
+    );
+  });
+
+  it('should refuse to start a batch that is not READY', async () => {
+    importBatchRepository.findOne.mockResolvedValue({
+      id: 'batch-1',
+      workspaceId: 'workspace-1',
+      status: 'PENDING',
+    });
+
+    await expect(
+      resolver.startImportBatch('batch-1', { id: 'workspace-1' } as never),
+    ).rejects.toThrow();
+
+    expect(messageQueueService.add).not.toHaveBeenCalled();
   });
 });

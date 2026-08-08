@@ -21,4 +21,5 @@ export enum MessageQueue {
   aiQueue = 'ai-queue',
   aiStreamQueue = 'ai-stream-queue',
   agentTaskQueue = 'agent-task-queue',
+  importQueue = 'import-queue',
 }
