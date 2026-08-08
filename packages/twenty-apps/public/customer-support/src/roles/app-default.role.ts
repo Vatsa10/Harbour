@@ -1,28 +1,38 @@
-import { defineApplicationRole } from 'twenty-sdk/define';
+import {
+  defineApplicationRole,
+  SystemPermissionFlag,
+} from 'twenty-sdk/define';
 
-import { APP_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identifiers';
+import {
+  APP_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
+  SUPPORT_QUEUE_OBJECT_UNIVERSAL_IDENTIFIER,
+} from 'src/constants/universal-identifiers';
 
 // The application's own service role — the identity this app's install /
-// upgrade / uninstall logic functions run as. It is deliberately empty.
+// upgrade / uninstall logic functions run as.
 //
-// The app ships exactly one logic function (uninstall), and that handler only
-// logs; it performs no record reads or writes and calls no settings-gated
-// mutation. A role grants what its own code calls and nothing more, so there
-// is nothing here to grant.
+// Every grant below is backed by a call this app's own code makes, and
+// nothing here is broader than that call needs. There are no
+// canReadAllObjectRecords / canUpdateAllObjectRecords blanket grants: those
+// were copied in from examples/hello-world once and removed, and the two
+// logic functions still do not need them.
 //
-// Previously this role carried canReadAllObjectRecords / canUpdateAll /
-// canSoftDeleteAll and SystemPermissionFlag.WORKFLOWS, copied from
-// examples/hello-world. All of it backed code that does not exist.
-//
-// Task 9 (workflow templates + seed data, blocked on Phase 4 Task 10's
-// installWorkflowDefinition) will need, in the same commit that lands it:
-//   - SystemPermissionFlag.WORKFLOWS  — installWorkflowDefinition is guarded
-//     by SettingsPermissionGuard(PermissionFlagType.WORKFLOWS)
-//   - an objectPermissions entry on supportQueue with create/read, to seed
-//     the default "General Support" queue from post-install
-// Granting either before that code exists is an unbacked standing grant on
-// every workspace that installs this app, so they are added with Task 9, not
-// reserved here.
+// What backs each grant (all added by Task 9, the commit that added the code):
+//   - WORKFLOWS — installWorkflowDefinition, called by src/utils/
+//     seed-workflow.util.ts from post-install, is guarded by
+//     SettingsPermissionGuard(PermissionFlagType.WORKFLOWS)
+//     (workflow-definition-install.resolver.ts).
+//   - AI — findManyAgents, called by src/utils/find-agent-id-by-name.util.ts
+//     to resolve the triage agent's row id, sits on AgentResolver, whose
+//     class-level guard is SettingsPermissionGuard(PermissionFlagType.AI).
+//     This is the read-side AI flag, not AI_SETTINGS: the app never creates or
+//     edits an agent at runtime.
+//   - supportQueue read + update — post-install's createSupportQueue seeds the
+//     default "General Support" queue. Record creation is gated by the same
+//     canUpdateObjectRecords bit as update; ObjectPermissionManifest exposes
+//     no separate create flag. Scoped to this app's own object; no standard
+//     CRM object is reachable by this role at all.
+// Soft-delete and destroy stay false: nothing this app runs deletes a record.
 export default defineApplicationRole({
   universalIdentifier: APP_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
   label: 'Customer support app service role',
@@ -36,7 +46,18 @@ export default defineApplicationRole({
   canBeAssignedToUsers: false,
   canBeAssignedToAgents: false,
   canBeAssignedToApiKeys: false,
-  objectPermissions: [],
+  objectPermissions: [
+    {
+      objectUniversalIdentifier: SUPPORT_QUEUE_OBJECT_UNIVERSAL_IDENTIFIER,
+      canReadObjectRecords: true,
+      canUpdateObjectRecords: true,
+      canSoftDeleteObjectRecords: false,
+      canDestroyObjectRecords: false,
+    },
+  ],
   fieldPermissions: [],
-  permissionFlagUniversalIdentifiers: [],
+  permissionFlagUniversalIdentifiers: [
+    SystemPermissionFlag.WORKFLOWS,
+    SystemPermissionFlag.AI,
+  ],
 });

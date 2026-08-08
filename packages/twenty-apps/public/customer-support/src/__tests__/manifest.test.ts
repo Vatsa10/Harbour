@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { SystemPermissionFlag } from 'twenty-sdk/define';
+
 import supportTriageAgent from 'src/agents/support-triage-agent';
 import applicationConfig from 'src/application-config';
 import {
@@ -45,6 +47,12 @@ const definitionModules = import.meta.glob<{ default: unknown }>(
     '!../constants/**',
     '!../__tests__/**',
     '!../logic-functions/**',
+    // Plain modules, not manifest units. A workflow template is installed at
+    // runtime through installWorkflowDefinition (there is no workflow
+    // manifest unit type), so these files export functions, not define*()
+    // results — same category as constants and logic-function handlers.
+    '!../utils/**',
+    '!../workflow-templates/**',
   ],
   { eager: true },
 );
@@ -234,18 +242,33 @@ describe('relations', () => {
 describe('the application service role', () => {
   const config = appDefaultRole.config as Record<string, unknown>;
 
-  // The app ships one logic function and it only logs. Any grant here is a
-  // standing permission on every workspace that installs the app, backing
-  // nothing. This test is what stops the next hello-world copy-paste.
-  it('grants nothing at all', () => {
+  // Every grant here is a standing permission on every workspace that
+  // installs the app, so each one must be backed by a call this app's own
+  // code makes. This test is what stops the next hello-world copy-paste: it
+  // enumerates the grants exactly, so an unbacked addition fails.
+  it('grants nothing beyond what its own logic functions call', () => {
     expect(config.canReadAllObjectRecords).toBe(false);
     expect(config.canUpdateAllObjectRecords).toBe(false);
     expect(config.canSoftDeleteAllObjectRecords).toBe(false);
     expect(config.canDestroyAllObjectRecords).toBe(false);
     expect(config.canUpdateAllSettings).toBe(false);
-    expect(config.objectPermissions).toEqual([]);
+    // supportQueue only — post-install's createSupportQueue. Creation is
+    // gated by the same bit as update; there is no separate create flag.
+    expect(config.objectPermissions).toEqual([
+      {
+        objectUniversalIdentifier: SUPPORT_QUEUE_OBJECT_UNIVERSAL_IDENTIFIER,
+        canReadObjectRecords: true,
+        canUpdateObjectRecords: true,
+        canSoftDeleteObjectRecords: false,
+        canDestroyObjectRecords: false,
+      },
+    ]);
     expect(config.fieldPermissions).toEqual([]);
-    expect(config.permissionFlagUniversalIdentifiers).toEqual([]);
+    // WORKFLOWS backs installWorkflowDefinition; AI backs findManyAgents.
+    expect(config.permissionFlagUniversalIdentifiers).toEqual([
+      SystemPermissionFlag.WORKFLOWS,
+      SystemPermissionFlag.AI,
+    ]);
   });
 
   it('is not assignable to a human or an agent', () => {

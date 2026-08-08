@@ -1,5 +1,6 @@
 import { defineAgent } from 'twenty-sdk/define';
 
+import { SUPPORT_TRIAGE_AGENT_NAME } from 'src/constants/agent-names';
 import {
   SUPPORT_AGENT_ROLE_UNIVERSAL_IDENTIFIER,
   SUPPORT_TRIAGE_AGENT_UNIVERSAL_IDENTIFIER,
@@ -12,7 +13,9 @@ export default defineAgent({
   // "No role means no registry tools"). See src/roles/support-agent.role.ts
   // for what it grants.
   roleUniversalIdentifier: SUPPORT_AGENT_ROLE_UNIVERSAL_IDENTIFIER,
-  name: 'support-triage-agent',
+  // Shared with the workflow seeders, which resolve this agent's row id by
+  // name — see src/constants/agent-names.ts.
+  name: SUPPORT_TRIAGE_AGENT_NAME,
   label: 'Support triage agent',
   description:
     'Reads a new support ticket and the CRM records it relates to, then proposes a priority, a status, and a triage summary. Never applies a change directly — every proposed change waits for human approval.',
