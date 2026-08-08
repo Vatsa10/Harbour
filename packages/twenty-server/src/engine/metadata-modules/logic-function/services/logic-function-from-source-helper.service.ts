@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 
-import { join } from 'path';
+// posix join, not the platform one: these are object-storage keys, and the
+// file-storage validator rejects backslashes — which is what `path.join`
+// produces on Windows, making the dev seed unrunnable there.
+import { join } from 'path/posix';
 
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';

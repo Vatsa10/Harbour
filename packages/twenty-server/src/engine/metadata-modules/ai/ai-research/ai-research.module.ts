@@ -19,6 +19,7 @@ import { EvidenceRecordingService } from 'src/engine/metadata-modules/ai/ai-rese
 import { FactDerivationService } from 'src/engine/metadata-modules/ai/ai-research/services/fact-derivation.service';
 import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services/fact.service';
 import { ResearchAgentService } from 'src/engine/metadata-modules/ai/ai-research/services/research-agent.service';
+import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { RoleTargetEntity } from 'src/engine/metadata-modules/role-target/role-target.entity';
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
@@ -35,6 +36,9 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
       RoleTargetEntity,
     ]),
     AiAgentRoleModule,
+    // AgentTaskResolver injects PermissionsService to gate createAgentTask;
+    // without this import Nest cannot resolve it and the app fails to boot.
+    PermissionsModule,
     // forwardRef: ToolProviderModule imports AiResearchModule directly, and
     // AiAgentExecutionModule forwardRef's back into ToolProviderModule
     // (tool-provider.module.ts:58-59) — this edge closes the same 3-module
