@@ -254,12 +254,18 @@ export class ProposalGateService {
     // opens no second write path. Static-tool items pass null object/record,
     // so this resolves to [] — an outbound send carries no fact-backed
     // justification, which is the honest answer rather than a fabricated one.
-    const factIds = await this.factService.findCurrentFactIdsForFields({
-      workspaceId: context.workspaceId,
-      objectNameSingular: gateInput.objectNameSingular ?? '',
-      recordId: gateInput.recordId ?? '',
-      fieldNames: Object.keys(gateInput.payload),
-    });
+    // Only a record-targeted write can have facts standing behind it. Passing
+    // '' for a missing recordId reaches a uuid column and throws, which turned
+    // every create_one and every gated static tool into an INTERNAL_ERROR.
+    const factIds =
+      isDefined(gateInput.objectNameSingular) && isDefined(gateInput.recordId)
+        ? await this.factService.findCurrentFactIdsForFields({
+            workspaceId: context.workspaceId,
+            objectNameSingular: gateInput.objectNameSingular,
+            recordId: gateInput.recordId,
+            fieldNames: Object.keys(gateInput.payload),
+          })
+        : [];
 
     const item = await this.proposalItemRepository.save({
       proposalId: proposal.id,

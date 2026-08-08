@@ -88,6 +88,13 @@ export class ToolExecutorService {
       return toFailedToolOutput(decision.failure);
     }
 
+    // Without this branch an AUTO-policy delete missing its confirmation token
+    // falls through to the switch and deletes the record anyway, which makes
+    // the whole confirmation gate unenforced.
+    if (decision.kind === 'CONFIRMATION_REQUIRED') {
+      return toFailedToolOutput(decision.failure);
+    }
+
     switch (descriptor.executionRef.kind) {
       case 'database_crud':
         return this.dispatchDatabaseCrud(
