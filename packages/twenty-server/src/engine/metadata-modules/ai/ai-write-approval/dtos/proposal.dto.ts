@@ -11,6 +11,35 @@ registerEnumType(ProposalStatus, { name: 'ProposalStatus' });
 registerEnumType(ProposalItemStatus, { name: 'ProposalItemStatus' });
 registerEnumType(ProposalActionType, { name: 'ProposalActionType' });
 
+// A fact and its primary evidence, flattened. sourceType and strength are
+// String, not GraphQL enums: EvidenceSourceType is a seven-member string
+// union owned by Phase 2 Task 1, and Phase 3 adds writers for three of them,
+// so a mirror enum here is a runtime error waiting for its first ingestion
+// proposal. This mirrors what the DTO already does for toolId and error.
+@ObjectType('ProposalItemFact')
+export class ProposalItemFactDTO {
+  @Field(() => ID)
+  id: string;
+
+  @Field(() => String)
+  fieldName: string;
+
+  @Field(() => String)
+  strength: string;
+
+  @Field(() => Boolean)
+  hasConflict: boolean;
+
+  @Field(() => String, { nullable: true })
+  sourceType: string | null;
+
+  @Field(() => String, { nullable: true })
+  sourceLocator: string | null;
+
+  @Field(() => Date, { nullable: true })
+  observedAt: Date | null;
+}
+
 @ObjectType('ProposalItem')
 export class ProposalItemDTO {
   @Field(() => ID)
@@ -39,6 +68,15 @@ export class ProposalItemDTO {
 
   @Field(() => String, { nullable: true })
   error: string | null;
+
+  @Field(() => [ID])
+  factIds: string[];
+
+  // Populated by ProposalItemFieldsResolver. Declared on the type rather
+  // than only on the resolver so a missing citation reads as an empty list,
+  // never as an unknown-field query error in the approval inbox.
+  @Field(() => [ProposalItemFactDTO])
+  facts: ProposalItemFactDTO[];
 }
 
 @ObjectType('Proposal')

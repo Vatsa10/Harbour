@@ -68,6 +68,10 @@ export class ProposalResolver {
           baseline: item.baseline,
           status: item.status,
           error: item.error,
+          factIds: item.factIds,
+          // Resolved lazily by ProposalItemFieldsResolver.facts; left absent
+          // here so the cheap common path (no facts) does no extra query.
+          facts: [],
         })),
       }));
   }

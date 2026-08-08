@@ -12,6 +12,7 @@ import { AiResearchModule } from 'src/engine/metadata-modules/ai/ai-research/ai-
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
 import { AiWritePolicyResolver } from 'src/engine/metadata-modules/ai/ai-write-approval/resolvers/ai-write-policy.resolver';
+import { ProposalItemFieldsResolver } from 'src/engine/metadata-modules/ai/ai-write-approval/resolvers/proposal-item-fields.resolver';
 import { ProposalResolver } from 'src/engine/metadata-modules/ai/ai-write-approval/resolvers/proposal.resolver';
 import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service';
 import { ProposalExecutionService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-execution.service';
@@ -41,6 +42,7 @@ import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.
     ProposalExecutionService,
     ProposalResolver,
     AiWritePolicyResolver,
+    ProposalItemFieldsResolver,
   ],
   exports: [
     AiWritePolicyService,
