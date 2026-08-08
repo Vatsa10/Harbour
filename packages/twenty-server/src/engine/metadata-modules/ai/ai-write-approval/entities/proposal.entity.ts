@@ -42,6 +42,20 @@ export class ProposalEntity {
   @Index()
   threadId: string | null;
 
+  // Idempotency key for proposals created outside a tool-call/thread context —
+  // ingestion (format "ingestion:<sourceType>:<sourceId>") and import (format
+  // "import:<importBatchId>:<rowNumber>"). A retried background job that finds
+  // an existing row for the same key writes nothing a second time.
+  @Column({ type: 'varchar', nullable: true })
+  @Index()
+  sourceKey: string | null;
+
+  // Human-readable justification shown on the proposal card. Set by
+  // background-job proposals (ingestion, import), which have no chat thread
+  // to explain themselves from. Null for tool-dispatch proposals.
+  @Column({ type: 'text', nullable: true })
+  reason: string | null;
+
   @Column({ type: 'timestamptz', nullable: false })
   expiresAt: Date;
 

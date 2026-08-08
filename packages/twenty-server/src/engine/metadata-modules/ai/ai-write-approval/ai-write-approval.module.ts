@@ -15,6 +15,7 @@ import { AiWritePolicyResolver } from 'src/engine/metadata-modules/ai/ai-write-a
 import { ProposalItemFieldsResolver } from 'src/engine/metadata-modules/ai/ai-write-approval/resolvers/proposal-item-fields.resolver';
 import { ProposalResolver } from 'src/engine/metadata-modules/ai/ai-write-approval/resolvers/proposal.resolver';
 import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service';
+import { ProposalCreationService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-creation.service';
 import { ProposalExecutionService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-execution.service';
 import { ProposalGateService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service';
 import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.module';
@@ -39,6 +40,7 @@ import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.
   providers: [
     AiWritePolicyService,
     ProposalGateService,
+    ProposalCreationService,
     ProposalExecutionService,
     ProposalResolver,
     AiWritePolicyResolver,
@@ -47,6 +49,7 @@ import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.
   exports: [
     AiWritePolicyService,
     ProposalGateService,
+    ProposalCreationService,
     ProposalExecutionService,
   ],
 })
