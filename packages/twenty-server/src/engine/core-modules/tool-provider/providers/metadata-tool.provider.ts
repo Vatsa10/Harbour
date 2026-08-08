@@ -16,6 +16,8 @@ import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.
 import { FieldMetadataToolsFactory } from 'src/engine/metadata-modules/field-metadata/tools/field-metadata-tools.factory';
 import { ObjectMetadataToolsFactory } from 'src/engine/metadata-modules/object-metadata/tools/object-metadata-tools.factory';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
+import { getObjectsPermissionsFromRolePermissionConfig } from 'src/engine/twenty-orm/utils/get-objects-permissions-from-role-permission-config.util';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 @Injectable()
 export class MetadataToolProvider implements ToolProvider {
@@ -25,13 +27,40 @@ export class MetadataToolProvider implements ToolProvider {
     private readonly objectMetadataToolsFactory: ObjectMetadataToolsFactory,
     private readonly fieldMetadataToolsFactory: FieldMetadataToolsFactory,
     private readonly permissionsService: PermissionsService,
+    private readonly workspaceCacheService: WorkspaceCacheService,
   ) {}
 
   async isAvailable(context: ToolProviderContext): Promise<boolean> {
-    return this.permissionsService.checkRolesPermissions(
-      context.rolePermissionConfig,
-      context.workspaceId,
-      PermissionFlagType.DATA_MODEL,
+    // A bypass context needs no special case: checkRolesPermissions returns
+    // true when role resolution yields null, so it short-circuits here.
+    const hasDataModelPermission =
+      await this.permissionsService.checkRolesPermissions(
+        context.rolePermissionConfig,
+        context.workspaceId,
+        PermissionFlagType.DATA_MODEL,
+      );
+
+    if (hasDataModelPermission) {
+      return true;
+    }
+
+    // A record-scoped agent must be able to discover the schema of the objects
+    // it can already read. The output is filtered to exactly those objects by
+    // the two factories, so this widens discovery, not access.
+    const { rolesPermissions } =
+      await this.workspaceCacheService.getOrRecompute(context.workspaceId, [
+        'rolesPermissions',
+      ]);
+
+    const objectPermissions = getObjectsPermissionsFromRolePermissionConfig({
+      rolesPermissions,
+      rolePermissionConfig: context.rolePermissionConfig,
+    });
+
+    // Object.values, not .some on the result — the util returns a Record keyed
+    // by objectMetadataId, never an array.
+    return Object.values(objectPermissions).some(
+      (permission) => permission.canReadObjectRecords,
     );
   }
 
@@ -64,8 +93,8 @@ export class MetadataToolProvider implements ToolProvider {
 
   private buildToolSet(context: ToolProviderContext): ToolSet {
     return {
-      ...this.objectMetadataToolsFactory.generateTools(context.workspaceId),
-      ...this.fieldMetadataToolsFactory.generateTools(context.workspaceId),
+      ...this.objectMetadataToolsFactory.generateTools(context),
+      ...this.fieldMetadataToolsFactory.generateTools(context),
     };
   }
 }

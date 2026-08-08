@@ -16,6 +16,7 @@ import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-appr
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
 import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service';
 import { type AiWritePolicyTarget } from 'src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type';
+import { buildDeleteConfirmationToken } from 'src/engine/metadata-modules/ai/ai-write-approval/utils/build-delete-confirmation-token.util';
 import {
   PROPOSAL_TTL_DAYS,
   ProposalActionType,
@@ -27,6 +28,7 @@ import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system
 export type GateDecision =
   | { kind: 'ALLOW' }
   | { kind: 'FORBID'; failure: ToolFailure }
+  | { kind: 'CONFIRMATION_REQUIRED'; failure: ToolFailure }
   | { kind: 'PROPOSED'; output: ToolOutput };
 
 type GateInput = {
@@ -40,6 +42,12 @@ type GateInput = {
   payload: Record<string, unknown>;
   // Fields snapshotted so approval can detect a human edit in between.
   baselineFieldNames: string[];
+  // AI-requested deletes only. `confirmationBasis` is what the token hashes
+  // over — the record id for delete_one, the stringified filter for
+  // delete_many. Absent on every other branch, which is what keeps the
+  // confirmation check scoped to deletes.
+  confirm?: string | null;
+  confirmationBasis?: string | null;
 };
 
 // Denylist, not allowlist: every CRUD operation is gated except these three
@@ -160,6 +168,38 @@ export class ProposalGateService {
     );
 
     if (mode === 'AUTO') {
+      // PROPOSE-mode deletes already stop at human review; this second call is
+      // the only thing standing between an AUTO policy and a one-shot delete.
+      // I17: DELETE_RECORDS as well as DELETE_RECORD — an AUTO-policy bulk
+      // delete is the exact case this exists for.
+      if (
+        (gateInput.actionType === ProposalActionType.DELETE_RECORD ||
+          gateInput.actionType === ProposalActionType.DELETE_RECORDS) &&
+        isDefined(gateInput.confirmationBasis)
+      ) {
+        const expectedToken = buildDeleteConfirmationToken({
+          workspaceId: context.workspaceId,
+          objectNameSingular: gateInput.objectNameSingular ?? '',
+          basis: gateInput.confirmationBasis,
+        });
+
+        if (gateInput.confirm !== expectedToken) {
+          return {
+            kind: 'CONFIRMATION_REQUIRED',
+            failure: buildToolFailure({
+              code: 'CONFIRMATION_REQUIRED',
+              message:
+                gateInput.actionType === ProposalActionType.DELETE_RECORDS
+                  ? `Deleting ${gateInput.objectNameSingular} records matching this filter is irreversible from this tool.`
+                  : `Deleting this ${gateInput.objectNameSingular} record is irreversible from this tool.`,
+              hint: `Confirm with the user, then repeat this exact call with confirm: "${expectedToken}".`,
+              retryable: true,
+              allowedActions: ['retry_with_confirm_token'],
+            }),
+          };
+        }
+      }
+
       return { kind: 'ALLOW' };
     }
 
@@ -322,7 +362,7 @@ export class ProposalGateService {
     }
 
     if (operation === 'delete_one') {
-      const { id } = args;
+      const { id, confirm } = args;
 
       return {
         ...base,
@@ -330,6 +370,8 @@ export class ProposalGateService {
         recordId: typeof id === 'string' ? id : null,
         payload: {},
         baselineFieldNames: DELETE_BASELINE_FIELD_NAMES,
+        confirm: typeof confirm === 'string' ? confirm : null,
+        confirmationBasis: typeof id === 'string' ? id : null,
       };
     }
 
@@ -390,12 +432,19 @@ export class ProposalGateService {
     }
 
     if (operation === 'delete_many') {
+      const filter = args.filter ?? {};
+
       return {
         ...base,
         target: { kind: 'record', objectNameSingular, fieldNames: [] },
         recordId: null,
-        payload: { filter: args.filter ?? {} },
+        payload: { filter },
         baselineFieldNames: [],
+        confirm: typeof args.confirm === 'string' ? args.confirm : null,
+        // Stringified filter, so two different filters get two different
+        // tokens and a confirmed narrow delete cannot be widened on the
+        // second call.
+        confirmationBasis: JSON.stringify(filter),
       };
     }
 

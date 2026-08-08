@@ -415,7 +415,9 @@ describe('ProposalExecutionService', () => {
 
     // Only the deselected item's facts. Approving item-1 is a "yes" to its
     // facts, not a "no".
-    expect(factService.markDismissed).toHaveBeenCalledWith(['fact-2']);
+    expect(factService.markDismissed).toHaveBeenCalledWith('workspace-1', [
+      'fact-2',
+    ]);
   });
 
   it('should not dismiss anything when every item was selected', async () => {
@@ -425,7 +427,7 @@ describe('ProposalExecutionService', () => {
 
     await approve(['item-1']);
 
-    expect(factService.markDismissed).toHaveBeenCalledWith([]);
+    expect(factService.markDismissed).toHaveBeenCalledWith('workspace-1', []);
   });
 
   it('should dismiss the facts behind every still-open item in a whole-proposal reject', async () => {
@@ -442,7 +444,7 @@ describe('ProposalExecutionService', () => {
       approverUserWorkspaceId: 'user-workspace-1',
     });
 
-    expect(factService.markDismissed).toHaveBeenCalledWith([
+    expect(factService.markDismissed).toHaveBeenCalledWith('workspace-1', [
       'fact-1',
       'fact-2',
     ]);

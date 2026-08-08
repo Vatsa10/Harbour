@@ -103,12 +103,16 @@ export class FindRecordsService {
         ),
       }));
 
+      // Explicit pagination signal so agents don't have to compute offset + records.length < count themselves
+      const hasMore = offset + records.length < totalCount;
+
       return {
         success: true,
         message: `Found ${records.length} ${objectName} records`,
         result: {
           records,
           count: totalCount,
+          hasMore,
         },
         ...(isNonEmptyArray(warnings) ? { warnings: warnings } : {}),
         recordReferences,

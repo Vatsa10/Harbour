@@ -6,10 +6,14 @@ import { FieldMetadataType, RelationType } from 'twenty-shared/types';
 import { z } from 'zod';
 
 import { METADATA_TOOL_EXCLUDED_FIELD_NAMES } from 'src/engine/core-modules/tool-provider/constants/metadata-tool-excluded-field-names.constant';
+import { type ToolProviderContext } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider-context.type';
 import { compactMetadataOutput } from 'src/engine/core-modules/tool-provider/utils/compact-metadata-output.util';
 import { formatValidationErrors } from 'src/engine/core-modules/tool-provider/utils/format-validation-errors.util';
 import { normalizeIconName } from 'src/engine/core-modules/tool-provider/utils/normalize-icon-name.util';
+import { resolveDiscoveryScope } from 'src/engine/core-modules/tool-provider/utils/resolve-discovery-scope.util';
 import { FieldMetadataService } from 'src/engine/metadata-modules/field-metadata/services/field-metadata.service';
+import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
 import { getObjectMetadataIdByName } from 'src/engine/metadata-modules/flat-object-metadata/utils/get-object-metadata-id-by-name.util';
 import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager/workspace-migration/exceptions/workspace-migration-builder-exception';
@@ -177,6 +181,8 @@ export class FieldMetadataToolsFactory {
   constructor(
     private readonly fieldMetadataService: FieldMetadataService,
     private readonly flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
+    private readonly workspaceCacheService: WorkspaceCacheService,
+    private readonly permissionsService: PermissionsService,
   ) {}
 
   private async getObjectMetadataIdOrThrow(
@@ -205,7 +211,9 @@ export class FieldMetadataToolsFactory {
     return objectMetadataId;
   }
 
-  generateTools(workspaceId: string): ToolSet {
+  generateTools(context: ToolProviderContext): ToolSet {
+    const { workspaceId } = context;
+
     return {
       get_field_metadata: {
         description:
@@ -240,12 +248,27 @@ export class FieldMetadataToolsFactory {
             paging: { limit: parameters.limit ?? 100 },
           });
 
+          const { isUnscoped, objectPermissions } = await resolveDiscoveryScope({
+            context,
+            permissionsService: this.permissionsService,
+            workspaceCacheService: this.workspaceCacheService,
+          });
+
           const compactedFields = (
             rawResults as unknown as Record<string, unknown>[]
           )
             .filter(
               (field) =>
                 !METADATA_TOOL_EXCLUDED_FIELD_NAMES.has(field.name as string),
+            )
+            // A field is discoverable only if its owning object is readable by
+            // this role. Same rule as get_object_metadata, so the two tools can
+            // never disagree about what exists.
+            .filter(
+              (field) =>
+                isUnscoped ||
+                objectPermissions[field.objectMetadataId as string]
+                  ?.canReadObjectRecords === true,
             )
             .map((field) => {
               if (field.isSystem && !parameters.includeFullSystemFields) {

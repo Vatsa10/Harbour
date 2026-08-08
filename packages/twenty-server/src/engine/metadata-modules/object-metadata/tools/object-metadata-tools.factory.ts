@@ -6,12 +6,16 @@ import { isDefined } from 'twenty-shared/utils';
 import { z } from 'zod';
 
 import { METADATA_TOOL_EXCLUDED_FIELD_NAMES } from 'src/engine/core-modules/tool-provider/constants/metadata-tool-excluded-field-names.constant';
+import { type ToolProviderContext } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider-context.type';
 import { compactMetadataOutput } from 'src/engine/core-modules/tool-provider/utils/compact-metadata-output.util';
 import { formatValidationErrors } from 'src/engine/core-modules/tool-provider/utils/format-validation-errors.util';
 import { normalizeIconName } from 'src/engine/core-modules/tool-provider/utils/normalize-icon-name.util';
+import { resolveDiscoveryScope } from 'src/engine/core-modules/tool-provider/utils/resolve-discovery-scope.util';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
 import { fromFlatObjectMetadataToObjectMetadataDto } from 'src/engine/metadata-modules/flat-object-metadata/utils/from-flat-object-metadata-to-object-metadata-dto.util';
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
+import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager/workspace-migration/exceptions/workspace-migration-builder-exception';
 
 type InlinedObjectFieldSummary = {
@@ -134,6 +138,8 @@ export class ObjectMetadataToolsFactory {
   constructor(
     private readonly objectMetadataService: ObjectMetadataService,
     private readonly flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
+    private readonly workspaceCacheService: WorkspaceCacheService,
+    private readonly permissionsService: PermissionsService,
   ) {}
 
   private async buildFieldsByObjectId(
@@ -174,7 +180,9 @@ export class ObjectMetadataToolsFactory {
     return fieldsByObjectId;
   }
 
-  generateTools(workspaceId: string): ToolSet {
+  generateTools(context: ToolProviderContext): ToolSet {
+    const { workspaceId } = context;
+
     return {
       get_object_metadata: {
         description:
@@ -209,29 +217,55 @@ export class ObjectMetadataToolsFactory {
             ? await this.buildFieldsByObjectId(workspaceId)
             : undefined;
 
-          return flatObjectMetadatas.map((flatObjectMetadata) => {
-            const dto =
-              fromFlatObjectMetadataToObjectMetadataDto(flatObjectMetadata);
-
-            const fields = fieldsByObjectId?.get(dto.id) ?? [];
-
-            if (dto.isSystem && !parameters.includeFullSystemObjects) {
-              return {
-                id: dto.id,
-                nameSingular: dto.nameSingular,
-                namePlural: dto.namePlural,
-                ...(parameters.includeFields ? { fields } : {}),
-              };
-            }
-
-            return compactMetadataOutput(
-              {
-                ...dto,
-                ...(parameters.includeFields ? { fields } : {}),
-              },
-              { stripWhenNullish: OBJECT_STRIP_WHEN_NULLISH },
-            );
+          const { isUnscoped, objectPermissions } = await resolveDiscoveryScope({
+            context,
+            permissionsService: this.permissionsService,
+            workspaceCacheService: this.workspaceCacheService,
           });
+
+          return flatObjectMetadatas
+            .filter(
+              (flatObjectMetadata) =>
+                isUnscoped ||
+                objectPermissions[flatObjectMetadata.id]
+                  ?.canReadObjectRecords === true,
+            )
+            .map((flatObjectMetadata) => {
+              const dto =
+                fromFlatObjectMetadataToObjectMetadataDto(flatObjectMetadata);
+
+              const fields = fieldsByObjectId?.get(dto.id) ?? [];
+
+              const permission = objectPermissions[dto.id];
+              // An unscoped caller with no explicit row in the permission map
+              // is unrestricted, not unpermitted.
+              const permittedOperations = {
+                read: permission?.canReadObjectRecords ?? isUnscoped,
+                write: permission?.canUpdateObjectRecords ?? isUnscoped,
+                delete: permission?.canSoftDeleteObjectRecords ?? isUnscoped,
+              };
+
+              if (dto.isSystem && !parameters.includeFullSystemObjects) {
+                return {
+                  id: dto.id,
+                  nameSingular: dto.nameSingular,
+                  namePlural: dto.namePlural,
+                  permittedOperations,
+                  ...(parameters.includeFields ? { fields } : {}),
+                };
+              }
+
+              return {
+                ...compactMetadataOutput(
+                  {
+                    ...dto,
+                    ...(parameters.includeFields ? { fields } : {}),
+                  },
+                  { stripWhenNullish: OBJECT_STRIP_WHEN_NULLISH },
+                ),
+                permittedOperations,
+              };
+            });
         },
       },
       create_object_metadata: {

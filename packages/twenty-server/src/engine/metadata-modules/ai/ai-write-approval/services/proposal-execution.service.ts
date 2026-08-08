@@ -282,6 +282,7 @@ export class ProposalExecutionService {
     // entities are kept (rather than mapping straight to ids) because
     // factIds lives on them and re-querying would be a second round trip.
     await this.factService.markDismissed(
+      workspaceId,
       unselectedItems.flatMap((item) => item.factIds),
     );
 
@@ -367,6 +368,7 @@ export class ProposalExecutionService {
     );
 
     await this.factService.markDismissed(
+      workspaceId,
       rejectedItems.flatMap((item) => item.factIds),
     );
 
