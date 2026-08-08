@@ -12,6 +12,7 @@ import { ImportBatchEntity } from 'src/modules/guided-import/entities/import-bat
 import { ImportRowEntity } from 'src/modules/guided-import/entities/import-row.entity';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { ImportBatchResolver } from 'src/modules/guided-import/resolvers/import-batch.resolver';
+import { ImportFailedRowsController } from 'src/modules/guided-import/controllers/import-failed-rows.controller';
 import { ImportMatchResolutionService } from 'src/modules/guided-import/services/import-match-resolution.service';
 import { ImportValidationService } from 'src/modules/guided-import/services/import-validation.service';
 import { MatchParticipantModule } from 'src/modules/match-participant/match-participant.module';
@@ -31,6 +32,7 @@ import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata
     MatchParticipantModule,
     WorkspaceManyOrAllFlatEntityMapsCacheModule,
   ],
+  controllers: [ImportFailedRowsController],
   providers: [
     ImportBatchResolver,
     ImportMatchResolutionService,

@@ -3,6 +3,7 @@ import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadata
 import { useGenerateDepthRecordGqlFieldsFromObject } from '@/object-record/graphql/record-gql-fields/hooks/useGenerateDepthRecordGqlFieldsFromObject';
 import { useBatchCreateManyRecords } from '@/object-record/hooks/useBatchCreateManyRecords';
 import { useBuildSpreadsheetImportFields } from '@/object-record/spreadsheet-import/hooks/useBuildSpreadSheetImportFields';
+import { useCreateImportBatch } from '@/object-record/spreadsheet-import/hooks/useCreateImportBatch';
 import { buildRecordFromImportedStructuredRow } from '@/object-record/spreadsheet-import/utils/buildRecordFromImportedStructuredRow';
 import { spreadsheetImportFilterAvailableFieldMetadataItems } from '@/object-record/spreadsheet-import/utils/spreadsheetImportFilterAvailableFieldMetadataItems';
 import { spreadsheetImportGetUnicityTableHook } from '@/object-record/spreadsheet-import/utils/spreadsheetImportGetUnicityTableHook';
@@ -19,6 +20,7 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
   const apolloCoreClient = useApolloCoreClient();
   const { openSpreadsheetImportDialog } = useOpenSpreadsheetImportDialog();
   const { buildSpreadsheetImportFields } = useBuildSpreadsheetImportFields();
+  const { runGuidedImport } = useCreateImportBatch();
 
   const { enqueueErrorSnackBar } = useSnackBar();
 
@@ -75,9 +77,17 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
         });
 
         try {
-          await batchCreateManyRecords({
-            recordsToCreate: createInputs,
-            upsert: true,
+          // Routed through the guided-import staging pipeline (Tasks 6-9)
+          // instead of a direct batch write, so extraction results become
+          // proposals through the AI write gate rather than bypassing it.
+          await runGuidedImport({
+            objectNameSingular,
+            fileName: `${objectNameSingular}-import.csv`,
+            rawRows: data.validStructuredRows as never,
+            mappedRows: createInputs,
+            columnMapping: Object.fromEntries(
+              spreadsheetImportFields.map((field) => [field.label, field.key]),
+            ),
           });
           await apolloCoreClient.refetchQueries({
             updateCache: (cache) => {

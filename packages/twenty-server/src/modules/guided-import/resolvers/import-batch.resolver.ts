@@ -29,6 +29,7 @@ import { ImportValidationService } from 'src/modules/guided-import/services/impo
 import {
   ImportBatchStatus,
   ImportRowMatchAction,
+  ImportRowStatus,
 } from 'src/modules/guided-import/types/import-batch-status.type';
 
 @UseGuards(
@@ -134,6 +135,47 @@ export class ImportBatchResolver {
       throw new BadRequestException(
         'Import batch must be prepared (READY) before it can start.',
       );
+    }
+
+    const runningBatch = await this.importBatchRepository.save({
+      ...batch,
+      status: ImportBatchStatus.RUNNING,
+    });
+
+    await this.messageQueueService.add<ImportExecutionJobData>(
+      ImportExecutionJob.name,
+      { workspaceId: workspace.id, importBatchId },
+    );
+
+    return runningBatch as unknown as ImportBatchDTO;
+  }
+
+  // Resets FAILED rows to PENDING and re-enqueues the resumable execution
+  // job, which processes only PENDING rows and leaves already-succeeded
+  // rows untouched.
+  @Mutation(() => ImportBatchDTO)
+  async retryFailedImportRows(
+    @Args('importBatchId') importBatchId: string,
+    @AuthWorkspace() workspace: FlatWorkspace,
+  ): Promise<ImportBatchDTO> {
+    const batch = await this.importBatchRepository.findOne({
+      where: { id: importBatchId, workspaceId: workspace.id },
+    });
+
+    if (!batch) {
+      throw new BadRequestException('Import batch not found.');
+    }
+
+    const failedRows = await this.importRowRepository.find({
+      where: { importBatchId, status: ImportRowStatus.FAILED },
+    });
+
+    for (const row of failedRows) {
+      await this.importRowRepository.save({
+        ...row,
+        status: ImportRowStatus.PENDING,
+        errorMessage: null,
+      });
     }
 
     const runningBatch = await this.importBatchRepository.save({

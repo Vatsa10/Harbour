@@ -282,3 +282,63 @@ describe('startImportBatch', () => {
     expect(messageQueueService.add).not.toHaveBeenCalled();
   });
 });
+
+describe('retryFailedImportRows', () => {
+  const importBatchRepository = { save: jest.fn(), findOne: jest.fn() };
+  const importRowRepository = { find: jest.fn(), save: jest.fn() };
+  const messageQueueService = { add: jest.fn() };
+  let resolver: ImportBatchResolver;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    importBatchRepository.save.mockImplementation(async (entity) => entity);
+    resolver = new ImportBatchResolver(
+      importBatchRepository as never,
+      importRowRepository as never,
+      {} as never,
+      {} as never,
+      messageQueueService as never,
+    );
+  });
+
+  it('should reset FAILED rows to PENDING and re-enqueue execution', async () => {
+    importBatchRepository.findOne.mockResolvedValue({
+      id: 'batch-1',
+      workspaceId: 'workspace-1',
+      status: 'COMPLETED',
+    });
+    importRowRepository.find.mockResolvedValue([
+      { id: 'row-3', status: 'FAILED', errorMessage: 'boom' },
+    ]);
+
+    await resolver.retryFailedImportRows(
+      'batch-1',
+      { id: 'workspace-1' } as never,
+    );
+
+    expect(importRowRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'row-3',
+        status: 'PENDING',
+        errorMessage: null,
+      }),
+    );
+    expect(importBatchRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'batch-1', status: 'RUNNING' }),
+    );
+    expect(messageQueueService.add).toHaveBeenCalledWith(
+      'ImportExecutionJob',
+      { workspaceId: 'workspace-1', importBatchId: 'batch-1' },
+    );
+  });
+
+  it('should reject a missing batch', async () => {
+    importBatchRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      resolver.retryFailedImportRows('batch-404', {
+        id: 'workspace-1',
+      } as never),
+    ).rejects.toThrow();
+  });
+});
