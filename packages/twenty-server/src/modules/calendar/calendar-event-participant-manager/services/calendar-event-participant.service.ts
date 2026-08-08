@@ -4,7 +4,7 @@ import { isDefined } from 'class-validator';
 import chunk from 'lodash.chunk';
 import differenceWith from 'lodash.differencewith';
 import { FieldActorSource } from 'twenty-shared/types';
-import { Any } from 'typeorm';
+import { Any, IsNull } from 'typeorm';
 
 import { type CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
@@ -21,6 +21,7 @@ import {
   type CreateCompanyAndContactJobData,
 } from 'src/modules/contact-creation-manager/jobs/create-company-and-contact.job';
 import { MatchParticipantService } from 'src/modules/match-participant/match-participant.service';
+import { ParticipantIdentityProposalService } from 'src/modules/match-participant/services/participant-identity-proposal.service';
 
 type FetchedCalendarEventParticipantWithCalendarEventId =
   FetchedCalendarEventParticipant & {
@@ -39,6 +40,7 @@ export class CalendarEventParticipantService {
     private readonly matchParticipantService: MatchParticipantService<CalendarEventParticipantWorkspaceEntity>,
     @InjectMessageQueue(MessageQueue.contactCreationQueue)
     private readonly messageQueueService: MessageQueueService,
+    private readonly participantIdentityProposalService: ParticipantIdentityProposalService,
   ) {}
 
   public async upsertAndDeleteCalendarEventParticipants({
@@ -181,6 +183,30 @@ export class CalendarEventParticipantService {
           matchWith: 'workspaceMemberAndPerson',
           workspaceId,
         });
+
+        // Second pass: anything the exact-match pass above left unlinked gets
+        // a CANDIDATE lookup, which can only ever become a proposal.
+        const savedParticipantIds: string[] = savedParticipants.map(
+          (participant) => participant.id,
+        );
+
+        if (savedParticipantIds.length > 0) {
+          const stillUnmatched = await calendarEventParticipantRepository.find({
+            where: { id: Any(savedParticipantIds), personId: IsNull() },
+          });
+
+          await this.participantIdentityProposalService.reviewUnmatchedParticipants(
+            {
+              participants: stillUnmatched.map((participant) => ({
+                id: participant.id,
+                handle: participant.handle,
+                displayName: participant.displayName,
+              })),
+              objectMetadataName: 'calendarEventParticipant',
+              workspaceId,
+            },
+          );
+        }
       },
       authContext,
       { lite: true },

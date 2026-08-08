@@ -91,8 +91,15 @@ export class ImportValidationService {
 
       if (row.matchAction === ImportRowMatchAction.CREATE) {
         for (const field of fields) {
+          // Non-nullable alone is not "the user must supply it": createdAt,
+          // position, searchVector and every other system column are
+          // non-nullable and filled by the platform. Only a field with no
+          // default and no system ownership is genuinely the importer's to
+          // provide — without this, every CREATE row failed validation.
           if (
             !field.isNullable &&
+            !field.isSystem &&
+            !isDefined(field.defaultValue) &&
             field.name !== 'id' &&
             !isDefined(mappedData[field.name]) &&
             !isDefined(validationErrors[field.name])

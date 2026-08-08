@@ -28,6 +28,9 @@ describe('IdentityResolutionService', () => {
     getRepository: jest.fn((_workspaceId: string, entity: unknown) => {
       return entity === 'company' ? companyRepository : personRepository;
     }),
+    // Pass through: the real manager establishes the ORM workspace context and
+    // then runs the callback, which is what the service under test relies on.
+    executeInWorkspaceContext: jest.fn(<T,>(fn: () => T | Promise<T>) => fn()),
   };
 
   beforeEach(async () => {

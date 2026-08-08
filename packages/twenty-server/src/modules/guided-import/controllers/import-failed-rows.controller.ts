@@ -19,10 +19,10 @@ export class ImportFailedRowsController {
     // Staging tables are core-schema platform infrastructure, not
     // workspace-object data, so the scoped repository wrapper doesn't apply.
     // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
-    @InjectRepository(ImportBatchEntity, 'core')
+    @InjectRepository(ImportBatchEntity)
     private readonly importBatchRepository: Repository<ImportBatchEntity>,
     // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
-    @InjectRepository(ImportRowEntity, 'core')
+    @InjectRepository(ImportRowEntity)
     private readonly importRowRepository: Repository<ImportRowEntity>,
   ) {}
 

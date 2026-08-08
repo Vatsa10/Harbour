@@ -20,11 +20,11 @@ describe('ImportFailedRowsController', () => {
       providers: [
         ImportFailedRowsController,
         {
-          provide: getRepositoryToken(ImportBatchEntity, 'core'),
+          provide: getRepositoryToken(ImportBatchEntity),
           useValue: importBatchRepository,
         },
         {
-          provide: getRepositoryToken(ImportRowEntity, 'core'),
+          provide: getRepositoryToken(ImportRowEntity),
           useValue: importRowRepository,
         },
       ],

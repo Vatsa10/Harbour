@@ -229,7 +229,9 @@ export class ImportBatchResolver {
       this.importRowRepository
         .createQueryBuilder('row')
         .where('row.importBatchId = :importBatchId', { importBatchId })
-        .andWhere("row.validationErrors::text != '{}'")
+        // Quoted explicitly: an unquoted camelCase identifier is folded to
+        // lowercase by Postgres and the column is not found.
+        .andWhere(`"row"."validationErrors"::text != '{}'`)
         .getCount(),
     ]);
 

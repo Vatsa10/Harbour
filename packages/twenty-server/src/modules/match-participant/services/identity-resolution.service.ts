@@ -4,6 +4,7 @@ import { isDefined } from 'twenty-shared/utils';
 import { ILike } from 'typeorm';
 
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { type CompanyWorkspaceEntity } from 'src/modules/company/standard-objects/company.workspace-entity';
 import { extractDomainFromLink } from 'src/modules/contact-creation-manager/utils/extract-domain-from-link.util';
 import { getDomainNameFromHandle } from 'src/modules/contact-creation-manager/utils/get-domain-name-from-handle.util';
@@ -35,6 +36,22 @@ export class IdentityResolutionService {
   }): Promise<IdentityMatch> {
     const { workspaceId, email, displayName } = params;
 
+    // Callers reach this from a GraphQL resolver, a BullMQ job, and a sync
+    // listener; only the last already holds a workspace context. Establishing
+    // it here means every caller works instead of the ORM throwing
+    // "Workspace context not set" on two of the three paths.
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      () => this.resolvePersonInContext(workspaceId, email, displayName),
+      buildSystemAuthContext(workspaceId),
+      { lite: true },
+    );
+  }
+
+  private async resolvePersonInContext(
+    workspaceId: string,
+    email: string,
+    displayName?: string | null,
+  ): Promise<IdentityMatch> {
     // Read-only lookup across the whole workspace: identity resolution has to
     // see records the calling actor may not, otherwise it would silently
     // duplicate people. Nothing is written here — the caller performs the write
@@ -138,6 +155,17 @@ export class IdentityResolutionService {
   }): Promise<IdentityMatch> {
     const { workspaceId, domain } = params;
 
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      () => this.resolveCompanyInContext(workspaceId, domain),
+      buildSystemAuthContext(workspaceId),
+      { lite: true },
+    );
+  }
+
+  private async resolveCompanyInContext(
+    workspaceId: string,
+    domain: string,
+  ): Promise<IdentityMatch> {
     const companyRepository =
       await this.globalWorkspaceOrmManager.getRepository<CompanyWorkspaceEntity>(
         workspaceId,

@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 
-import { In } from 'typeorm';
+import { In, IsNull } from 'typeorm';
 
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { MatchParticipantService } from 'src/modules/match-participant/match-participant.service';
+import { ParticipantIdentityProposalService } from 'src/modules/match-participant/services/participant-identity-proposal.service';
 import { type MessageParticipantWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-participant.workspace-entity';
 import { type ParticipantWithMessageId } from 'src/modules/messaging/message-import-manager/drivers/gmail/types/gmail-message.type';
 
@@ -14,6 +15,7 @@ export class MessagingMessageParticipantService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly matchParticipantService: MatchParticipantService<MessageParticipantWorkspaceEntity>,
+    private readonly participantIdentityProposalService: ParticipantIdentityProposalService,
   ) {}
 
   public async saveMessageParticipants(
@@ -75,6 +77,33 @@ export class MessagingMessageParticipantService {
           matchWith: 'workspaceMemberAndPerson',
           workspaceId,
         });
+
+        // Second pass: anything the exact-match pass above left unlinked gets
+        // a CANDIDATE lookup, which can only ever become a proposal.
+        const createdParticipantIds: string[] = (
+          createdParticipants.raw ?? []
+        ).map(
+          (participant: Pick<MessageParticipantWorkspaceEntity, 'id'>) =>
+            participant.id,
+        );
+
+        if (createdParticipantIds.length > 0) {
+          const stillUnmatched = await messageParticipantRepository.find({
+            where: { id: In(createdParticipantIds), personId: IsNull() },
+          });
+
+          await this.participantIdentityProposalService.reviewUnmatchedParticipants(
+            {
+              participants: stillUnmatched.map((participant) => ({
+                id: participant.id,
+                handle: participant.handle,
+                displayName: participant.displayName,
+              })),
+              objectMetadataName: 'messageParticipant',
+              workspaceId,
+            },
+          );
+        }
       },
       authContext,
       { lite: true },

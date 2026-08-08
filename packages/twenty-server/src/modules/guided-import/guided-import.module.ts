@@ -3,6 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
+import { TokenModule } from 'src/engine/core-modules/auth/token/token.module';
+import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/workspace-cache-storage.module';
 import { RecordCrudModule } from 'src/engine/core-modules/record-crud/record-crud.module';
 import { AiWriteApprovalModule } from 'src/engine/metadata-modules/ai/ai-write-approval/ai-write-approval.module';
 import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.module';
@@ -22,13 +24,24 @@ import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata
   // ImportBatchResolver injects PermissionsService; without this import Nest
   // cannot resolve it and the whole application fails to boot.
   imports: [
-    TypeOrmModule.forFeature([ImportBatchEntity, ImportRowEntity]),
-    TypeOrmModule.forFeature([UserEntity, UserWorkspaceEntity]),
+    // One forFeature call, not two: two dynamic TypeOrmModule imports in the
+    // same module collide on the same module token and only one survives.
+    TypeOrmModule.forFeature([
+      ImportBatchEntity,
+      ImportRowEntity,
+      UserEntity,
+      UserWorkspaceEntity,
+    ]),
     RecordCrudModule,
     AiWriteApprovalModule,
     UserRoleModule,
     WorkspaceCacheModule,
     PermissionsModule,
+    // WorkspaceAuthGuard on ImportBatchResolver builds a JwtAuthGuard, which
+    // needs AccessTokenService and WorkspaceCacheStorageService; without these
+    // the whole application fails to boot.
+    TokenModule,
+    WorkspaceCacheStorageModule,
     MatchParticipantModule,
     WorkspaceManyOrAllFlatEntityMapsCacheModule,
   ],

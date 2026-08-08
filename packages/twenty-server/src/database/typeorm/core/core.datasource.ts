@@ -42,8 +42,8 @@ export const typeORMCoreModuleOptions: TypeOrmModuleOptions = {
   type: 'postgres',
   logging: getLoggingConfig(),
   schema: 'core',
-  entities:
-    process.env.IS_BILLING_ENABLED === 'true'
+  entities: [
+    ...(process.env.IS_BILLING_ENABLED === 'true'
       ? [
           `${isJest ? 'src/' : 'dist/'}engine/core-modules/**/*.entity{.ts,.js}`,
           `${isJest ? 'src/' : 'dist/'}engine/metadata-modules/**/*.entity{.ts,.js}`,
@@ -51,7 +51,12 @@ export const typeORMCoreModuleOptions: TypeOrmModuleOptions = {
       : [
           `${isJest ? 'src/' : 'dist/'}engine/core-modules/**/!(billing-*).entity.{ts,js}`,
           `${isJest ? 'src/' : 'dist/'}engine/metadata-modules/**/*.entity{.ts,.js}`,
-        ],
+        ]),
+    // Guided-import staging tables live on the core schema but outside
+    // engine/, so they need their own glob or TypeOrmModule.forFeature cannot
+    // build their repositories and the application fails to boot.
+    `${isJest ? 'src/' : 'dist/'}modules/guided-import/entities/*.entity{.ts,.js}`,
+  ],
   synchronize: false,
   migrationsRun: false,
   poolSize: Number(process.env.PG_POOL_MAX_CONNECTIONS ?? 10),
