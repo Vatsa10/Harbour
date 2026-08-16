@@ -20,6 +20,7 @@ import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services
 import { ProposalExecutionService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-execution.service';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
+import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 const buildItem = (overrides: Record<string, unknown> = {}) => ({
@@ -72,6 +73,11 @@ describe('ProposalExecutionService', () => {
   };
   const moduleRef = { get: jest.fn() };
   const factService = { markDismissed: jest.fn() };
+  const workspaceRepository = { update: jest.fn() };
+  const globalWorkspaceOrmManager = {
+    getRepository: jest.fn(),
+    executeInWorkspaceContext: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -133,6 +139,13 @@ describe('ProposalExecutionService', () => {
       message: 'ran',
     });
     moduleRef.get.mockReturnValue([staticToolProvider]);
+    workspaceRepository.update.mockResolvedValue({ affected: 1 });
+    globalWorkspaceOrmManager.getRepository.mockResolvedValue(
+      workspaceRepository,
+    );
+    globalWorkspaceOrmManager.executeInWorkspaceContext.mockImplementation(
+      async (fn: () => unknown) => fn(),
+    );
     findRecordsService.execute.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -185,6 +198,10 @@ describe('ProposalExecutionService', () => {
           useValue: proposalItemRepository,
         },
         { provide: FactService, useValue: factService },
+        {
+          provide: GlobalWorkspaceOrmManager,
+          useValue: globalWorkspaceOrmManager,
+        },
       ],
     }).compile();
 
@@ -661,4 +678,96 @@ describe('ProposalExecutionService', () => {
       expect(factService.markDismissed).not.toHaveBeenCalled();
     });
   });
+
+  describe('objects blocked from automation', () => {
+    const participantItem = (overrides: Record<string, unknown> = {}) =>
+      buildItem({
+        objectNameSingular: 'messageParticipant',
+        recordId: 'participant-1',
+        payload: { personId: 'person-1' },
+        baseline: { personId: null },
+        ...overrides,
+      });
+
+    beforeEach(() => {
+      findRecordsService.execute.mockResolvedValue({
+        success: true,
+        message: 'ok',
+        result: { records: [{ id: 'participant-1', personId: null }] },
+      });
+    });
+
+    it('should apply a messageParticipant link that record-crud refuses on automation grounds', async () => {
+      proposalItemRepository.find.mockResolvedValue([participantItem()]);
+
+      const result = await approve(['item-1']);
+
+      // record-crud would return success:false for this object, so the item
+      // must not be routed there.
+      expect(updateRecordService.execute).not.toHaveBeenCalled();
+      expect(globalWorkspaceOrmManager.getRepository).toHaveBeenCalledWith(
+        'workspace-1',
+        'messageParticipant',
+        { unionOf: ['role-1'] },
+      );
+      expect(workspaceRepository.update).toHaveBeenCalledWith('participant-1', {
+        personId: 'person-1',
+      });
+      expect(result.appliedItemIds).toEqual(['item-1']);
+      expect(result.failedItemIds).toEqual([]);
+      expect(result.failures).toEqual([]);
+      expect(itemStatusWrite('item-1')?.status).toBe('APPLIED');
+    });
+
+    it('should fail the item with a reason when the row no longer exists', async () => {
+      proposalItemRepository.find.mockResolvedValue([participantItem()]);
+      workspaceRepository.update.mockResolvedValue({ affected: 0 });
+
+      const result = await approve(['item-1']);
+
+      expect(result.appliedItemIds).toEqual([]);
+      expect(result.failedItemIds).toEqual(['item-1']);
+      expect(result.failures).toEqual([
+        {
+          itemId: 'item-1',
+          error: expect.stringContaining(
+            'No messageParticipant row with id participant-1 was updated',
+          ),
+        },
+      ]);
+      expect(itemStatusWrite('item-1')?.error).toContain('participant-1');
+    });
+
+    it('should refuse an action shape other than a single-record update', async () => {
+      proposalItemRepository.find.mockResolvedValue([
+        participantItem({ actionType: 'DELETE_RECORD', baseline: {} }),
+      ]);
+
+      const result = await approve(['item-1']);
+
+      expect(workspaceRepository.update).not.toHaveBeenCalled();
+      expect(deleteRecordService.execute).not.toHaveBeenCalled();
+      expect(result.failedItemIds).toEqual(['item-1']);
+      expect(result.failures[0].error).toContain('blocked from automated writes');
+    });
+  });
+
+  it('should surface the underlying error text for a failed item', async () => {
+    proposalItemRepository.find.mockResolvedValue([buildItem()]);
+    updateRecordService.execute.mockResolvedValue({
+      success: false,
+      message: 'Failed to update record in person',
+      error: 'Field jobTitle is not writable by this role',
+    });
+
+    const result = await approve(['item-1']);
+
+    expect(result.failures).toEqual([
+      {
+        itemId: 'item-1',
+        error: 'Field jobTitle is not writable by this role',
+      },
+    ]);
+  });
+
 });

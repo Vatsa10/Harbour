@@ -5,7 +5,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { PermissionFlagType } from 'twenty-shared/constants';
 import { FieldActorSource, type ActorMetadata } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
-import { In, Repository } from 'typeorm';
+import { canObjectBeManagedByAutomation } from 'twenty-shared/workflow';
+import { In, ObjectLiteral, Repository } from 'typeorm';
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { buildUserAuthContext } from 'src/engine/core-modules/auth/utils/build-user-auth-context.util';
@@ -37,14 +38,24 @@ import {
 } from 'src/engine/metadata-modules/ai/ai-write-approval/types/proposal-status.type';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
+import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+
+// Why an item failed, carried back to the caller. Without it an approver sees
+// only an id in failedItemIds and has nothing to act on, and the reason is
+// buried in a row nobody queries.
+export type ApprovalFailure = {
+  itemId: string;
+  error: string;
+};
 
 export type ApprovalResult = {
   proposalId: string;
   appliedItemIds: string[];
   conflictedItemIds: string[];
   failedItemIds: string[];
+  failures: ApprovalFailure[];
   aborted: boolean;
 };
 
@@ -90,6 +101,9 @@ export class ProposalExecutionService {
     // ToolProviderModule imports this module, so the provider list is resolved
     // lazily rather than injected, which would close a module cycle.
     private readonly moduleRef: ModuleRef,
+    // Used only for objects record-crud refuses on automation grounds; see
+    // applyAutomationBlockedRecordWrite.
+    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
@@ -223,12 +237,14 @@ export class ProposalExecutionService {
         appliedItemIds: [],
         conflictedItemIds,
         failedItemIds: [],
+        failures: [],
         aborted: true,
       };
     }
 
     const appliedItemIds: string[] = [];
     const failedItemIds: string[] = [];
+    const failures: ApprovalFailure[] = [];
 
     // Record writes first. An outbound send cannot be undone, so it must never
     // fire ahead of a record write that might still fail.
@@ -255,12 +271,22 @@ export class ProposalExecutionService {
           },
         );
       } else {
+        const error =
+          output.error ?? output.message ?? 'Unknown proposal item failure';
+
         failedItemIds.push(item.id);
+        failures.push({ itemId: item.id, error });
+
+        // A silent failure here reads as "approval did nothing" in the UI.
+        this.logger.error(
+          `Proposal item ${item.id} (${item.actionType} ${item.objectNameSingular ?? item.toolId}) failed: ${error}`,
+        );
+
         await this.proposalItemRepository.update(
           { id: item.id },
           {
             status: ProposalItemStatus.FAILED,
-            error: output.error ?? output.message,
+            error,
           },
         );
       }
@@ -300,6 +326,7 @@ export class ProposalExecutionService {
       appliedItemIds,
       conflictedItemIds: [],
       failedItemIds,
+      failures,
       aborted: false,
     };
   }
@@ -495,6 +522,20 @@ export class ProposalExecutionService {
       : [];
     const filter = (item.payload.filter ?? {}) as Record<string, unknown>;
 
+    // record-crud refuses every write to an object on the automation
+    // blocklist (messageParticipant, calendarEventParticipant, message, ...).
+    // That blocklist exists to stop *unattended automations* rewriting
+    // ingestion-owned rows; an approved proposal is the opposite case — a
+    // named human pressed approve, and the write runs as them. Without this
+    // branch every ingestion identity proposal is approvable but never
+    // appliable: it lands in failedItemIds and the link never happens.
+    if (
+      isDefined(item.objectNameSingular) &&
+      !canObjectBeManagedByAutomation({ nameSingular: item.objectNameSingular })
+    ) {
+      return this.applyAutomationBlockedRecordWrite(item, approver);
+    }
+
     switch (item.actionType) {
       case ProposalActionType.CREATE_RECORD:
         return this.createRecordService.execute({
@@ -572,6 +613,70 @@ export class ProposalExecutionService {
 
       case ProposalActionType.STATIC_TOOL:
         return this.applyStaticTool(item, approver);
+    }
+  }
+
+  // Applies a record write to an automation-blocked object through the
+  // ordinary workspace ORM, still scoped to the approver's role, so object and
+  // field permissions are enforced exactly as they would be for a manual edit.
+  // Deliberately narrow: only single-record updates on an existing row, which
+  // is the whole shape ingestion proposals produce. Anything else stays
+  // refused, with a message that says why rather than a bare failure.
+  private async applyAutomationBlockedRecordWrite(
+    item: ProposalItemEntity,
+    approver: ApproverContext,
+  ): Promise<ToolOutput> {
+    const objectName = item.objectNameSingular ?? '';
+
+    if (
+      item.actionType !== ProposalActionType.UPDATE_RECORD ||
+      !isDefined(item.recordId)
+    ) {
+      return {
+        success: false,
+        message: `Cannot apply this change to ${objectName}`,
+        error: `"${objectName}" is blocked from automated writes; only single-record updates of an existing row may be approved on it, not ${item.actionType}.`,
+      };
+    }
+
+    try {
+      return await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        async () => {
+          const repository =
+            await this.globalWorkspaceOrmManager.getRepository<ObjectLiteral>(
+              approver.workspaceId,
+              objectName,
+              approver.rolePermissionConfig,
+            );
+
+          const result = await repository.update(item.recordId as string, {
+            ...item.payload,
+          });
+
+          if (result.affected === 0) {
+            return {
+              success: false,
+              message: `Failed to update record in ${objectName}`,
+              error: `No ${objectName} row with id ${item.recordId} was updated; it may have been deleted since the proposal was made.`,
+            };
+          }
+
+          return {
+            success: true,
+            message: `Record updated successfully in ${objectName}`,
+            result: { record: { id: item.recordId } },
+          };
+        },
+        approver.authContext,
+        { lite: true },
+      );
+    } catch (error) {
+      return {
+        success: false,
+        message: `Failed to update record in ${objectName}`,
+        error:
+          error instanceof Error ? error.message : 'Failed to update record',
+      };
     }
   }
 
@@ -675,6 +780,7 @@ export class ProposalExecutionService {
       appliedItemIds: [],
       conflictedItemIds: [],
       failedItemIds: [],
+      failures: [],
       aborted,
     };
   }

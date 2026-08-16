@@ -97,6 +97,18 @@ export class ProposalDTO {
   items: ProposalItemDTO[];
 }
 
+// Why each failed item failed. failedItemIds alone tells an approver that
+// something did not apply but never what to do about it, and the reason
+// otherwise only exists on a proposalItem row the inbox has already closed.
+@ObjectType('ApprovalFailure')
+export class ApprovalFailureDTO {
+  @Field(() => ID)
+  itemId: string;
+
+  @Field(() => String)
+  error: string;
+}
+
 @ObjectType('ApprovalResult')
 export class ApprovalResultDTO {
   @Field(() => ID)
@@ -110,6 +122,9 @@ export class ApprovalResultDTO {
 
   @Field(() => [ID])
   failedItemIds: string[];
+
+  @Field(() => [ApprovalFailureDTO])
+  failures: ApprovalFailureDTO[];
 
   @Field(() => Boolean)
   aborted: boolean;

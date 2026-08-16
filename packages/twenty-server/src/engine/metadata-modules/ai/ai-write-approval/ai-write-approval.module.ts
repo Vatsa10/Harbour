@@ -7,6 +7,7 @@ import { ToolModule } from 'src/engine/core-modules/tool/tool.module';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
+import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { AiResearchModule } from 'src/engine/metadata-modules/ai/ai-research/ai-research.module';
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
@@ -36,6 +37,7 @@ import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.
     PermissionsModule,
     WorkspaceCacheModule,
     ToolModule,
+    GlobalWorkspaceDataSourceModule,
   ],
   providers: [
     AiWritePolicyService,
