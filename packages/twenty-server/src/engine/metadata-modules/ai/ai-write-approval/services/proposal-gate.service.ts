@@ -17,7 +17,10 @@ import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval
 import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service';
 import { ProposalSupersessionService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-supersession.service';
 import { type AiWritePolicyTarget } from 'src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type';
-import { buildDeleteConfirmationToken } from 'src/engine/metadata-modules/ai/ai-write-approval/utils/build-delete-confirmation-token.util';
+import {
+  buildDeleteConfirmationToken,
+  buildDeleteFilterBasis,
+} from 'src/engine/metadata-modules/ai/ai-write-approval/utils/build-delete-confirmation-token.util';
 import {
   PROPOSAL_TTL_DAYS,
   ProposalActionType,
@@ -491,7 +494,7 @@ export class ProposalGateService {
         // Stringified filter, so two different filters get two different
         // tokens and a confirmed narrow delete cannot be widened on the
         // second call.
-        confirmationBasis: JSON.stringify(filter),
+        confirmationBasis: buildDeleteFilterBasis(filter),
       };
     }
 

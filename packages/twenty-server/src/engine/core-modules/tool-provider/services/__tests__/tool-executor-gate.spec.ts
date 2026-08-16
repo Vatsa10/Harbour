@@ -34,6 +34,16 @@ const updateDescriptor = {
   },
 } as never;
 
+const deleteDescriptor = {
+  name: 'delete_person',
+  category: 'database',
+  executionRef: {
+    kind: 'database_crud',
+    objectNameSingular: 'person',
+    operation: 'delete_one',
+  },
+} as never;
+
 const findDescriptor = {
   name: 'find_person',
   category: 'database',
@@ -50,6 +60,7 @@ describe('ToolExecutorService gating', () => {
   const gateService = { evaluate: jest.fn() };
   const updateRecordService = { execute: jest.fn() };
   const findRecordsService = { execute: jest.fn() };
+  const deleteRecordService = { execute: jest.fn() };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -76,7 +87,7 @@ describe('ToolExecutorService gating', () => {
         { provide: CreateManyRecordsService, useValue: stub },
         { provide: UpdateManyRecordsService, useValue: stub },
         { provide: UpsertManyRecordsService, useValue: stub },
-        { provide: DeleteRecordService, useValue: stub },
+        { provide: DeleteRecordService, useValue: deleteRecordService },
         { provide: DeleteManyRecordsService, useValue: stub },
         { provide: LogicFunctionExecutorService, useValue: stub },
         {
@@ -151,6 +162,30 @@ describe('ToolExecutorService gating', () => {
     // error carries message + hint per toFailedToolOutput, not the bare message
     expect(result.error).toBe('Not permitted Ask a workspace admin.');
     expect(result.message).toBe('Not permitted');
+  });
+
+  it('should short-circuit before the delete service when confirmation is required', async () => {
+    gateService.evaluate.mockResolvedValue({
+      kind: 'CONFIRMATION_REQUIRED',
+      failure: {
+        code: 'CONFIRMATION_REQUIRED',
+        message: 'Deleting this person record is irreversible from this tool.',
+        hint: 'Repeat this exact call with confirm: "abc1234567".',
+        retryable: true,
+        allowedActions: ['retry_with_confirm_token'],
+      },
+    });
+
+    const result = await service.dispatch(
+      deleteDescriptor,
+      { id: 'record-1' },
+      context,
+    );
+
+    expect(deleteRecordService.execute).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.failure?.code).toBe('CONFIRMATION_REQUIRED');
+    expect(result.failure?.retryable).toBe(true);
   });
 
   it('should still execute reads', async () => {
