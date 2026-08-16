@@ -7,6 +7,7 @@ import { I18nService } from 'src/engine/core-modules/i18n/i18n.service';
 import { type GenerateDescriptorOptions } from 'src/engine/core-modules/tool-provider/interfaces/generate-descriptor-options.type';
 import { type ToolProviderContext } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider-context.type';
 import { type ToolProvider } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider.interface';
+import { getCatalogObjectGrants } from 'src/engine/core-modules/tool-provider/utils/get-catalog-object-grants.util';
 import { getCrudToolLabels } from 'src/engine/core-modules/tool-provider/utils/get-crud-tool-label.util';
 
 import { getFlatFieldsFromFlatObjectMetadata } from 'src/engine/api/graphql/workspace-schema-builder/utils/get-flat-fields-for-flat-object-metadata.util';
@@ -70,10 +71,11 @@ export class DatabaseToolProvider implements ToolProvider {
     const toolNames = options?.toolNames;
     const descriptors: (ToolIndexEntry | ToolDescriptor)[] = [];
 
-    const { rolesPermissions, flatObjectPermissionMaps } =
+    const { rolesPermissions, flatObjectPermissionMaps, flatRoleMaps } =
       await this.workspaceCacheService.getOrRecompute(context.workspaceId, [
         'rolesPermissions',
         'flatObjectPermissionMaps',
+        'flatRoleMaps',
       ]);
 
     const objectPermissions = getObjectsPermissionsFromRolePermissionConfig({
@@ -88,9 +90,20 @@ export class DatabaseToolProvider implements ToolProvider {
     const requireExplicitObjectGrants =
       context.requireExplicitObjectGrants === true;
 
-    const roleId = getRoleIdsFromRolePermissionConfig(
+    const roleIds = getRoleIdsFromRolePermissionConfig(
       context.rolePermissionConfig,
-    )[0];
+    );
+    const roleId = roleIds[0];
+
+    const getCatalogGrant = getCatalogObjectGrants({
+      roleIds,
+      combineWith:
+        'intersectionOf' in context.rolePermissionConfig
+          ? 'intersection'
+          : 'union',
+      flatRoleMaps,
+      flatObjectPermissionMaps,
+    });
 
     const explicitPermissionByObjectId = new Map<
       string,
@@ -138,15 +151,19 @@ export class DatabaseToolProvider implements ToolProvider {
         continue;
       }
 
+      const catalogGrant = getCatalogGrant(flatObject.id);
+
+      // Both branches ignore the composed `isSystem` fallback: what the role
+      // was actually granted decides what is advertised.
       const canReadRecords = requireExplicitObjectGrants
         ? explicitPermission?.canReadObjectRecords === true
-        : permission.canReadObjectRecords;
+        : catalogGrant.canReadObjectRecords;
       const canUpdateRecords = requireExplicitObjectGrants
         ? explicitPermission?.canUpdateObjectRecords === true
-        : permission.canUpdateObjectRecords;
+        : catalogGrant.canUpdateObjectRecords;
       const canSoftDeleteRecords = requireExplicitObjectGrants
         ? explicitPermission?.canSoftDeleteObjectRecords === true
-        : permission.canSoftDeleteObjectRecords;
+        : catalogGrant.canSoftDeleteObjectRecords;
 
       const snakePlural = camelToSnakeCase(flatObject.namePlural);
       const snakeSingular = camelToSnakeCase(flatObject.nameSingular);

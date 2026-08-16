@@ -42,9 +42,28 @@ type ExplicitPermissionRow = {
   canSoftDeleteObjectRecords?: boolean;
 };
 
+type RoleRecordFlags = {
+  canReadAllObjectRecords: boolean;
+  canUpdateAllObjectRecords: boolean;
+  canSoftDeleteAllObjectRecords: boolean;
+};
+
+const ALL_RECORDS_ROLE_FLAGS: RoleRecordFlags = {
+  canReadAllObjectRecords: true,
+  canUpdateAllObjectRecords: true,
+  canSoftDeleteAllObjectRecords: true,
+};
+
+const NO_RECORDS_ROLE_FLAGS: RoleRecordFlags = {
+  canReadAllObjectRecords: false,
+  canUpdateAllObjectRecords: false,
+  canSoftDeleteAllObjectRecords: false,
+};
+
 type GenerateDescriptorsTestOptions = {
   requireExplicitObjectGrants?: boolean;
   explicitPermissionRows?: ExplicitPermissionRow[];
+  roleFlags?: RoleRecordFlags;
 };
 
 describe('DatabaseToolProvider', () => {
@@ -85,6 +104,16 @@ describe('DatabaseToolProvider', () => {
               { roleId, ...row },
             ]),
           ),
+        },
+        flatRoleMaps: {
+          universalIdentifierById: { [roleId]: `role-uid` },
+          byUniversalIdentifier: {
+            'role-uid': {
+              id: roleId,
+              universalIdentifier: 'role-uid',
+              ...(options?.roleFlags ?? ALL_RECORDS_ROLE_FLAGS),
+            },
+          },
         },
       }),
     } as unknown as WorkspaceCacheService;
@@ -286,6 +315,79 @@ describe('DatabaseToolProvider', () => {
       expect(descriptor.label).toBeDefined();
       expect(descriptor.label.length).toBeGreaterThan(0);
     }
+  });
+
+  // The composed rolesPermissions cache grants every role full CRUD on any
+  // isSystem object. `allObjectPermissions` in this harness reproduces exactly
+  // that: composed permissions say yes while the role was granted nothing.
+  describe('role with zero object permissions', () => {
+    const zeroPermissionOptions = {
+      roleFlags: NO_RECORDS_ROLE_FLAGS,
+      explicitPermissionRows: [],
+    };
+
+    const systemObjects = [
+      createFlatObject({
+        nameSingular: 'noteTarget',
+        namePlural: 'noteTargets',
+        isSystem: true,
+      }),
+      createFlatObject({
+        nameSingular: 'attachment',
+        namePlural: 'attachments',
+        isSystem: true,
+      }),
+      createFlatObject({
+        nameSingular: 'person',
+        namePlural: 'people',
+      }),
+    ];
+
+    it('advertises zero write tools despite composed system-object permissions', async () => {
+      const descriptorNames = await generateDescriptorNames(
+        systemObjects,
+        zeroPermissionOptions,
+      );
+
+      const writeToolNames = descriptorNames.filter((name) =>
+        /^(create|update|upsert|delete)_/.test(name),
+      );
+
+      expect(writeToolNames).toEqual([]);
+    });
+
+    it('advertises zero tools of any kind', async () => {
+      const descriptorNames = await generateDescriptorNames(
+        systemObjects,
+        zeroPermissionOptions,
+      );
+
+      expect(descriptorNames).toEqual([]);
+    });
+
+    it('still advertises exactly the verbs an explicit row grants', async () => {
+      const personObject = createFlatObject({
+        nameSingular: 'person',
+        namePlural: 'people',
+      });
+
+      const descriptorNames = await generateDescriptorNames([personObject], {
+        roleFlags: NO_RECORDS_ROLE_FLAGS,
+        explicitPermissionRows: [
+          {
+            objectMetadataId: personObject.id,
+            canReadObjectRecords: true,
+            canUpdateObjectRecords: false,
+            canSoftDeleteObjectRecords: false,
+          },
+        ],
+      });
+
+      expect(descriptorNames).toContain('find_many_people');
+      expect(descriptorNames).not.toContain('create_one_person');
+      expect(descriptorNames).not.toContain('update_one_person');
+      expect(descriptorNames).not.toContain('delete_one_person');
+    });
   });
 
   describe('requireExplicitObjectGrants', () => {
