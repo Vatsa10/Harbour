@@ -53,6 +53,7 @@ import { CalendarEventParticipantManagerModule } from 'src/modules/calendar/cale
 import { CalendarModule } from 'src/modules/calendar/calendar.module';
 import { AutoCompaniesAndContactsCreationJobModule } from 'src/modules/contact-creation-manager/jobs/auto-companies-and-contacts-creation-job.module';
 import { ImportExecutionJobModule } from 'src/modules/guided-import/jobs/import-execution-job.module';
+import { StructuredExtractionJobModule } from 'src/modules/structured-extraction/jobs/structured-extraction-job.module';
 import { MessagingModule } from 'src/modules/messaging/messaging.module';
 import { TimelineJobModule } from 'src/modules/timeline/jobs/timeline-job.module';
 import { TimelineActivityModule } from 'src/modules/timeline/timeline-activity.module';
@@ -83,6 +84,7 @@ import { WorkflowModule } from 'src/modules/workflow/workflow.module';
     FeatureFlagModule,
     AutoCompaniesAndContactsCreationJobModule,
     ImportExecutionJobModule,
+    StructuredExtractionJobModule,
     TimelineJobModule,
     WebhookJobModule,
     WorkflowModule,
