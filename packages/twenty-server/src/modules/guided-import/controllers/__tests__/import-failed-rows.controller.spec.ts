@@ -6,6 +6,9 @@ import { ImportRowEntity } from 'src/modules/guided-import/entities/import-row.e
 import { ImportFailedRowsController } from 'src/modules/guided-import/controllers/import-failed-rows.controller';
 import { JwtAuthGuard } from 'src/engine/guards/jwt-auth.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
+import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
+import { PermissionFlagType } from 'twenty-shared/constants';
+import { type CanActivate, type Type } from '@nestjs/common';
 
 describe('ImportFailedRowsController', () => {
   let controller: ImportFailedRowsController;
@@ -26,6 +29,12 @@ describe('ImportFailedRowsController', () => {
         {
           provide: getRepositoryToken(ImportRowEntity),
           useValue: importRowRepository,
+        },
+        // SettingsPermissionGuard(IMPORT_CSV) is constructed at class-decoration
+        // time and injects this; the guard itself is stubbed below.
+        {
+          provide: PermissionsService,
+          useValue: { userHasWorkspaceSettingPermission: jest.fn() },
         },
       ],
     })
@@ -103,5 +112,33 @@ describe('ImportFailedRowsController', () => {
 
     expect(response.status).toHaveBeenCalledWith(404);
     expect(response.setHeader).not.toHaveBeenCalled();
+  });
+
+  // I5: the raw uploaded rows are the same data ImportBatchResolver restricts
+  // with IMPORT_CSV. Without a settings guard on this controller any
+  // authenticated workspace member could download any batch's file contents.
+  // The guard is a class-level decorator, so its presence shows up as a hard
+  // dependency on PermissionsService: drop the guard and this module compiles.
+  it('should require the settings-permission guard dependency', async () => {
+    await expect(
+      Test.createTestingModule({
+        providers: [
+          ImportFailedRowsController,
+          {
+            provide: getRepositoryToken(ImportBatchEntity),
+            useValue: importBatchRepository,
+          },
+          {
+            provide: getRepositoryToken(ImportRowEntity),
+            useValue: importRowRepository,
+          },
+        ],
+      })
+        .overrideGuard(JwtAuthGuard)
+        .useValue({ canActivate: jest.fn().mockReturnValue(true) })
+        .overrideGuard(WorkspaceAuthGuard)
+        .useValue({ canActivate: jest.fn().mockReturnValue(true) })
+        .compile(),
+    ).rejects.toThrow('PermissionsService');
   });
 });

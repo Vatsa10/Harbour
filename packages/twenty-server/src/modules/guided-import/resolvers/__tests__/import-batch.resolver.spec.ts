@@ -142,8 +142,12 @@ describe('prepareImportBatch', () => {
 
     expect(matchResolutionService.resolveBatch).toHaveBeenCalledWith(
       'batch-1',
+      'workspace-1',
     );
-    expect(validationService.validateBatch).toHaveBeenCalledWith('batch-1');
+    expect(validationService.validateBatch).toHaveBeenCalledWith(
+      'batch-1',
+      'workspace-1',
+    );
     expect(importBatchRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'batch-1', status: 'READY' }),
     );
