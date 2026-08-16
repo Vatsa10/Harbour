@@ -117,6 +117,24 @@ const describeItem = (item: ProposalItem): string => {
 
 const FIELD_DIFF_ACTION_TYPES = ['CREATE_RECORD', 'UPDATE_RECORD'];
 
+// Freshness is the whole point of storing lastObservedAt: a STRONG citation
+// from two years ago and one from this morning are different claims, and the
+// reviewer is the only one who can weigh that. It was queried, typed, and
+// dropped at the last inch.
+const formatObservedAt = (observedAt: string | null): string | null => {
+  if (observedAt === null) {
+    return null;
+  }
+
+  const parsed = new Date(observedAt);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toISOString().slice(0, 10);
+};
+
 const findFactForField = (
   item: ProposalItem,
   fieldName: string,
@@ -200,6 +218,9 @@ export const ProposalDiffTable = ({
                           )}
                           {fact.strength} · {fact.sourceType} ·{' '}
                           {fact.sourceLocator}
+                          {formatObservedAt(fact.observedAt) !== null && (
+                            <> · observed {formatObservedAt(fact.observedAt)}</>
+                          )}
                         </StyledCitation>
                       )}
                     </StyledCell>

@@ -195,4 +195,36 @@ describe('ProposalDiffTable', () => {
 
     expect(screen.getByText(/Conflicting sources/)).toBeInTheDocument();
   });
+  // Important 2. Freshness was queried, typed, put in this fixture and never
+  // rendered, so a reviewer could not tell a citation observed this morning
+  // from one observed two years ago.
+  it('should show the reviewer when the citation was observed', () => {
+    render(
+      <ProposalDiffTable
+        items={items}
+        onApprove={jest.fn()}
+        onReject={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/observed 2026-08-01/)).toBeInTheDocument();
+  });
+
+  it('should render the citation without a date rather than an invalid one', () => {
+    render(
+      <ProposalDiffTable
+        items={[
+          {
+            ...items[0],
+            facts: [{ ...items[0].facts[0], observedAt: null }],
+          },
+        ]}
+        onApprove={jest.fn()}
+        onReject={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/WEB_SEARCH/)).toBeInTheDocument();
+    expect(screen.queryByText(/observed/)).not.toBeInTheDocument();
+  });
 });
