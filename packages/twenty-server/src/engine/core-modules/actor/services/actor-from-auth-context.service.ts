@@ -141,7 +141,15 @@ export class ActorFromAuthContextService {
         };
       }
     } else {
-      record[fieldName] = actorMetadata;
+      // Symmetric with createdBy: an explicitly supplied source (IMPORT,
+      // WORKFLOW, AGENT) is preserved so the audit trail can distinguish an
+      // import- or automation-driven update from a hand edit. The identity is
+      // always re-derived from the auth context, so a caller-supplied source
+      // cannot be used to spoof an actor.
+      record[fieldName] = {
+        ...actorMetadata,
+        source: existingValue?.source ?? actorMetadata.source,
+      };
     }
   }
 

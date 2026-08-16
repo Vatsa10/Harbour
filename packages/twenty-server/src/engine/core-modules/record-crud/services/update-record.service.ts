@@ -31,6 +31,8 @@ export class UpdateRecordService {
       fieldsToUpdate,
       authContext,
       rolePermissionConfig,
+      updatedBy,
+      isHumanApproved,
     } = params;
 
     if (!isDefined(objectRecordId) || !isValidUuid(objectRecordId)) {
@@ -54,6 +56,7 @@ export class UpdateRecordService {
       });
 
       if (
+        !isHumanApproved &&
         !canObjectBeManagedByAutomation({
           nameSingular: flatObjectMetadata.nameSingular,
         })
@@ -90,11 +93,19 @@ export class UpdateRecordService {
       // This prevents validation errors for partial composite field inputs
       const cleanedRecord = removeUndefinedFromRecord(filteredObjectRecord);
 
+      // An explicit actor (IMPORT, WORKFLOW, AGENT) must survive to the stored
+      // record, or the audit trail cannot tell an import-driven update from a
+      // hand edit. The actor hook keeps the source and re-derives the identity
+      // from the auth context, so this cannot be used to spoof an actor.
+      const dataWithActor = isDefined(updatedBy)
+        ? { ...cleanedRecord, updatedBy }
+        : cleanedRecord;
+
       const { results: updatedRecord } =
         await this.commonUpdateOneRunner.execute(
           {
             id: objectRecordId,
-            data: cleanedRecord,
+            data: dataWithActor,
             selectedFields,
           },
           queryRunnerContext,

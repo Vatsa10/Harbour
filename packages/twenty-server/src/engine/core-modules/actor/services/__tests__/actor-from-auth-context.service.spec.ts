@@ -33,7 +33,7 @@ describe('ActorFromAuthContextService', () => {
                   'person-universal-id': {
                     id: 'person-id',
                     nameSingular: 'person',
-                    fieldIds: ['createdBy-id'],
+                    fieldIds: ['createdBy-id', 'updatedBy-id'],
                     universalIdentifier: 'person-universal-id',
                   },
                 },
@@ -50,9 +50,16 @@ describe('ActorFromAuthContextService', () => {
                     objectMetadataId: 'person-id',
                     universalIdentifier: 'createdBy-universal-id',
                   },
+                  'updatedBy-universal-id': {
+                    id: 'updatedBy-id',
+                    name: 'updatedBy',
+                    objectMetadataId: 'person-id',
+                    universalIdentifier: 'updatedBy-universal-id',
+                  },
                 },
                 universalIdentifierById: {
                   'createdBy-id': 'createdBy-universal-id',
+                  'updatedBy-id': 'updatedBy-universal-id',
                 },
                 universalIdentifiersByApplicationId: {},
               },
@@ -161,6 +168,70 @@ describe('ActorFromAuthContextService', () => {
         }),
       ).rejects.toThrowErrorMatchingInlineSnapshot(
         `"Unable to build actor metadata - no valid actor information found in auth context"`,
+      );
+    });
+  });
+
+  describe('injectUpdatedBy', () => {
+    const userAuthContext = {
+      type: 'user',
+      workspaceMemberId: 'workspace-member-id',
+      workspaceMember: {
+        id: 'workspace-member-id',
+        name: { firstName: 'Jane', lastName: 'Austen' },
+      },
+      workspace: { id: '20202020-bdec-497f-847a-1bb334fefe58' },
+    } as unknown as WorkspaceAuthContext;
+
+    it('should preserve an explicitly supplied source so an import is not audited as a hand edit', async () => {
+      const [record] = await service.injectUpdatedBy({
+        records: [
+          { updatedBy: { source: FieldActorSource.IMPORT, name: 'ignored' } },
+        ],
+        objectMetadataNameSingular: 'person',
+        authContext: userAuthContext,
+      });
+
+      expect(record.updatedBy).toEqual(
+        expect.objectContaining({ source: FieldActorSource.IMPORT }),
+      );
+    });
+
+    it('should re-derive the identity from the auth context, so a supplied source cannot spoof an actor', async () => {
+      const [record] = await service.injectUpdatedBy({
+        records: [
+          {
+            updatedBy: {
+              source: FieldActorSource.IMPORT,
+              name: 'Someone Else',
+              workspaceMemberId: 'attacker-id',
+            },
+          },
+        ],
+        objectMetadataNameSingular: 'person',
+        authContext: userAuthContext,
+      });
+
+      expect(record.updatedBy).toEqual(
+        expect.objectContaining({
+          name: 'Jane Austen',
+          workspaceMemberId: 'workspace-member-id',
+        }),
+      );
+    });
+
+    it('should default the source to the auth context when none was supplied', async () => {
+      const [record] = await service.injectUpdatedBy({
+        records: [{}],
+        objectMetadataNameSingular: 'person',
+        authContext: userAuthContext,
+      });
+
+      expect(record.updatedBy).toEqual(
+        expect.objectContaining({
+          source: FieldActorSource.MANUAL,
+          name: 'Jane Austen',
+        }),
       );
     });
   });

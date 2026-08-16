@@ -6,7 +6,7 @@ import { PermissionFlagType } from 'twenty-shared/constants';
 import { FieldActorSource, type ActorMetadata } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { canObjectBeManagedByAutomation } from 'twenty-shared/workflow';
-import { In, ObjectLiteral, Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { buildUserAuthContext } from 'src/engine/core-modules/auth/utils/build-user-auth-context.util';
@@ -38,7 +38,6 @@ import {
 } from 'src/engine/metadata-modules/ai/ai-write-approval/types/proposal-status.type';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
@@ -101,9 +100,6 @@ export class ProposalExecutionService {
     // ToolProviderModule imports this module, so the provider list is resolved
     // lazily rather than injected, which would close a module cycle.
     private readonly moduleRef: ModuleRef,
-    // Used only for objects record-crud refuses on automation grounds; see
-    // applyAutomationBlockedRecordWrite.
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
@@ -616,11 +612,13 @@ export class ProposalExecutionService {
     }
   }
 
-  // Applies a record write to an automation-blocked object through the
-  // ordinary workspace ORM, still scoped to the approver's role, so object and
-  // field permissions are enforced exactly as they would be for a manual edit.
-  // Deliberately narrow: only single-record updates on an existing row, which
-  // is the whole shape ingestion proposals produce. Anything else stays
+  // Applies a record write to an automation-blocked object. It still goes
+  // through UpdateRecordService — so the update event fires, updatedBy is
+  // stamped, composite fields are formatted, and object/field permissions are
+  // enforced under the approver's role — carrying `isHumanApproved` to tell
+  // record-crud that a named human, not an unattended automation, authorised
+  // this. Deliberately narrow: only single-record updates on an existing row,
+  // which is the whole shape ingestion proposals produce. Anything else stays
   // refused, with a message that says why rather than a bare failure.
   private async applyAutomationBlockedRecordWrite(
     item: ProposalItemEntity,
@@ -639,45 +637,16 @@ export class ProposalExecutionService {
       };
     }
 
-    try {
-      return await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-        async () => {
-          const repository =
-            await this.globalWorkspaceOrmManager.getRepository<ObjectLiteral>(
-              approver.workspaceId,
-              objectName,
-              approver.rolePermissionConfig,
-            );
-
-          const result = await repository.update(item.recordId as string, {
-            ...item.payload,
-          });
-
-          if (result.affected === 0) {
-            return {
-              success: false,
-              message: `Failed to update record in ${objectName}`,
-              error: `No ${objectName} row with id ${item.recordId} was updated; it may have been deleted since the proposal was made.`,
-            };
-          }
-
-          return {
-            success: true,
-            message: `Record updated successfully in ${objectName}`,
-            result: { record: { id: item.recordId } },
-          };
-        },
-        approver.authContext,
-        { lite: true },
-      );
-    } catch (error) {
-      return {
-        success: false,
-        message: `Failed to update record in ${objectName}`,
-        error:
-          error instanceof Error ? error.message : 'Failed to update record',
-      };
-    }
+    return this.updateRecordService.execute({
+      objectName,
+      objectRecordId: item.recordId,
+      objectRecord: item.payload,
+      authContext: approver.authContext,
+      rolePermissionConfig: approver.rolePermissionConfig,
+      updatedBy: approver.actorMetadata,
+      isHumanApproved: true,
+      slimResponse: true,
+    });
   }
 
   // The dispatch path re-checks tool permissions before every static tool.

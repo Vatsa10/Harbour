@@ -53,13 +53,14 @@ describe('EvidenceRecordingService', () => {
     service = module.get<EvidenceRecordingService>(EvidenceRecordingService);
   });
 
-  it('should assign STRONG strength for a CRM_RECORD source deterministically', async () => {
+  it('should assign STRONG strength for a server-observed CRM_RECORD source deterministically', async () => {
     await service.recordEvidence({
       workspaceId: 'workspace-1',
       runId: 'run-1',
       objectNameSingular: 'company',
       recordId: 'record-1',
       sourceType: 'CRM_RECORD',
+      assertedBy: 'SERVER',
       sourceLocator: 'internal:company:record-1',
       extractor: 'agent-run:agent-1',
       payload: { fieldName: 'employeeCount', value: '500' },
@@ -78,6 +79,7 @@ describe('EvidenceRecordingService', () => {
       objectNameSingular: 'company',
       recordId: 'record-1',
       sourceType: 'WEB_SEARCH',
+      assertedBy: 'SERVER',
       sourceLocator: 'https://example.com',
       extractor: 'agent-run:agent-1',
       payload: { fieldName: 'employeeCount', value: '500' },
@@ -86,6 +88,50 @@ describe('EvidenceRecordingService', () => {
     expect(evidenceRepository.save).toHaveBeenCalledWith(
       'workspace-1',
       expect.objectContaining({ strength: 'WEAK' }),
+    );
+  });
+
+  // Critical 5. sourceType is a free enum on the record_evidence tool schema,
+  // so this is the route a model uses to promote its own guess. The strength
+  // table alone said CRM_RECORD -> STRONG; a model wanting a STRONG citation
+  // typed eight characters and the approval UI rendered it as corroboration.
+  it('should mark a model-asserted observation WEAK even when it claims the strongest source type', async () => {
+    for (const sourceType of ['CRM_RECORD', 'CRM_ACTIVITY', 'MANUAL', 'IMPORT_FILE'] as const) {
+      await service.recordEvidence({
+        workspaceId: 'workspace-1',
+        runId: 'run-1',
+        objectNameSingular: 'company',
+        recordId: 'record-1',
+        sourceType,
+        assertedBy: 'MODEL',
+        sourceLocator: 'https://example.com/fabricated',
+        extractor: 'record_evidence',
+        payload: { fieldName: 'employeeCount', value: '500' },
+      });
+    }
+
+    for (const [, entity] of evidenceRepository.save.mock.calls) {
+      expect(entity.strength).toBe('WEAK');
+    }
+    expect(evidenceRepository.save).toHaveBeenCalledTimes(4);
+  });
+
+  it('should still let a server-observed IMPORT_FILE source be STRONG', async () => {
+    await service.recordEvidence({
+      workspaceId: 'workspace-1',
+      runId: null,
+      objectNameSingular: 'company',
+      recordId: 'record-1',
+      sourceType: 'IMPORT_FILE',
+      assertedBy: 'SERVER',
+      sourceLocator: 'importBatch:batch-1:row:7',
+      extractor: 'guided-import',
+      payload: { fieldName: 'employeeCount', value: '500' },
+    });
+
+    expect(evidenceRepository.save).toHaveBeenCalledWith(
+      'workspace-1',
+      expect.objectContaining({ strength: 'STRONG' }),
     );
   });
 
@@ -101,6 +147,7 @@ describe('EvidenceRecordingService', () => {
       objectNameSingular: 'company',
       recordId: 'record-1',
       sourceType: 'WEB_SEARCH',
+      assertedBy: 'SERVER',
       sourceLocator: 'https://example.com/about',
       extractor: 'agent-run:agent-1',
       observedAt: new Date('2026-08-01T00:00:00.000Z'),
@@ -150,6 +197,7 @@ describe('EvidenceRecordingService', () => {
       objectNameSingular: 'company',
       recordId: 'record-1',
       sourceType: 'WEB_SEARCH',
+      assertedBy: 'SERVER',
       sourceLocator: 'https://example.com/about',
       extractor: 'agent-run:agent-1',
       payload: { fieldName: 'employeeCount', value: '500' },
@@ -172,6 +220,7 @@ describe('EvidenceRecordingService', () => {
         objectNameSingular: 'company',
         recordId: 'record-1',
         sourceType: 'WEB_SEARCH',
+      assertedBy: 'SERVER',
         sourceLocator: 'https://example.com/about',
         extractor: 'agent-run:agent-1',
         payload: { fieldName: 'employeeCount', value: '500' },

@@ -128,6 +128,9 @@ export class StructuredExtractionService {
         objectNameSingular: 'person',
         recordId: subject.personId,
         sourceType: SOURCE_EVIDENCE_TYPE[sourceKind],
+        // The server picked this source type from the ingested artefact it
+        // was handed; the model only extracted the claim inside it.
+        assertedBy: 'SERVER',
         sourceLocator,
         extractor: EXTRACTOR_NAME,
         observedAt: subject.observedAt,

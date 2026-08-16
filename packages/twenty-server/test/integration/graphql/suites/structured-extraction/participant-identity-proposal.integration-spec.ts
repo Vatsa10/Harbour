@@ -4,6 +4,9 @@ import request from 'supertest';
 
 import { MessageParticipantRole } from 'twenty-shared/types';
 
+import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
+import { type GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { type MessagingMessageParticipantService } from 'src/modules/messaging/message-participant-manager/services/messaging-message-participant.service';
 import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 
@@ -123,13 +126,48 @@ const findParticipant = async (
 
 describe('participant identity proposal (e2e)', () => {
   let messagingMessageParticipantService: MessagingMessageParticipantService;
+  let globalWorkspaceOrmManager: GlobalWorkspaceOrmManager;
   let setupPersonId: string;
   let messageId: string;
+
+  // Production always calls saveMessageParticipants from inside an open
+  // workspace transaction (messaging-save-messages-and-enqueue-contact-
+  // creation.service.ts). Calling it without one exercises a shape that
+  // never occurs and hid the missing transaction manager on the
+  // still-unmatched lookup.
+  const saveParticipantsAsProductionDoes = async () =>
+    globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const dataSource =
+          await globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+
+        await dataSource.transaction(async (manager) => {
+          await messagingMessageParticipantService.saveMessageParticipants(
+            [
+              {
+                messageId,
+                handle: INBOUND_HANDLE,
+                displayName: 'Jane Doe',
+                role: MessageParticipantRole.FROM,
+              },
+            ],
+            SEED_APPLE_WORKSPACE_ID,
+            manager as WorkspaceEntityManager,
+          );
+        });
+      },
+      buildSystemAuthContext(SEED_APPLE_WORKSPACE_ID),
+      { lite: true },
+    );
 
   beforeAll(async () => {
     messagingMessageParticipantService =
       getAppProviderByClassName<MessagingMessageParticipantService>(
         'MessagingMessageParticipantService',
+      );
+    globalWorkspaceOrmManager =
+      getAppProviderByClassName<GlobalWorkspaceOrmManager>(
+        'GlobalWorkspaceOrmManager',
       );
 
     const companyId = await createRecord('createCompany', 'CompanyCreateInput', {
@@ -167,17 +205,7 @@ describe('participant identity proposal (e2e)', () => {
 
   it('leaves the participant unlinked and proposes the candidate person instead', async () => {
     // The exact code path a real inbound email import takes, minus the driver.
-    await messagingMessageParticipantService.saveMessageParticipants(
-      [
-        {
-          messageId,
-          handle: INBOUND_HANDLE,
-          displayName: 'Jane Doe',
-          role: MessageParticipantRole.FROM,
-        },
-      ],
-      SEED_APPLE_WORKSPACE_ID,
-    );
+    await saveParticipantsAsProductionDoes();
 
     const participantId = await findParticipantId();
 
@@ -238,17 +266,7 @@ describe('participant identity proposal (e2e)', () => {
 
     // Re-run the save with the same message/handle: the participant already
     // exists, so nothing new is inserted and no duplicate proposal appears.
-    await messagingMessageParticipantService.saveMessageParticipants(
-      [
-        {
-          messageId,
-          handle: INBOUND_HANDLE,
-          displayName: 'Jane Doe',
-          role: MessageParticipantRole.FROM,
-        },
-      ],
-      SEED_APPLE_WORKSPACE_ID,
-    );
+    await saveParticipantsAsProductionDoes();
 
     const proposals = await global.testDataSource.query(
       `SELECT id FROM core."proposal" WHERE "sourceKey" = $1`,

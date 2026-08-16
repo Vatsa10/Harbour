@@ -291,6 +291,8 @@ describe('agent task research (e2e)', () => {
       fieldName: 'jobTitle',
       value: 'Head of Sales',
       sourceType: 'WEB_SEARCH',
+      // Recorded by the test harness, not by a model.
+      assertedBy: 'SERVER',
       sourceLocator: 'https://example.com/about',
     });
 
@@ -336,6 +338,8 @@ describe('agent task research (e2e)', () => {
       strength: 'WEAK',
       hasConflict: false,
       sourceType: 'WEB_SEARCH',
+      // Recorded by the test harness, not by a model.
+      assertedBy: 'SERVER',
       sourceLocator: 'https://example.com/about',
     });
 
@@ -607,6 +611,8 @@ describe('agent task research (e2e)', () => {
       objectNameSingular: 'person',
       recordId: personId,
       sourceType: 'WEB_SEARCH',
+      // Recorded by the test harness, not by a model.
+      assertedBy: 'SERVER',
       sourceLocator: 'https://example.com/about',
       extractor: `agent-run:${runId}`,
       payload: { fieldName: 'jobTitle', value: 'Head of Sales' },
@@ -634,6 +640,8 @@ describe('agent task research (e2e)', () => {
       objectNameSingular: 'person',
       recordId: personId,
       sourceType: 'WEB_SEARCH',
+      // Recorded by the test harness, not by a model.
+      assertedBy: 'SERVER',
       sourceLocator: 'https://example.com/team',
       extractor: `agent-run:${randomUUID()}`,
       payload: { fieldName: 'jobTitle', value: 'Head of Sales' },
@@ -653,6 +661,8 @@ describe('agent task research (e2e)', () => {
       objectNameSingular: 'person',
       recordId: personId,
       sourceType: 'WEB_SEARCH',
+      // Recorded by the test harness, not by a model.
+      assertedBy: 'SERVER',
       sourceLocator: 'https://example.com/news',
       extractor: `agent-run:${randomUUID()}`,
       payload: { fieldName: 'jobTitle', value: 'VP of Sales' },

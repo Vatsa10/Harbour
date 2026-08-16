@@ -702,17 +702,22 @@ describe('ProposalExecutionService', () => {
 
       const result = await approve(['item-1']);
 
-      // record-crud would return success:false for this object, so the item
-      // must not be routed there.
-      expect(updateRecordService.execute).not.toHaveBeenCalled();
-      expect(globalWorkspaceOrmManager.getRepository).toHaveBeenCalledWith(
-        'workspace-1',
-        'messageParticipant',
-        { unionOf: ['role-1'] },
+      // The write must still go through record-crud so the update event
+      // fires, updatedBy is stamped and composites are formatted. The
+      // blocklist is waived only by the explicit human-approval flag, never
+      // by writing behind the ORM's back.
+      expect(updateRecordService.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          objectName: 'messageParticipant',
+          objectRecordId: 'participant-1',
+          objectRecord: { personId: 'person-1' },
+          rolePermissionConfig: { unionOf: ['role-1'] },
+          isHumanApproved: true,
+          updatedBy: expect.objectContaining({ name: 'Jane Austen' }),
+        }),
       );
-      expect(workspaceRepository.update).toHaveBeenCalledWith('participant-1', {
-        personId: 'person-1',
-      });
+      expect(globalWorkspaceOrmManager.getRepository).not.toHaveBeenCalled();
+      expect(workspaceRepository.update).not.toHaveBeenCalled();
       expect(result.appliedItemIds).toEqual(['item-1']);
       expect(result.failedItemIds).toEqual([]);
       expect(result.failures).toEqual([]);
@@ -721,7 +726,11 @@ describe('ProposalExecutionService', () => {
 
     it('should fail the item with a reason when the row no longer exists', async () => {
       proposalItemRepository.find.mockResolvedValue([participantItem()]);
-      workspaceRepository.update.mockResolvedValue({ affected: 0 });
+      updateRecordService.execute.mockResolvedValue({
+        success: false,
+        message: 'Failed to update record in messageParticipant',
+        error: 'Record participant-1 not found',
+      });
 
       const result = await approve(['item-1']);
 
@@ -730,9 +739,7 @@ describe('ProposalExecutionService', () => {
       expect(result.failures).toEqual([
         {
           itemId: 'item-1',
-          error: expect.stringContaining(
-            'No messageParticipant row with id participant-1 was updated',
-          ),
+          error: expect.stringContaining('participant-1'),
         },
       ]);
       expect(itemStatusWrite('item-1')?.error).toContain('participant-1');
@@ -746,6 +753,7 @@ describe('ProposalExecutionService', () => {
       const result = await approve(['item-1']);
 
       expect(workspaceRepository.update).not.toHaveBeenCalled();
+      expect(updateRecordService.execute).not.toHaveBeenCalled();
       expect(deleteRecordService.execute).not.toHaveBeenCalled();
       expect(result.failedItemIds).toEqual(['item-1']);
       expect(result.failures[0].error).toContain('blocked from automated writes');

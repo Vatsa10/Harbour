@@ -69,7 +69,14 @@ const UNGATED_STATIC_TOOL_IDS = [
   // it would ask a human to approve the act of writing down an observation, and
   // no evidence would ever be recorded — the whole pipeline goes inert.
   'record_evidence',
-  // create_agent_task writes only to core."agentTask" — it schedules research,
+  // create_agent_task schedules research. It writes core."agentTask" and, via
+  // ResearchAgentService.ensureRoleBinding -> AiAgentRoleService, one
+  // roleTarget row plus the flat-metadata workspace migration that binds the
+  // seeded research agent to its seeded role. No model input reaches roleId or
+  // agentId (both resolve from server-side universal identifiers) and the
+  // binding is idempotent and once-per-workspace, so this is not a write path
+  // a model can steer — but it is more than core."agentTask", and a reviewer
+  // re-approving this exemption should be told so.
   // it never touches a CRM record and never sends anything outbound. The
   // research run it schedules is itself dispatched through this same gate, so
   // exempting the scheduling call does not exempt any write.

@@ -1,8 +1,11 @@
 import { z } from 'zod';
 
 // The model reports WHAT it observed and WHERE. It never reports how much that
-// observation is worth — strength is assigned server-side from the source type,
-// so a confident-sounding model cannot promote its own guess.
+// observation is worth. Strength is assigned server-side, and everything
+// arriving through this tool is marked model-asserted and therefore WEAK —
+// including a sourceType of CRM_RECORD, which used to be the eight characters
+// that bought a fabricated citation a STRONG badge. STRONG is reserved for
+// observations the server made itself.
 export const RecordEvidenceInputZodSchema = z.object({
   objectNameSingular: z
     .string()
@@ -19,7 +22,7 @@ export const RecordEvidenceInputZodSchema = z.object({
   sourceType: z
     .enum(['CRM_RECORD', 'CRM_ACTIVITY', 'WEB_SEARCH', 'MANUAL'])
     .describe(
-      'Where the observation came from. CRM_RECORD and CRM_ACTIVITY are our own data; WEB_SEARCH is anything fetched from outside; MANUAL is a human statement.',
+      'Where the observation came from. CRM_RECORD and CRM_ACTIVITY are our own data; WEB_SEARCH is anything fetched from outside; MANUAL is a human statement. This describes the source honestly for a reviewer; it does not change how much the observation counts for.',
     ),
   sourceLocator: z
     .string()

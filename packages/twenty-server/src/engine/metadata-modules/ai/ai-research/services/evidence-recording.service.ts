@@ -3,9 +3,10 @@ import { Injectable } from '@nestjs/common';
 import { EvidenceEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/evidence.entity';
 import { FactDerivationService } from 'src/engine/metadata-modules/ai/ai-research/services/fact-derivation.service';
 import {
-  EVIDENCE_SOURCE_STRENGTH,
+  type EvidenceAssertedBy,
   type EvidencePayload,
   type EvidenceSourceType,
+  resolveEvidenceStrength,
 } from 'src/engine/metadata-modules/ai/ai-research/types/evidence.type';
 import { hashEvidencePayload } from 'src/engine/metadata-modules/ai/ai-research/utils/hash-evidence-payload.util';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
@@ -17,6 +18,10 @@ export type RecordEvidenceParams = {
   objectNameSingular: string;
   recordId: string;
   sourceType: EvidenceSourceType;
+  // Required, not defaulted: a new caller must state whether a model chose the
+  // source type or the server did. A default would silently hand the next
+  // model-facing path the STRONG badge this parameter exists to withhold.
+  assertedBy: EvidenceAssertedBy;
   sourceLocator: string;
   extractor: string;
   observedAt?: Date;
@@ -49,8 +54,12 @@ export class EvidenceRecordingService {
       payload: params.payload,
       payloadHash: hashEvidencePayload(params.payload),
       // Deterministic — this is the one line that decides strength, and it
-      // reads straight from the fixed table, not from anything the model said.
-      strength: EVIDENCE_SOURCE_STRENGTH[params.sourceType],
+      // reads from the fixed table only for source types the SERVER observed.
+      // Anything a model asserted is WEAK regardless of what it called it.
+      strength: resolveEvidenceStrength({
+        sourceType: params.sourceType,
+        assertedBy: params.assertedBy,
+      }),
     })) as EvidenceEntity;
 
     // Deliberately not caught: a derivation failure leaves the observation on

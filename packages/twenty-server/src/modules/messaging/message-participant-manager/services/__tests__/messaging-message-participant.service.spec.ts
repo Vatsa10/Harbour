@@ -1,4 +1,6 @@
 import { Test } from '@nestjs/testing';
+
+import { MessageParticipantRole } from 'twenty-shared/types';
 import type { TestingModule } from '@nestjs/testing';
 
 import type { WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
@@ -81,7 +83,7 @@ describe('MessagingMessageParticipantService', () => {
           messageId: 'message-1',
           handle: 'jane@acme.com',
           displayName: 'Jane',
-          role: 'from',
+          role: MessageParticipantRole.FROM,
         },
       ],
       WORKSPACE_ID,
@@ -110,7 +112,7 @@ describe('MessagingMessageParticipantService', () => {
           messageId: 'message-1',
           handle: 'jane@acme.com',
           displayName: 'Jane',
-          role: 'from',
+          role: MessageParticipantRole.FROM,
         },
       ],
       WORKSPACE_ID,
