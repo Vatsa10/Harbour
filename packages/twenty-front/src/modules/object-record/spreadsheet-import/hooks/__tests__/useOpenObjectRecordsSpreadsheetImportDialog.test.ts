@@ -3,6 +3,7 @@ import { act } from 'react';
 import gql from 'graphql-tag';
 
 import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { guidedImportReviewState } from '@/object-record/spreadsheet-import/states/guidedImportReviewState';
 import { spreadsheetImportDialogState } from '@/spreadsheet-import/states/spreadsheetImportDialogState';
 import { useOpenObjectRecordsSpreadsheetImportDialog } from '@/object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog';
 import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
@@ -23,11 +24,25 @@ jest.mock('@/object-record/hooks/useBatchCreateManyRecords', () => ({
   }),
 }));
 
-const mockRunGuidedImport = jest.fn().mockResolvedValue('import-batch-id');
+const mockPreview = {
+  totalRows: 1,
+  createCount: 0,
+  updateCount: 1,
+  proposeCount: 0,
+  skipCount: 0,
+  rowsWithErrorsCount: 0,
+};
+
+const mockPrepareGuidedImport = jest.fn().mockResolvedValue({
+  importBatchId: 'import-batch-id',
+  preview: mockPreview,
+});
+const mockStartGuidedImport = jest.fn().mockResolvedValue(undefined);
 
 jest.mock('@/object-record/spreadsheet-import/hooks/useCreateImportBatch', () => ({
   useCreateImportBatch: () => ({
-    runGuidedImport: mockRunGuidedImport,
+    prepareGuidedImport: mockPrepareGuidedImport,
+    startGuidedImport: mockStartGuidedImport,
   }),
 }));
 
@@ -167,13 +182,22 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
     });
 
     // Submitted rows are routed through the guided-import staging pipeline
-    // (create -> prepare -> start import batch) so extraction results become
-    // proposals through the AI write gate, rather than through a direct
-    // batch write.
+    // (create -> prepare) so extraction results become proposals through the
+    // AI write gate, rather than through a direct batch write.
     expect(mockBatchCreateManyRecords).not.toHaveBeenCalled();
-    expect(mockRunGuidedImport).toHaveBeenCalledTimes(1);
+    expect(mockPrepareGuidedImport).toHaveBeenCalledTimes(1);
 
-    const callArgs = mockRunGuidedImport.mock.calls[0][0];
+    // The whole point of the review step: submitting the wizard prepares the
+    // batch and stops. Nothing is written until a human confirms.
+    expect(mockStartGuidedImport).not.toHaveBeenCalled();
+    expect(jotaiStore.get(guidedImportReviewState.atom)).toEqual(
+      expect.objectContaining({
+        importBatchId: 'import-batch-id',
+        preview: mockPreview,
+      }),
+    );
+
+    const callArgs = mockPrepareGuidedImport.mock.calls[0][0];
     expect(callArgs).toHaveProperty('mappedRows');
     expect(Array.isArray(callArgs.mappedRows)).toBe(true);
     expect(callArgs.mappedRows).toHaveLength(1);

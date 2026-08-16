@@ -3,6 +3,7 @@ import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
 import { ThemeContext } from 'twenty-ui/theme-constants';
 
 import { SKELETON_LOADER_HEIGHT_SIZES } from '@/activities/components/SkeletonLoader';
+import { GuidedImportReviewModal } from '@/object-record/spreadsheet-import/components/GuidedImportReviewModal';
 import { SPREADSHEET_IMPORT_MODAL_ID } from '@/spreadsheet-import/constants/SpreadsheetImportModalId';
 import { spreadsheetImportDialogState } from '@/spreadsheet-import/states/spreadsheetImportDialogState';
 import { matchColumnsState } from '@/spreadsheet-import/steps/components/MatchColumnsStep/components/states/initialComputedColumnsState';
@@ -58,6 +59,9 @@ export const SpreadsheetImportProvider = (
   return (
     <>
       {props.children}
+      {/* Mounted outside the wizard: the review step opens after the wizard
+          dialog closes, and the failed-rows banner outlives both. */}
+      <GuidedImportReviewModal />
       {spreadsheetImportDialog.isOpen && spreadsheetImportDialog.options && (
         <React.Suspense fallback={<LoadingSkeleton />}>
           <SpreadsheetImport

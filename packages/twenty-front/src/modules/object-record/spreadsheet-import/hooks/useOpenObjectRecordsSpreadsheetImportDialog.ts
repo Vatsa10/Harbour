@@ -1,15 +1,11 @@
-import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
-import { useGenerateDepthRecordGqlFieldsFromObject } from '@/object-record/graphql/record-gql-fields/hooks/useGenerateDepthRecordGqlFieldsFromObject';
-import { useBatchCreateManyRecords } from '@/object-record/hooks/useBatchCreateManyRecords';
 import { useBuildSpreadsheetImportFields } from '@/object-record/spreadsheet-import/hooks/useBuildSpreadSheetImportFields';
 import { useCreateImportBatch } from '@/object-record/spreadsheet-import/hooks/useCreateImportBatch';
+import { guidedImportReviewState } from '@/object-record/spreadsheet-import/states/guidedImportReviewState';
 import { buildRecordFromImportedStructuredRow } from '@/object-record/spreadsheet-import/utils/buildRecordFromImportedStructuredRow';
 import { spreadsheetImportFilterAvailableFieldMetadataItems } from '@/object-record/spreadsheet-import/utils/spreadsheetImportFilterAvailableFieldMetadataItems';
 import { spreadsheetImportGetUnicityTableHook } from '@/object-record/spreadsheet-import/utils/spreadsheetImportGetUnicityTableHook';
-import { SPREADSHEET_IMPORT_CREATE_RECORDS_BATCH_SIZE } from '@/spreadsheet-import/constants/SpreadsheetImportCreateRecordsBatchSize';
 import { useOpenSpreadsheetImportDialog } from '@/spreadsheet-import/hooks/useOpenSpreadsheetImportDialog';
-import { spreadsheetImportCreatedRecordsProgressState } from '@/spreadsheet-import/states/spreadsheetImportCreatedRecordsProgressState';
 import { type SpreadsheetImportDialogOptions } from '@/spreadsheet-import/types';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
@@ -17,10 +13,9 @@ import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomStat
 export const useOpenObjectRecordsSpreadsheetImportDialog = (
   objectNameSingular: string,
 ) => {
-  const apolloCoreClient = useApolloCoreClient();
   const { openSpreadsheetImportDialog } = useOpenSpreadsheetImportDialog();
   const { buildSpreadsheetImportFields } = useBuildSpreadsheetImportFields();
-  const { runGuidedImport } = useCreateImportBatch();
+  const { prepareGuidedImport } = useCreateImportBatch();
 
   const { enqueueErrorSnackBar } = useSnackBar();
 
@@ -28,24 +23,9 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
     objectNameSingular,
   });
 
-  const setSpreadsheetImportCreatedRecordsProgress = useSetAtomState(
-    spreadsheetImportCreatedRecordsProgressState,
-  );
+  const setGuidedImportReview = useSetAtomState(guidedImportReviewState);
 
   const abortController = new AbortController();
-
-  const { recordGqlFields } = useGenerateDepthRecordGqlFieldsFromObject({
-    objectNameSingular,
-    depth: 0,
-  });
-
-  const { batchCreateManyRecords } = useBatchCreateManyRecords({
-    objectNameSingular,
-    recordGqlFields,
-    mutationBatchSize: SPREADSHEET_IMPORT_CREATE_RECORDS_BATCH_SIZE,
-    setBatchedRecordsCount: setSpreadsheetImportCreatedRecordsProgress,
-    abortController,
-  });
 
   const openObjectRecordsSpreadsheetImportDialog = (
     options?: Omit<
@@ -80,7 +60,12 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
           // Routed through the guided-import staging pipeline (Tasks 6-9)
           // instead of a direct batch write, so extraction results become
           // proposals through the AI write gate rather than bypassing it.
-          await runGuidedImport({
+          //
+          // Stops at prepare. Nothing is written until the human confirms the
+          // verdict in GuidedImportReviewModal — an EXACT-matched row
+          // overwrites live customer fields, and that must not happen behind
+          // the reviewer's back.
+          const { importBatchId, preview } = await prepareGuidedImport({
             objectNameSingular,
             fileName: `${objectNameSingular}-import.csv`,
             rawRows: data.validStructuredRows as never,
@@ -89,10 +74,12 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
               spreadsheetImportFields.map((field) => [field.label, field.key]),
             ),
           });
-          await apolloCoreClient.refetchQueries({
-            updateCache: (cache) => {
-              cache.evict({ fieldName: objectMetadataItem.namePlural });
-            },
+
+          setGuidedImportReview({
+            importBatchId,
+            objectNameSingular,
+            objectNamePlural: objectMetadataItem.namePlural,
+            preview,
           });
         } catch (error: any) {
           enqueueErrorSnackBar({
