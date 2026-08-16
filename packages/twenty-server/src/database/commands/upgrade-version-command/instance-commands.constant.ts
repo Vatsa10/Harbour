@@ -145,7 +145,7 @@ import { AddProposalSourceKeyAndReasonFastInstanceCommand } from 'src/database/c
 import { AddFactAndProposalUniquenessFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1786200000000-add-fact-and-proposal-uniqueness';
 import { AddImportRowLeaseFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1786300000000-add-import-row-lease';
 import { AddProposalSupersessionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1786400000000-add-proposal-supersession';
-import { AddRecordBriefFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1786400000000-add-record-brief';
+import { AddRecordBriefFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1786500000000-add-record-brief';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
