@@ -88,9 +88,15 @@ export class MessagingMessageParticipantService {
         );
 
         if (createdParticipantIds.length > 0) {
-          const stillUnmatched = await messageParticipantRepository.find({
-            where: { id: In(createdParticipantIds), personId: IsNull() },
-          });
+          // Must read through the caller's transaction manager: the rows above
+          // were inserted inside it, so a default-connection read cannot see
+          // them and would always yield an empty list.
+          const stillUnmatched = await messageParticipantRepository.find(
+            {
+              where: { id: In(createdParticipantIds), personId: IsNull() },
+            },
+            transactionManager,
+          );
 
           await this.participantIdentityProposalService.reviewUnmatchedParticipants(
             {

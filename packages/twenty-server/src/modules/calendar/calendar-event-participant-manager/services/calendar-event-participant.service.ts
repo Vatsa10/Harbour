@@ -4,7 +4,7 @@ import { isDefined } from 'class-validator';
 import chunk from 'lodash.chunk';
 import differenceWith from 'lodash.differencewith';
 import { FieldActorSource } from 'twenty-shared/types';
-import { Any, IsNull } from 'typeorm';
+import { Any, In, IsNull } from 'typeorm';
 
 import { type CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
@@ -191,9 +191,15 @@ export class CalendarEventParticipantService {
         );
 
         if (savedParticipantIds.length > 0) {
-          const stillUnmatched = await calendarEventParticipantRepository.find({
-            where: { id: Any(savedParticipantIds), personId: IsNull() },
-          });
+          // Must read through the caller's transaction manager: the rows above
+          // were inserted inside it, so a default-connection read cannot see
+          // them and would always yield an empty list.
+          const stillUnmatched = await calendarEventParticipantRepository.find(
+            {
+              where: { id: In(savedParticipantIds), personId: IsNull() },
+            },
+            transactionManager,
+          );
 
           await this.participantIdentityProposalService.reviewUnmatchedParticipants(
             {
