@@ -236,4 +236,34 @@ describe('ProposalCreationService', () => {
       expect.objectContaining({ factIds: [] }),
     );
   });
+  // Important 7. The find-then-save dedupe is not atomic; two concurrent
+  // retries of the same message-sync job both miss the read.
+  // IDX_PROPOSAL_SOURCE_KEY_UNIQUE is what actually enforces one proposal per
+  // source, and losing that race must read as "already proposed", not as a
+  // 500 with a half-built proposal behind it.
+  it('should return null instead of throwing when a concurrent retry already claimed the sourceKey', async () => {
+    proposalRepository.save.mockRejectedValueOnce(
+      Object.assign(
+        new Error(
+          'duplicate key value violates unique constraint "IDX_PROPOSAL_SOURCE_KEY_UNIQUE"',
+        ),
+        { code: '23505' },
+      ),
+    );
+
+    const result = await createFromExtraction([jobTitleItem]);
+
+    expect(result).toBeNull();
+    expect(proposalItemRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('should rethrow a save failure that is not a unique violation', async () => {
+    proposalRepository.save.mockRejectedValueOnce(
+      Object.assign(new Error('connection terminated'), { code: '08006' }),
+    );
+
+    await expect(createFromExtraction([jobTitleItem])).rejects.toThrow(
+      'connection terminated',
+    );
+  });
 });

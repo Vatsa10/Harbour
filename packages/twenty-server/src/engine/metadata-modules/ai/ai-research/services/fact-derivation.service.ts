@@ -7,6 +7,7 @@ import { FactEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/
 import { FactStatus } from 'src/engine/metadata-modules/ai/ai-research/types/fact-status.type';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
+import { isPostgresUniqueViolation } from 'src/utils/is-postgres-unique-violation.util';
 
 const isSameValue = (a: unknown, b: unknown): boolean =>
   JSON.stringify(a) === JSON.stringify(b);
@@ -24,7 +25,29 @@ export class FactDerivationService {
   // Deterministic — no LLM in this path. The agent already reported what it
   // saw when it called record_evidence; everything from here on is plain
   // comparison logic a human can audit without re-reading a prompt.
+  // The read-then-write below is not atomic, and it cannot be: the CURRENT
+  // lookup, the corroboration branch and the supersession branch are three
+  // different writes. The database settles the race instead —
+  // IDX_FACT_CURRENT_UNIQUE rejects the second concurrent insert, and the
+  // loser re-derives against the row the winner just committed, which lands
+  // in the corroboration or supersession branch exactly as if it had arrived
+  // second in the first place. One retry only: a second violation is a real
+  // fault, not a race.
   async deriveFact(evidence: EvidenceEntity): Promise<FactEntity | null> {
+    try {
+      return await this.deriveFactOnce(evidence);
+    } catch (error) {
+      if (!isPostgresUniqueViolation(error)) {
+        throw error;
+      }
+
+      return this.deriveFactOnce(evidence);
+    }
+  }
+
+  private async deriveFactOnce(
+    evidence: EvidenceEntity,
+  ): Promise<FactEntity | null> {
     const { workspaceId, objectNameSingular, recordId } = evidence;
     const { fieldName, value } = evidence.payload;
 
@@ -99,6 +122,19 @@ export class FactDerivationService {
     // Supersede — keep the history, don't delete it. The old row stays
     // queryable with its own value and evidence, and points forward to the
     // fact that replaced it.
+    //
+    // The outgoing row leaves CURRENT *before* the replacement is inserted:
+    // IDX_FACT_CURRENT_UNIQUE forbids two uncontested CURRENT rows for one
+    // field, so the old order (insert, then supersede) would now always
+    // violate it. The forward pointer is written once the successor has an id.
+    const supersededAt = new Date();
+
+    await this.factRepository.save(workspaceId, {
+      ...existingCurrent,
+      status: FactStatus.SUPERSEDED,
+      supersededAt,
+    });
+
     const newFact = (await this.factRepository.save(
       workspaceId,
       this.buildNewFact(evidence, { hasConflict: false }),
@@ -107,7 +143,7 @@ export class FactDerivationService {
     await this.factRepository.save(workspaceId, {
       ...existingCurrent,
       status: FactStatus.SUPERSEDED,
-      supersededAt: new Date(),
+      supersededAt,
       supersededByFactId: newFact.id,
     });
 

@@ -147,9 +147,13 @@ describe('FactDerivationService', () => {
       }),
     );
 
+    // The LAST write to the old row: the demotion out of CURRENT happens
+    // before the successor exists (the partial unique index forbids two
+    // uncontested CURRENT rows), so the forward pointer is written after.
     const supersededSave = factRepository.save.mock.calls
       .map(([, entity]) => entity)
-      .find((entity) => entity.id === 'fact-1');
+      .filter((entity) => entity.id === 'fact-1')
+      .pop();
 
     // Supersession is a status transition with a forward pointer, not a
     // delete: the old row keeps its value and evidence so "why did we once
@@ -273,5 +277,93 @@ describe('FactDerivationService', () => {
     const fact = await service.deriveFact(buildEvidence());
 
     expect(fact?.status).toBe(FactStatus.CURRENT);
+  });
+
+  // Critical 3. Charter contract 2: "a retry must never duplicate a fact."
+  // The lookup-then-insert is not atomic, so IDX_FACT_CURRENT_UNIQUE is what
+  // actually enforces the invariant — these two tests pin the service's half
+  // of that bargain.
+  describe('concurrent derivation for the same (recordId, fieldName)', () => {
+    it('should re-derive against the winner rather than duplicating when the CURRENT unique index rejects the insert', async () => {
+      const uniqueViolation = Object.assign(
+        new Error(
+          'duplicate key value violates unique constraint "IDX_FACT_CURRENT_UNIQUE"',
+        ),
+        { code: '23505' },
+      );
+
+      // First pass: no CURRENT fact visible, so the service inserts — and
+      // loses the race. Second pass: the winner's row is now visible.
+      factRepository.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          id: 'fact-winner',
+          value: '500',
+          status: FactStatus.CURRENT,
+          evidenceIds: ['evidence-0'],
+          runId: 'run-0',
+          lastObservedAt: new Date('2026-01-01T00:00:00.000Z'),
+        });
+
+      factRepository.save.mockRejectedValueOnce(uniqueViolation);
+
+      const fact = await service.deriveFact(buildEvidence());
+
+      // Same value as the winner: the losing observation corroborates it,
+      // growing the citation list instead of creating a second CURRENT row.
+      expect(fact).toEqual(
+        expect.objectContaining({
+          id: 'fact-winner',
+          evidenceIds: ['evidence-0', 'evidence-1'],
+        }),
+      );
+      expect(factRepository.save).toHaveBeenCalledTimes(2);
+      expect(factRepository.save).not.toHaveBeenCalledWith(
+        'workspace-1',
+        expect.objectContaining({ id: undefined, status: FactStatus.CURRENT }),
+      );
+    });
+
+    it('should rethrow a non-unique-violation failure instead of retrying it', async () => {
+      const boom = Object.assign(new Error('connection terminated'), {
+        code: '08006',
+      });
+
+      factRepository.save.mockRejectedValueOnce(boom);
+
+      await expect(service.deriveFact(buildEvidence())).rejects.toThrow(
+        'connection terminated',
+      );
+      expect(factRepository.save).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // Critical 3, second half: with a partial unique index over uncontested
+  // CURRENT rows, inserting the successor while the predecessor is still
+  // CURRENT would violate it on every ordinary supersession.
+  it('should move the outgoing fact out of CURRENT before inserting its replacement', async () => {
+    factRepository.findOne.mockResolvedValue({
+      id: 'fact-1',
+      value: '400',
+      status: FactStatus.CURRENT,
+      hasConflict: false,
+      evidenceIds: ['evidence-0'],
+      runId: 'run-0',
+      lastObservedAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+
+    await service.deriveFact(buildEvidence({ runId: 'run-2' }));
+
+    const savedStatuses = factRepository.save.mock.calls.map(
+      ([, entity]) => `${entity.id ?? 'new'}:${entity.status}`,
+    );
+
+    // The predecessor's demotion must come first; the successor's insert must
+    // not sit between two CURRENT rows for the same field.
+    expect(savedStatuses).toEqual([
+      `fact-1:${FactStatus.SUPERSEDED}`,
+      `new:${FactStatus.CURRENT}`,
+      `fact-1:${FactStatus.SUPERSEDED}`,
+    ]);
   });
 });

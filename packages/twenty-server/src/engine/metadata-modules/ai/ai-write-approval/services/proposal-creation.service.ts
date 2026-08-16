@@ -17,6 +17,7 @@ import {
   ProposalItemStatus,
   ProposalStatus,
 } from 'src/engine/metadata-modules/ai/ai-write-approval/types/proposal-status.type';
+import { isPostgresUniqueViolation } from 'src/utils/is-postgres-unique-violation.util';
 
 // The non-agent entry point into the proposal model. Background jobs
 // (ingestion extraction, guided import) have no ToolProviderContext to key a
@@ -82,7 +83,7 @@ export class ProposalCreationService {
 
     expiresAt.setDate(expiresAt.getDate() + PROPOSAL_TTL_DAYS);
 
-    const proposal = await this.proposalRepository.save({
+    const proposal = await this.saveProposalOrNullOnRace({
       workspaceId,
       sourceKey,
       // No agent turn behind a background job, so there is no thread to batch
@@ -93,6 +94,13 @@ export class ProposalCreationService {
       status: ProposalStatus.PENDING,
       expiresAt,
     });
+
+    // The read above lost the race to a concurrent retry of the same job; the
+    // other caller owns the proposal, so this one reports "nothing new" — the
+    // same answer the read would have given a moment later.
+    if (!isDefined(proposal)) {
+      return null;
+    }
 
     const itemIds: string[] = [];
 
@@ -123,5 +131,22 @@ export class ProposalCreationService {
     }
 
     return { proposalId: proposal.id, itemIds };
+  }
+
+  // find-then-save is not atomic. IDX_PROPOSAL_SOURCE_KEY_UNIQUE settles the
+  // race in the database; a unique violation here means the concurrent caller
+  // already created the proposal this one was about to duplicate.
+  private async saveProposalOrNullOnRace(
+    proposal: Partial<ProposalEntity>,
+  ): Promise<ProposalEntity | null> {
+    try {
+      return await this.proposalRepository.save(proposal);
+    } catch (error) {
+      if (!isPostgresUniqueViolation(error)) {
+        throw error;
+      }
+
+      return null;
+    }
   }
 }

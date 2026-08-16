@@ -142,6 +142,7 @@ import { AddAiResearchAgentTaskAndRunFastInstanceCommand } from 'src/database/co
 import { AddGuidedImportFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1785994046918-add-guided-import';
 import { AddConnectedAccountExcludeFromAiExtractionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1786100000000-add-connected-account-exclude-from-ai-extraction';
 import { AddProposalSourceKeyAndReasonFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1786110000000-add-proposal-source-key-and-reason';
+import { AddFactAndProposalUniquenessFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1786200000000-add-fact-and-proposal-uniqueness';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
@@ -286,4 +287,5 @@ export const INSTANCE_COMMANDS = [
   AddGuidedImportFastInstanceCommand,
   AddConnectedAccountExcludeFromAiExtractionFastInstanceCommand,
   AddProposalSourceKeyAndReasonFastInstanceCommand,
+  AddFactAndProposalUniquenessFastInstanceCommand,
 ];
