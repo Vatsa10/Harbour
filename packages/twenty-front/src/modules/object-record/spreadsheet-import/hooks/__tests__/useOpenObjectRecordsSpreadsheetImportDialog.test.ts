@@ -23,6 +23,14 @@ jest.mock('@/object-record/hooks/useBatchCreateManyRecords', () => ({
   }),
 }));
 
+const mockRunGuidedImport = jest.fn().mockResolvedValue('import-batch-id');
+
+jest.mock('@/object-record/spreadsheet-import/hooks/useCreateImportBatch', () => ({
+  useCreateImportBatch: () => ({
+    runGuidedImport: mockRunGuidedImport,
+  }),
+}));
+
 const mockResult = jest.fn(() => ({
   data: {
     createCompanies: [
@@ -111,7 +119,7 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
     ).toBe(true);
   });
 
-  it('should call batchCreateManyRecords when onSubmit is executed', async () => {
+  it('should route submitted rows through the guided-import pipeline when onSubmit is executed', async () => {
     const { result } = renderHook(
       () => {
         const { openObjectRecordsSpreadsheetImportDialog } =
@@ -158,17 +166,21 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
       await spreadsheetImportDialog.options?.onSubmit(submitData, fakeCsv());
     });
 
-    expect(mockBatchCreateManyRecords).toHaveBeenCalledTimes(1);
+    // Submitted rows are routed through the guided-import staging pipeline
+    // (create -> prepare -> start import batch) so extraction results become
+    // proposals through the AI write gate, rather than through a direct
+    // batch write.
+    expect(mockBatchCreateManyRecords).not.toHaveBeenCalled();
+    expect(mockRunGuidedImport).toHaveBeenCalledTimes(1);
 
-    const callArgs = mockBatchCreateManyRecords.mock.calls[0][0];
-    expect(callArgs).toHaveProperty('recordsToCreate');
-    expect(callArgs).toHaveProperty('upsert', true);
-    expect(Array.isArray(callArgs.recordsToCreate)).toBe(true);
-    expect(callArgs.recordsToCreate).toHaveLength(1);
+    const callArgs = mockRunGuidedImport.mock.calls[0][0];
+    expect(callArgs).toHaveProperty('mappedRows');
+    expect(Array.isArray(callArgs.mappedRows)).toBe(true);
+    expect(callArgs.mappedRows).toHaveLength(1);
 
-    const recordToCreate = callArgs.recordsToCreate[0];
-    expect(recordToCreate).toHaveProperty('name', 'Example Company');
-    expect(recordToCreate).toHaveProperty('idealCustomerProfile', true);
-    expect(recordToCreate).toHaveProperty('employees', 0);
+    const mappedRow = callArgs.mappedRows[0];
+    expect(mappedRow).toHaveProperty('name', 'Example Company');
+    expect(mappedRow).toHaveProperty('idealCustomerProfile', true);
+    expect(mappedRow).toHaveProperty('employees', 0);
   });
 });
