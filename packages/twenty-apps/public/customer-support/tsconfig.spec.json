@@ -3,11 +3,13 @@
   "compilerOptions": {
     "composite": true,
     "types": [
+      "node",
       "vitest/globals",
       "vite/client"
     ]
   },
   "include": [
+    "package.json",
     "src/**/*.ts",
     "src/**/*.tsx"
   ],
