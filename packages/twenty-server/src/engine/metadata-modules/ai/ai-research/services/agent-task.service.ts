@@ -14,6 +14,7 @@ import {
 } from 'src/engine/metadata-modules/ai/ai-research/constants/agent-task.const';
 import { AgentTaskEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/agent-task.entity';
 import { AgentTaskStatus } from 'src/engine/metadata-modules/ai/ai-research/types/agent-task-status.type';
+import { isPostgresUniqueViolation } from 'src/utils/is-postgres-unique-violation.util';
 
 export type CreateAgentTaskParams = {
   workspaceId: string;
@@ -41,15 +42,50 @@ export class AgentTaskService {
     private readonly agentTaskRepository: Repository<AgentTaskEntity>,
   ) {}
 
+  // The read below and the insert are not one operation, so two concurrent
+  // callers with the same key both miss the read and one of them hits
+  // IDX_AGENT_TASK_IDEMPOTENCY_KEY. That is the index doing its job; the loser
+  // must get the same "already scheduled" answer the read would have given a
+  // moment later, not an unstructured 500 surfaced to an agent that will then
+  // retry or invent a workaround.
   async createTask(params: CreateAgentTaskParams): Promise<AgentTaskEntity> {
+    try {
+      return await this.createTaskOnce(params);
+    } catch (error) {
+      if (!isPostgresUniqueViolation(error) || !isDefined(params.idempotencyKey)) {
+        throw error;
+      }
+
+      const winner = await this.findOpenTaskByIdempotencyKey(params);
+
+      // Lost the race but the winner is already gone (completed or cancelled
+      // between the violation and this read) — nothing to return, so let the
+      // ordinary path try again rather than inventing a task.
+      if (!isDefined(winner)) {
+        return this.createTaskOnce(params);
+      }
+
+      return winner;
+    }
+  }
+
+  private findOpenTaskByIdempotencyKey(
+    params: CreateAgentTaskParams,
+  ): Promise<AgentTaskEntity | null> {
+    return this.agentTaskRepository.findOne({
+      where: {
+        workspaceId: params.workspaceId,
+        idempotencyKey: params.idempotencyKey as string,
+        status: In([AgentTaskStatus.PENDING, AgentTaskStatus.LEASED]),
+      },
+    });
+  }
+
+  private async createTaskOnce(
+    params: CreateAgentTaskParams,
+  ): Promise<AgentTaskEntity> {
     if (isDefined(params.idempotencyKey)) {
-      const existing = await this.agentTaskRepository.findOne({
-        where: {
-          workspaceId: params.workspaceId,
-          idempotencyKey: params.idempotencyKey,
-          status: In([AgentTaskStatus.PENDING, AgentTaskStatus.LEASED]),
-        },
-      });
+      const existing = await this.findOpenTaskByIdempotencyKey(params);
 
       // Already scheduled — refresh timing/reason instead of duplicating the
       // work. Mirrors the crm repo's upsert-scheduling pattern.

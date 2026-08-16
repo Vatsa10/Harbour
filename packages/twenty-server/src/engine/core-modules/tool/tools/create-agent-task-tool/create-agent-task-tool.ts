@@ -63,12 +63,15 @@ export class CreateAgentTaskTool implements Tool {
       // rather than queueing the same research twice.
       idempotencyKey: `tool:${objectNameSingular}:${recordId}:${reason}`,
       // ToolExecutionContext carries no actor (five fields, none of them an
-      // actor), so the actor is a literal. This is the same shape
-      // ProposalEntity.createdByActor already stores.
+      // actor), so the actor is assembled here. Contract 5 asks the audit
+      // entry to distinguish principals, and 'AI agent' distinguishes nothing
+      // — the id of the agent that scheduled the work is known four lines up,
+      // and ActorMetadata.context is typed to `provider` only, so `name` is
+      // where it can go.
       createdByActor: {
         source: FieldActorSource.AGENT,
         workspaceMemberId: null,
-        name: 'AI agent',
+        name: `AI agent ${agentId}`,
         context: {},
       },
     });

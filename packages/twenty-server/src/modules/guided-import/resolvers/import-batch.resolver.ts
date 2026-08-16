@@ -109,8 +109,14 @@ export class ImportBatchResolver {
       throw new BadRequestException('Import batch not found.');
     }
 
-    await this.importMatchResolutionService.resolveBatch(importBatchId);
-    await this.importValidationService.validateBatch(importBatchId);
+    await this.importMatchResolutionService.resolveBatch(
+      importBatchId,
+      workspace.id,
+    );
+    await this.importValidationService.validateBatch(
+      importBatchId,
+      workspace.id,
+    );
 
     const readyBatch = await this.importBatchRepository.save({
       ...batch,

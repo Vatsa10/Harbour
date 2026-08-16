@@ -14,7 +14,6 @@ export const describeCustomFieldForToolSchema = (
     FlatFieldMetadata,
     'name' | 'label' | 'type' | 'description' | 'options'
   >,
-  relationTargetLabel?: string,
 ): string => {
   if (isDefined(field.description) && field.description.length > 0) {
     return field.description;
@@ -49,15 +48,13 @@ export const describeCustomFieldForToolSchema = (
     field.type === FieldMetadataType.RELATION ||
     field.type === FieldMetadataType.MORPH_RELATION
   ) {
-    if (!isDefined(relationTargetLabel)) {
-      return `Custom field "${field.label}". This is a relation — the value must be the UUID of an existing target record.`;
-    }
-
-    return (
-      `Custom field "${field.label}", linking to ${relationTargetLabel}. ` +
-      `If you don't already know the target record's ID, call find_one_${relationTargetLabel} ` +
-      `or find_many_${relationTargetLabel}s first to look it up — never guess an ID.`
-    );
+    // Deliberately does not name the target object: resolving a relation's
+    // target label needs the flat object metadata maps, which this call site
+    // does not receive. Naming a *guessed* object (or a find_one_<guess> tool
+    // that does not exist) is worse for the model than naming none. The
+    // remaining half of the charter's "resolve relation targets" requirement
+    // is tracked as an open gap, not silently faked here.
+    return `Custom field "${field.label}". This is a relation — the value must be the UUID of an existing target record. Look the record up with the relevant find_one_* or find_many_* tool first; never guess an ID.`;
   }
 
   return `Custom field "${field.label}".`;

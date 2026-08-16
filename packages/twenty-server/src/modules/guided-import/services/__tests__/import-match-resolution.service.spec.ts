@@ -47,6 +47,25 @@ describe('ImportMatchResolutionService', () => {
     );
   });
 
+  it('should scope the batch lookup to the caller workspace', async () => {
+    importRowRepository.find.mockResolvedValue([]);
+
+    await service.resolveBatch('batch-1', 'workspace-1');
+
+    expect(importBatchRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 'batch-1', workspaceId: 'workspace-1' },
+    });
+  });
+
+  it('should do nothing when the batch belongs to another workspace', async () => {
+    importBatchRepository.findOne.mockResolvedValue(null);
+
+    await service.resolveBatch('batch-1', 'other-workspace');
+
+    expect(importRowRepository.find).not.toHaveBeenCalled();
+    expect(importRowRepository.save).not.toHaveBeenCalled();
+  });
+
   it('should mark a row CREATE when there is no identity match', async () => {
     importRowRepository.find.mockResolvedValue([
       {
@@ -58,7 +77,7 @@ describe('ImportMatchResolutionService', () => {
       kind: 'NONE',
     });
 
-    await service.resolveBatch('batch-1');
+    await service.resolveBatch('batch-1', 'workspace-1');
 
     expect(importRowRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -82,7 +101,7 @@ describe('ImportMatchResolutionService', () => {
       matchedOn: 'email match',
     });
 
-    await service.resolveBatch('batch-1');
+    await service.resolveBatch('batch-1', 'workspace-1');
 
     expect(importRowRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -109,7 +128,7 @@ describe('ImportMatchResolutionService', () => {
       explanation: 'name and domain match, different email',
     });
 
-    await service.resolveBatch('batch-1');
+    await service.resolveBatch('batch-1', 'workspace-1');
 
     expect(importRowRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -125,7 +144,7 @@ describe('ImportMatchResolutionService', () => {
       { id: 'row-1', mappedData: {} },
     ]);
 
-    await service.resolveBatch('batch-1');
+    await service.resolveBatch('batch-1', 'workspace-1');
 
     expect(identityResolutionService.resolvePerson).not.toHaveBeenCalled();
     expect(importRowRepository.save).toHaveBeenCalledWith(
@@ -143,7 +162,7 @@ describe('ImportMatchResolutionService', () => {
       { id: 'row-1', mappedData: { name: 'New Deal' } },
     ]);
 
-    await service.resolveBatch('batch-1');
+    await service.resolveBatch('batch-1', 'workspace-1');
 
     expect(identityResolutionService.resolvePerson).not.toHaveBeenCalled();
     expect(identityResolutionService.resolveCompany).not.toHaveBeenCalled();

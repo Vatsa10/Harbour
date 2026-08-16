@@ -94,7 +94,7 @@ describe('ImportValidationService', () => {
       },
     ]);
 
-    await service.validateBatch('batch-1');
+    await service.validateBatch('batch-1', 'workspace-1');
 
     expect(importRowRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'row-1', validationErrors: {} }),
@@ -106,7 +106,7 @@ describe('ImportValidationService', () => {
       { id: 'row-1', matchAction: 'CREATE', mappedData: { jobTitle: 'VP' } },
     ]);
 
-    await service.validateBatch('batch-1');
+    await service.validateBatch('batch-1', 'workspace-1');
 
     expect(importRowRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -126,7 +126,7 @@ describe('ImportValidationService', () => {
       },
     ]);
 
-    await service.validateBatch('batch-1');
+    await service.validateBatch('batch-1', 'workspace-1');
 
     expect(importRowRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'row-1', validationErrors: {} }),
@@ -138,7 +138,7 @@ describe('ImportValidationService', () => {
       { id: 'row-1', matchAction: 'SKIP', mappedData: {} },
     ]);
 
-    await service.validateBatch('batch-1');
+    await service.validateBatch('batch-1', 'workspace-1');
 
     expect(importRowRepository.save).not.toHaveBeenCalled();
   });

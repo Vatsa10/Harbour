@@ -2,18 +2,32 @@ import { Controller, Get, Param, Res, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { type Response } from 'express';
+import { PermissionFlagType } from 'twenty-shared/constants';
 import { Repository } from 'typeorm';
 
 import type { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
 import { JwtAuthGuard } from 'src/engine/guards/jwt-auth.guard';
+import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { ImportBatchEntity } from 'src/modules/guided-import/entities/import-batch.entity';
 import { ImportRowEntity } from 'src/modules/guided-import/entities/import-row.entity';
 import { ImportRowStatus } from 'src/modules/guided-import/types/import-batch-status.type';
 
+// A quote or newline in a user-supplied file name would otherwise break out of
+// the Content-Disposition quoting.
+const sanitizeContentDispositionFileName = (fileName: string): string =>
+  fileName.replace(/[^\w.\- ]/g, '_');
+
 @Controller('rest/import')
-@UseGuards(JwtAuthGuard, WorkspaceAuthGuard)
+@UseGuards(
+  JwtAuthGuard,
+  WorkspaceAuthGuard,
+  // The raw uploaded rows are the same data the mutation surface restricts;
+  // ImportBatchResolver guards with IMPORT_CSV, so this door needs the same
+  // lock or any workspace member can download any batch.
+  SettingsPermissionGuard(PermissionFlagType.IMPORT_CSV),
+)
 export class ImportFailedRowsController {
   constructor(
     // Staging tables are core-schema platform infrastructure, not
@@ -50,7 +64,7 @@ export class ImportFailedRowsController {
     response.setHeader('Content-Type', 'text/csv');
     response.setHeader(
       'Content-Disposition',
-      `attachment; filename="${batch.fileName}-failed-rows.csv"`,
+      `attachment; filename="${sanitizeContentDispositionFileName(batch.fileName)}-failed-rows.csv"`,
     );
 
     const headers = new Set<string>();
@@ -76,10 +90,19 @@ export class ImportFailedRowsController {
   }
 
   private escapeCsvCell(value: string): string {
-    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-      return `"${value.replace(/"/g, '""')}"`;
+    // A cell opening with =, +, - or @ is executed as a formula by Excel and
+    // Sheets when the downloaded file is opened. Prefix it so the cell stays
+    // literal text.
+    const neutralised = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+
+    if (
+      neutralised.includes(',') ||
+      neutralised.includes('"') ||
+      neutralised.includes('\n')
+    ) {
+      return `"${neutralised.replace(/"/g, '""')}"`;
     }
 
-    return value;
+    return neutralised;
   }
 }

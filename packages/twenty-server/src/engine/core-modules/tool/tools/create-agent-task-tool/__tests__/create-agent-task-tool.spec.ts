@@ -30,7 +30,7 @@ describe('CreateAgentTaskTool', () => {
     });
   });
 
-  it('should schedule the task against the workspace research agent with a literal agent actor', async () => {
+  it('should schedule the task against the workspace research agent and name that agent in the actor', async () => {
     const tool = buildTool();
 
     const result = await tool.execute(args as never, context as never);
@@ -48,7 +48,10 @@ describe('CreateAgentTaskTool', () => {
       createdByActor: {
         source: 'AGENT',
         workspaceMemberId: null,
-        name: 'AI agent',
+        // Contract 5: the audit entry must distinguish principals, and the
+        // scheduling agent's id is the only thing that distinguishes one
+        // agent-scheduled task from another.
+        name: 'AI agent agent-seeded',
         context: {},
       },
     });

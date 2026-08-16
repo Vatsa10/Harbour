@@ -49,17 +49,17 @@ describe('describeCustomFieldForToolSchema', () => {
     );
   });
 
-  it('should point a RELATION field at the target object and instruct a lookup first', () => {
+  it('should tell the model a RELATION value is a looked-up UUID, not a guessable one', () => {
     const field = {
       ...baseField,
       type: FieldMetadataType.RELATION,
       options: null,
     };
 
-    const description = describeCustomFieldForToolSchema(field, 'opportunity');
+    const description = describeCustomFieldForToolSchema(field);
 
-    expect(description).toContain('opportunity');
-    expect(description).toContain('find_one_opportunity');
+    expect(description).toContain('UUID of an existing target record');
+    expect(description).toContain('never guess an ID');
   });
 
   it('should fall back to a plain label-based description for other custom field types with no description', () => {

@@ -31,9 +31,12 @@ export class ImportMatchResolutionService {
   // Identity-aware dedup only exists for person/company today (Task 2's
   // scope). Every other object gets CREATE for every row — no worse than
   // today's spreadsheet import, which has no server-side dedup at all.
-  async resolveBatch(importBatchId: string): Promise<void> {
+  // workspaceId is a required parameter, not something read off the batch it
+  // just looked up: a batch id alone would let any caller that forgets to
+  // check ownership resolve and rewrite another tenant's rows.
+  async resolveBatch(importBatchId: string, workspaceId: string): Promise<void> {
     const batch = await this.importBatchRepository.findOne({
-      where: { id: importBatchId },
+      where: { id: importBatchId, workspaceId },
     });
 
     if (!isDefined(batch)) {

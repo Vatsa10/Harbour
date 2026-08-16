@@ -25,9 +25,15 @@ export class ImportValidationService {
     private readonly importRowRepository: Repository<ImportRowEntity>,
   ) {}
 
-  async validateBatch(importBatchId: string): Promise<void> {
+  // workspaceId is a required parameter, not something read off the batch it
+  // just looked up: a batch id alone would let any caller that forgets to
+  // check ownership validate and rewrite another tenant's rows.
+  async validateBatch(
+    importBatchId: string,
+    workspaceId: string,
+  ): Promise<void> {
     const batch = await this.importBatchRepository.findOne({
-      where: { id: importBatchId },
+      where: { id: importBatchId, workspaceId },
     });
 
     if (!isDefined(batch)) {

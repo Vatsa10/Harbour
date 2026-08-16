@@ -122,9 +122,16 @@ export const generateRecordPropertiesZodSchema = (
       isRelationOrMorphRelation &&
       field.settings?.relationType === RelationType.MANY_TO_ONE
     ) {
-      shape[`${field.name}Id`] = field.isNullable
+      const relationSchema = field.isNullable
         ? UuidValueOptionalSchema
         : UuidValueSchema;
+
+      // Custom relation fields carry no description of their own, so without
+      // this the model is handed a bare UUID field with no hint that it must
+      // look the target up rather than invent an id.
+      shape[`${field.name}Id`] = field.isCustom
+        ? relationSchema.describe(describeCustomFieldForToolSchema(field))
+        : relationSchema;
 
       return;
     }

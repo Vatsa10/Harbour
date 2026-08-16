@@ -12,9 +12,13 @@ export class CreateAgentTaskInput {
   @IsUUID()
   recordId: string;
 
-  @Field(() => ID)
+  // Optional: omit it and the workspace's seeded research agent is resolved
+  // server-side, which is also what binds it to its role. A supplied id is
+  // validated before the task is created.
+  @Field(() => ID, { nullable: true })
+  @IsOptional()
   @IsUUID()
-  agentId: string;
+  agentId?: string;
 
   @Field(() => String)
   @IsString()
@@ -25,6 +29,20 @@ export class CreateAgentTaskInput {
   @IsInt()
   @Min(0)
   priority?: number;
+
+  // The charter's "budgeted" and "retryable" controls. Without these the only
+  // way to set them was to be a language model calling the tool.
+  @Field(() => Int, { nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  budget?: number;
+
+  @Field(() => Int, { nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  maxAttempts?: number;
 
   @Field(() => String, { nullable: true })
   @IsOptional()

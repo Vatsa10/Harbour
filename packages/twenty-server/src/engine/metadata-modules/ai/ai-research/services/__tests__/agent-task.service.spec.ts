@@ -314,4 +314,54 @@ describe('AgentTaskService', () => {
       expect(cancelled).toBe(false);
     });
   });
+  // Important 5. The find-then-save dedupe is not atomic and the migration
+  // puts a partial unique index on exactly the predicate it reads. Two
+  // concurrent calls with the same key both miss the read; the loser used to
+  // get an unstructured Postgres error where the code path promised an
+  // idempotent "already scheduled".
+  describe('idempotency-key race', () => {
+    const params = {
+      workspaceId: 'workspace-1',
+      objectNameSingular: 'company',
+      recordId: 'record-1',
+      agentId: 'agent-1',
+      reason: 'New lead created',
+      idempotencyKey: 'tool:company:record-1:New lead created',
+    };
+
+    it('should return the winning task instead of throwing when the unique index rejects the insert', async () => {
+      const winner = {
+        id: 'task-winner',
+        status: AgentTaskStatus.PENDING,
+        idempotencyKey: params.idempotencyKey,
+      };
+
+      // First read: nothing scheduled. Insert loses to the concurrent caller.
+      // Second read: the winner is now visible.
+      agentTaskRepository.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(winner);
+      agentTaskRepository.save.mockRejectedValueOnce(
+        Object.assign(
+          new Error(
+            'duplicate key value violates unique constraint "IDX_AGENT_TASK_IDEMPOTENCY_KEY"',
+          ),
+          { code: '23505' },
+        ),
+      );
+
+      await expect(service.createTask(params)).resolves.toEqual(winner);
+    });
+
+    it('should rethrow a failure that is not a unique violation', async () => {
+      agentTaskRepository.findOne.mockResolvedValue(null);
+      agentTaskRepository.save.mockRejectedValueOnce(
+        Object.assign(new Error('connection terminated'), { code: '08006' }),
+      );
+
+      await expect(service.createTask(params)).rejects.toThrow(
+        'connection terminated',
+      );
+    });
+  });
 });

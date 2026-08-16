@@ -53,6 +53,36 @@ export class ResearchAgentService {
     return agent.id;
   }
 
+  // The GraphQL front door lets a caller name an agent. An id that is not in
+  // this workspace, or that holds no role, produced a run with zero registry
+  // tools that still reported SUCCEEDED — the same silent dead loop as an
+  // unseeded workspace, one input field away. Rejecting it at the door is the
+  // only place the caller can be told what is wrong.
+  async assertAgentIsUsable(params: {
+    workspaceId: string;
+    agentId: string;
+  }): Promise<void> {
+    const agent = await this.agentRepository.findOne({
+      where: { id: params.agentId, workspaceId: params.workspaceId },
+    });
+
+    if (!isDefined(agent)) {
+      throw new Error(
+        `No agent ${params.agentId} exists in this workspace. Omit agentId to use the workspace's research agent.`,
+      );
+    }
+
+    const roleBinding = await this.roleTargetRepository.findOne({
+      where: { workspaceId: params.workspaceId, agentId: params.agentId },
+    });
+
+    if (!isDefined(roleBinding)) {
+      throw new Error(
+        `Agent ${params.agentId} has no role, so it would run with no tools and find nothing. Omit agentId to use the workspace's research agent.`,
+      );
+    }
+  }
+
   private async ensureRoleBinding(
     workspaceId: string,
     agentId: string,
