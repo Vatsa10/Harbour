@@ -8,6 +8,7 @@ import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
+import { ContactAutoCreatePolicyService } from 'src/modules/contact-creation-manager/services/contact-auto-create-policy.service';
 import { CreateCompanyAndPersonService } from 'src/modules/contact-creation-manager/services/create-company-and-contact.service';
 import { CreateCompanyService } from 'src/modules/contact-creation-manager/services/create-company.service';
 import { CreatePersonService } from 'src/modules/contact-creation-manager/services/create-person.service';
@@ -52,6 +53,14 @@ describe('CreateCompanyAndPersonService', () => {
         {
           provide: ExceptionHandlerService,
           useValue: {},
+        },
+        {
+          provide: ContactAutoCreatePolicyService,
+          useValue: {
+            evaluate: jest
+              .fn()
+              .mockResolvedValue({ enrichOnlyHandles: new Set<string>() }),
+          },
         },
         {
           provide: IngestionSuppressionService,
@@ -407,6 +416,110 @@ describe('CreateCompanyAndPersonService', () => {
           {
             personId: 'existing-person-1',
             name: { firstName: 'Félix', lastName: 'Malfait' },
+          },
+        ]);
+      });
+    });
+
+    // Rules 1 and 2 of the ported auto-create policy. The gate itself lives in
+    // ContactAutoCreatePolicyService; what is asserted here is that a gated
+    // handle cannot mint a Person, cannot restore a soft-deleted one, and
+    // cannot mint a Company — while still being allowed to enrich a Person
+    // that already exists.
+    describe('enrichOnlyHandles (reciprocity gate)', () => {
+      it('should not create a Person or a Company for a gated handle', () => {
+        const result =
+          service.computeContactsThatNeedPersonCreateAndRestoreAndWorkDomainNamesToCreate(
+            [{ handle: 'cold@prospect.com', displayName: 'Cold Prospect' }],
+            [],
+            FieldActorSource.EMAIL,
+            mockConnectedAccount,
+            null,
+            new Set(['cold@prospect.com']),
+          );
+
+        expect(result.contactsThatNeedPersonCreate).toEqual([]);
+        expect(result.contactsThatNeedPersonRestore).toEqual([]);
+        // Rule 2: no company matched and no contact matched, so this message
+        // contributes nothing at all — no orphan Person, no orphan Company.
+        expect(result.workDomainNamesToCreate).toEqual([]);
+        expect(result.peopleToEnrichNames).toEqual([]);
+      });
+
+      it('should still create for an ungated handle in the same batch', () => {
+        const result =
+          service.computeContactsThatNeedPersonCreateAndRestoreAndWorkDomainNamesToCreate(
+            [
+              { handle: 'cold@prospect.com', displayName: 'Cold Prospect' },
+              { handle: 'replied@customer.com', displayName: 'Real Customer' },
+            ],
+            [],
+            FieldActorSource.EMAIL,
+            mockConnectedAccount,
+            null,
+            new Set(['cold@prospect.com']),
+          );
+
+        expect(result.contactsThatNeedPersonCreate.map((c) => c.handle)).toEqual(
+          ['replied@customer.com'],
+        );
+        expect(
+          result.workDomainNamesToCreate.map((c) => c.domainName),
+        ).toEqual(['customer.com']);
+      });
+
+      it('should not restore a soft-deleted Person for a gated handle', () => {
+        const softDeleted = {
+          id: 'soft-deleted-1',
+          emails: {
+            primaryEmail: 'cold@prospect.com',
+            additionalEmails: null,
+          },
+          deletedAt: new Date(),
+          createdBy: { source: FieldActorSource.EMAIL },
+        } as unknown as PersonWorkspaceEntity;
+
+        const result =
+          service.computeContactsThatNeedPersonCreateAndRestoreAndWorkDomainNamesToCreate(
+            [{ handle: 'cold@prospect.com', displayName: 'Cold Prospect' }],
+            [softDeleted],
+            FieldActorSource.EMAIL,
+            mockConnectedAccount,
+            null,
+            new Set(['cold@prospect.com']),
+          );
+
+        expect(result.contactsThatNeedPersonRestore).toEqual([]);
+        expect(result.workDomainNamesToCreate).toEqual([]);
+      });
+
+      it('should still enrich a Person that already exists', () => {
+        const existing = {
+          id: 'existing-1',
+          emails: {
+            primaryEmail: 'cold@prospect.com',
+            additionalEmails: null,
+          },
+          name: { firstName: 'Cold', lastName: '' },
+          deletedAt: null,
+          createdBy: { source: FieldActorSource.EMAIL },
+        } as unknown as PersonWorkspaceEntity;
+
+        const result =
+          service.computeContactsThatNeedPersonCreateAndRestoreAndWorkDomainNamesToCreate(
+            [{ handle: 'cold@prospect.com', displayName: 'Cold Prospect' }],
+            [existing],
+            FieldActorSource.EMAIL,
+            mockConnectedAccount,
+            null,
+            new Set(['cold@prospect.com']),
+          );
+
+        expect(result.contactsThatNeedPersonCreate).toEqual([]);
+        expect(result.peopleToEnrichNames).toEqual([
+          {
+            personId: 'existing-1',
+            name: { firstName: 'Cold', lastName: 'Prospect' },
           },
         ]);
       });
