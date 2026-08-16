@@ -9,6 +9,7 @@ import { Process } from 'src/engine/core-modules/message-queue/decorators/proces
 import { Processor } from 'src/engine/core-modules/message-queue/decorators/processor.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
+import { AGENT_CONFIG } from 'src/engine/metadata-modules/ai/ai-agent/constants/agent-config.const';
 import { AgentAsyncExecutorService } from 'src/engine/metadata-modules/ai/ai-agent-execution/services/agent-async-executor.service';
 import { AgentEntity } from 'src/engine/metadata-modules/ai/ai-agent/entities/agent.entity';
 import {
@@ -20,6 +21,7 @@ import { AgentTaskEntity } from 'src/engine/metadata-modules/ai/ai-research/enti
 import { AgentTaskService } from 'src/engine/metadata-modules/ai/ai-research/services/agent-task.service';
 import { AgentRunStatus } from 'src/engine/metadata-modules/ai/ai-research/types/agent-run-status.type';
 import { AgentTaskStatus } from 'src/engine/metadata-modules/ai/ai-research/types/agent-task-status.type';
+import { RoleTargetEntity } from 'src/engine/metadata-modules/role-target/role-target.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 
@@ -50,7 +52,38 @@ export class AgentTaskRunJob {
     // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(AgentEntity)
     private readonly agentRepository: Repository<AgentEntity>,
+    // Needed to tell "the agent exists" from "the agent can actually do
+    // anything": with no roleTarget row there is no agentRoleId, and
+    // agent-async-executor gives a role-less agent zero registry tools.
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    @InjectRepository(RoleTargetEntity)
+    private readonly roleTargetRepository: Repository<RoleTargetEntity>,
   ) {}
+
+  // On a workspace upgraded from before 2.28.0 the researcher agent and the
+  // AI Researcher role were never seeded, so this job used to load `null`,
+  // pass `agent ?? null` to executeAgent, run with zero tools, find nothing,
+  // and write SUCCEEDED with 'Research run completed.' A workspace-wide dead
+  // loop reported success in run history, which is the worst possible way for
+  // this to fail. Now it is a named failure with the command that fixes it.
+  private async findBlockingSetupProblem(params: {
+    workspaceId: string;
+    agent: AgentEntity | null;
+  }): Promise<string | null> {
+    if (!isDefined(params.agent)) {
+      return `No research agent exists in workspace ${params.workspaceId}. This workspace predates the 2.28.0 seed; run \`upgrade:2-28:backfill-research-agent-and-role\`.`;
+    }
+
+    const roleBinding = await this.roleTargetRepository.findOne({
+      where: { workspaceId: params.workspaceId, agentId: params.agent.id },
+    });
+
+    if (!isDefined(roleBinding)) {
+      return `Research agent ${params.agent.id} has no role binding, so it would run with zero tools and report finding nothing. Ensure the AI Researcher role exists (\`upgrade:2-28:backfill-research-agent-and-role\`) and re-schedule.`;
+    }
+
+    return null;
+  }
 
   @Process(AgentTaskRunJob.name)
   async handle(data: AgentTaskRunJobData): Promise<void> {
@@ -87,6 +120,30 @@ export class AgentTaskRunJob {
           agentId: task.agentId,
           status: AgentRunStatus.RUNNING,
         });
+
+        const setupProblem = await this.findBlockingSetupProblem({
+          workspaceId,
+          agent,
+        });
+
+        if (isDefined(setupProblem)) {
+          await this.agentRunRepository.save({
+            ...run,
+            status: AgentRunStatus.FAILED,
+            finishedAt: new Date(),
+            elapsedMs: Date.now() - run.startedAt.getTime(),
+            errorMessage: setupProblem,
+          });
+
+          await this.agentTaskService.failTask({
+            taskId: task.id,
+            workspaceId,
+            runId: run.id,
+            errorMessage: setupProblem,
+          });
+
+          return;
+        }
 
         const actorContext: ActorMetadata = {
           source: FieldActorSource.AGENT,
@@ -127,7 +184,14 @@ export class AgentTaskRunJob {
           // varchar, so every one of them is coalesced rather than passed
           // through.
           const stepCount = result.steps?.length ?? 0;
-          const exhaustedBudget = stepCount >= task.budget;
+          // The executor clamps maxSteps to MAX_STEPS, so a task asking for
+          // budget: 1000 actually stops at MAX_STEPS and `stepCount >=
+          // task.budget` was never true — a truncated run then looked exactly
+          // like a thorough one in run history, which is the failure the note
+          // below exists to prevent. Compare against the budget that was
+          // really enforced.
+          const effectiveBudget = Math.min(task.budget, AGENT_CONFIG.MAX_STEPS);
+          const exhaustedBudget = stepCount >= effectiveBudget;
 
           await this.agentRunRepository.save({
             ...run,
@@ -145,7 +209,7 @@ export class AgentTaskRunJob {
           // identical in run history unless the outcome says which one
           // happened.
           const budgetNote = exhaustedBudget
-            ? ` (stopped at the step budget of ${task.budget} — findings may be incomplete)`
+            ? ` (stopped at the step budget of ${effectiveBudget} — findings may be incomplete)`
             : '';
 
           await this.agentTaskService.completeTask({
