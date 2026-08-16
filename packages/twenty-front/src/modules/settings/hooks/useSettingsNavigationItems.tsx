@@ -181,6 +181,12 @@ const useSettingsNavigationItems = (): SettingsNavigationSection[] => {
           isHidden: !permissionMap[PermissionFlagType.AI],
         },
         {
+          label: t`Workflow templates`,
+          path: SettingsPath.WorkflowTemplates,
+          Icon: IconHierarchy2,
+          isHidden: !permissionMap[PermissionFlagType.WORKFLOWS],
+        },
+        {
           label: t`Communication`,
           path: SettingsPath.WorkspaceCommunications,
           Icon: IconMessageCircle,

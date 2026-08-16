@@ -12,6 +12,8 @@ export type WorkflowTemplateSummary = {
 type WorkflowTemplateCardProps = {
   template: WorkflowTemplateSummary;
   onInstall: (key: string) => void;
+  isInstalling?: boolean;
+  isInstalled?: boolean;
 };
 
 const StyledCard = styled.div`
@@ -35,13 +37,18 @@ const StyledDescription = styled.p`
 export const WorkflowTemplateCard = ({
   template,
   onInstall,
+  isInstalling = false,
+  isInstalled = false,
 }: WorkflowTemplateCardProps) => (
   <StyledCard>
     <StyledName>{template.name}</StyledName>
     <StyledDescription>{template.description}</StyledDescription>
     <Button
-      title="Install"
+      title={
+        isInstalled ? 'Installed' : isInstalling ? 'Installing…' : 'Install'
+      }
       accent="blue"
+      disabled={isInstalling || isInstalled}
       onClick={() => onInstall(template.key)}
     />
   </StyledCard>

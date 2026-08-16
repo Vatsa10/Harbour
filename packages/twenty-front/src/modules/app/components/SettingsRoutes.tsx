@@ -790,6 +790,22 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
           element={<SettingsAiApprovals />}
         />
       </Route>
+      {/* Both template resolvers are guarded by SettingsPermissionGuard(WORKFLOWS)
+          on the server, so the route has to ask for the same flag — under
+          AI_SETTINGS the page loaded for users whose query and mutation both
+          failed, and hid from users entitled to it. */}
+      <Route
+        element={
+          <SettingsProtectedRouteWrapper
+            settingsPermission={PermissionFlagType.WORKFLOWS}
+          />
+        }
+      >
+        <Route
+          path={SettingsPath.WorkflowTemplates}
+          element={<SettingsWorkflowTemplates />}
+        />
+      </Route>
       <Route
         element={
           <SettingsProtectedRouteWrapper
@@ -799,10 +815,6 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
       >
         <Route path={SettingsPath.AI} element={<SettingsAI />} />
         <Route path={SettingsPath.AiPrompts} element={<SettingsAiPrompts />} />
-        <Route
-          path={SettingsPath.WorkflowTemplates}
-          element={<SettingsWorkflowTemplates />}
-        />
         <Route
           path={SettingsPath.AiNewAgent}
           element={<SettingsAgentForm mode="create" />}
