@@ -220,6 +220,24 @@ export class ImportBatchResolver {
     return runningBatch as unknown as ImportBatchDTO;
   }
 
+  // Execution is an enqueued job, so the wizard needs something to poll:
+  // without this the UI can only report "submitted", never "finished".
+  @Query(() => ImportBatchDTO)
+  async importBatch(
+    @Args('importBatchId') importBatchId: string,
+    @AuthWorkspace() workspace: FlatWorkspace,
+  ): Promise<ImportBatchDTO> {
+    const batch = await this.importBatchRepository.findOne({
+      where: { id: importBatchId, workspaceId: workspace.id },
+    });
+
+    if (!batch) {
+      throw new BadRequestException('Import batch not found.');
+    }
+
+    return batch as unknown as ImportBatchDTO;
+  }
+
   @Query(() => ImportBatchPreviewDTO)
   async importBatchPreview(
     @Args('importBatchId') importBatchId: string,

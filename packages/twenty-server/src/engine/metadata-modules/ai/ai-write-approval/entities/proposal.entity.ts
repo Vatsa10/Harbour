@@ -59,6 +59,11 @@ export class ProposalEntity {
   @Column({ type: 'timestamptz', nullable: false })
   expiresAt: Date;
 
+  // Set when every reviewable item underneath went SUPERSEDED. The proposal
+  // row stays queryable — supersession is bookkeeping, not deletion.
+  @Column({ type: 'timestamptz', nullable: true })
+  supersededAt: Date | null;
+
   @Column({ type: 'uuid', nullable: true })
   reviewedByUserWorkspaceId: string | null;
 

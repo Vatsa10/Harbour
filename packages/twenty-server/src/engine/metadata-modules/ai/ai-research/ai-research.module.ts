@@ -12,12 +12,15 @@ import { AgentRunEntity } from 'src/engine/metadata-modules/ai/ai-research/entit
 import { AgentTaskEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/agent-task.entity';
 import { EvidenceEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/evidence.entity';
 import { FactEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/fact.entity';
+import { RecordBriefEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/record-brief.entity';
 import { AgentTaskRunJob } from 'src/engine/metadata-modules/ai/ai-research/jobs/agent-task-run.job';
 import { AgentTaskResolver } from 'src/engine/metadata-modules/ai/ai-research/resolvers/agent-task.resolver';
+import { RecordBriefResolver } from 'src/engine/metadata-modules/ai/ai-research/resolvers/record-brief.resolver';
 import { AgentTaskService } from 'src/engine/metadata-modules/ai/ai-research/services/agent-task.service';
 import { EvidenceRecordingService } from 'src/engine/metadata-modules/ai/ai-research/services/evidence-recording.service';
 import { FactDerivationService } from 'src/engine/metadata-modules/ai/ai-research/services/fact-derivation.service';
 import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services/fact.service';
+import { RecordBriefService } from 'src/engine/metadata-modules/ai/ai-research/services/record-brief.service';
 import { ResearchAgentService } from 'src/engine/metadata-modules/ai/ai-research/services/research-agent.service';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { RoleTargetEntity } from 'src/engine/metadata-modules/role-target/role-target.entity';
@@ -34,6 +37,7 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
       AgentEntity,
       RoleEntity,
       RoleTargetEntity,
+      RecordBriefEntity,
     ]),
     AiAgentRoleModule,
     // AgentTaskResolver injects PermissionsService to gate createAgentTask;
@@ -57,8 +61,11 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     AgentTaskDispatchCronCommand,
     AgentTaskRunJob,
     AgentTaskResolver,
+    RecordBriefService,
+    RecordBriefResolver,
     provideWorkspaceScopedRepository(EvidenceEntity),
     provideWorkspaceScopedRepository(FactEntity),
+    provideWorkspaceScopedRepository(RecordBriefEntity),
   ],
   // TypeOrmModule is deliberately NOT re-exported. Exporting it would put
   // Repository<FactEntity> in every importing module's injector and reopen the

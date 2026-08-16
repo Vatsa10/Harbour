@@ -24,6 +24,18 @@ export type ProposalItemFact = {
   observedAt: Date | null;
 };
 
+// The projection the record-brief composer reads. Same boundary rule as
+// ProposalItemFact above: a flat shape, not the entity.
+export type RecordBriefFact = {
+  id: string;
+  fieldName: string;
+  value: unknown;
+  strength: string;
+  hasConflict: boolean;
+  lastObservedAt: Date;
+  evidenceCount: number;
+};
+
 @Injectable()
 export class FactService {
   constructor(
@@ -56,6 +68,36 @@ export class FactService {
     });
 
     return facts.map((fact) => fact.id);
+  }
+
+  // The brief composer's whole view of Fact. Owner Decision 1: the brief
+  // module never touches FactEntity or the repository, so promoting Fact to a
+  // standard object stays a change to this file. Deliberately a flat
+  // projection — evidenceCount, not evidenceIds, because corroboration count
+  // is the only thing a gate needs and handing out ids invites a second query
+  // path into Evidence from outside this module.
+  async findCurrentFactsForRecord(params: {
+    workspaceId: string;
+    objectNameSingular: string;
+    recordId: string;
+  }): Promise<RecordBriefFact[]> {
+    const facts = await this.factRepository.find(params.workspaceId, {
+      where: {
+        objectNameSingular: params.objectNameSingular,
+        recordId: params.recordId,
+        status: FactStatus.CURRENT,
+      },
+    });
+
+    return facts.map((fact) => ({
+      id: fact.id,
+      fieldName: fact.fieldName,
+      value: fact.value,
+      strength: fact.strength,
+      hasConflict: fact.hasConflict,
+      lastObservedAt: fact.lastObservedAt,
+      evidenceCount: fact.evidenceIds.length,
+    }));
   }
 
   // The single citation surface for the approval UI. Two queries total for a
@@ -103,6 +145,35 @@ export class FactService {
         observedAt: primary?.observedAt ?? null,
       };
     });
+  }
+
+  // Which of these facts have left CURRENT — superseded by a later
+  // observation, or dismissed by a reviewer. Proposal supersession asks this
+  // to find drafts whose evidence no longer stands. Returns ids, not rows:
+  // the caller only needs the set difference, and handing out FactEntity
+  // would widen the one sanctioned Fact boundary this service exists to keep
+  // narrow.
+  async findNonCurrentFactIds(
+    workspaceId: string,
+    ids: string[],
+  ): Promise<string[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const facts = await this.factRepository.find(workspaceId, {
+      where: { id: In(ids) },
+    });
+
+    const currentIds = new Set(
+      facts
+        .filter((fact) => fact.status === FactStatus.CURRENT)
+        .map((fact) => fact.id),
+    );
+
+    // A cited id with no row at all counts as non-current: the citation is
+    // dangling, which is strictly worse than superseded, not better.
+    return ids.filter((id) => !currentIds.has(id));
   }
 
   // Permanently dismisses the facts behind a rejected proposal item, so a

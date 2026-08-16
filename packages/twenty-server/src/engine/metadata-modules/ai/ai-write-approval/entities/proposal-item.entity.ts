@@ -14,6 +14,7 @@ import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval
 import {
   ProposalActionType,
   ProposalItemStatus,
+  type ProposalSupersessionReason,
 } from 'src/engine/metadata-modules/ai/ai-write-approval/types/proposal-status.type';
 
 @Entity({ name: 'proposalItem', schema: 'core' })
@@ -71,6 +72,21 @@ export class ProposalItemEntity {
   // the honest state: no evidence backs those.
   @Column({ type: 'jsonb', default: () => "'[]'::jsonb" })
   factIds: string[];
+
+  // Supersession trio, mirroring FactEntity's supersededAt /
+  // supersededByFactId: the outgoing row keeps its own payload and its own
+  // citations and points forward at whatever replaced it, so "why did this
+  // leave my inbox" is answerable without a log file. Null on every item that
+  // is still answerable.
+  @Column({ type: 'timestamptz', nullable: true })
+  supersededAt: Date | null;
+
+  // Only set for NEWER_PROPOSAL — the other two causes have no successor item.
+  @Column({ type: 'uuid', nullable: true })
+  supersededByProposalItemId: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  supersessionReason: ProposalSupersessionReason | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

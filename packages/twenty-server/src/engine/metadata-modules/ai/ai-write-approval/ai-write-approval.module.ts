@@ -19,6 +19,7 @@ import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-ap
 import { ProposalCreationService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-creation.service';
 import { ProposalExecutionService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-execution.service';
 import { ProposalGateService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service';
+import { ProposalSupersessionService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-supersession.service';
 import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.module';
 
 @Module({
@@ -44,6 +45,7 @@ import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.
     ProposalGateService,
     ProposalCreationService,
     ProposalExecutionService,
+    ProposalSupersessionService,
     ProposalResolver,
     AiWritePolicyResolver,
     ProposalItemFieldsResolver,
@@ -53,6 +55,9 @@ import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.
     ProposalGateService,
     ProposalCreationService,
     ProposalExecutionService,
+    // Exported for the monitoring sweep, which owns the per-workspace tick
+    // this service's pull-based half runs on.
+    ProposalSupersessionService,
   ],
 })
 export class AiWriteApprovalModule {}

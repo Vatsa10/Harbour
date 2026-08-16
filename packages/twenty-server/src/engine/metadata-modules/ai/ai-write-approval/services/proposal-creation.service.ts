@@ -8,6 +8,7 @@ import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
 import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service';
+import { ProposalSupersessionService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-supersession.service';
 import {
   type CreateFromExtractionInput,
   type CreateFromExtractionResult,
@@ -30,6 +31,7 @@ export class ProposalCreationService {
   constructor(
     private readonly aiWritePolicyService: AiWritePolicyService,
     private readonly factService: FactService,
+    private readonly proposalSupersessionService: ProposalSupersessionService,
     // Looked up by (workspaceId, sourceKey) as a single composite condition,
     // which the scoped wrapper's "workspaceId first, merge rest" shape does
     // not fit — same reason ProposalGateService opts out.
@@ -129,6 +131,13 @@ export class ProposalCreationService {
 
       itemIds.push(savedItem.id);
     }
+
+    // A newer draft for the same field retires the older one instead of
+    // leaving two contradictory cards in the inbox for a week.
+    await this.proposalSupersessionService.supersedeOverlappingItems({
+      workspaceId,
+      proposalId: proposal.id,
+    });
 
     return { proposalId: proposal.id, itemIds };
   }

@@ -8,6 +8,11 @@ export enum ProposalStatus {
   FAILED = 'FAILED',
   REJECTED = 'REJECTED',
   EXPIRED = 'EXPIRED',
+  // The situation the proposal was drafted against no longer holds. Terminal
+  // like REJECTED, but not a human decision — nobody said no, the question
+  // stopped being the question. Rows are kept, never deleted, exactly as
+  // FactStatus.SUPERSEDED keeps the outgoing fact queryable.
+  SUPERSEDED = 'SUPERSEDED',
 }
 
 export enum ProposalItemStatus {
@@ -16,7 +21,28 @@ export enum ProposalItemStatus {
   REJECTED = 'REJECTED',
   CONFLICTED = 'CONFLICTED',
   FAILED = 'FAILED',
+  SUPERSEDED = 'SUPERSEDED',
 }
+
+// Why an item stopped being answerable. Deliberately three named causes and
+// not a free-text note: the inbox has to explain the disappearance to the
+// human who was about to review the card.
+export const PROPOSAL_SUPERSESSION_REASONS = [
+  // A newer proposal item targets the same record and at least one of the
+  // same fields. The later draft saw a later world.
+  'NEWER_PROPOSAL',
+  // The record moved underneath the draft — the baseline captured at creation
+  // no longer matches the record. This is the same comparison approval makes,
+  // run early so the card leaves the inbox instead of failing at approval.
+  'RECORD_CHANGED',
+  // Every fact cited by the item left CURRENT (superseded by a later
+  // observation, or dismissed by a reviewer). The evidence is gone, so the
+  // proposed value has nothing standing behind it.
+  'FACT_SUPERSEDED',
+] as const;
+
+export type ProposalSupersessionReason =
+  (typeof PROPOSAL_SUPERSESSION_REASONS)[number];
 
 export enum ProposalActionType {
   CREATE_RECORD = 'CREATE_RECORD',

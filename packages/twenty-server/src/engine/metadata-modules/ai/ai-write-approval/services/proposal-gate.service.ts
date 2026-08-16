@@ -15,6 +15,7 @@ import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
 import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service';
+import { ProposalSupersessionService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-supersession.service';
 import { type AiWritePolicyTarget } from 'src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type';
 import { buildDeleteConfirmationToken } from 'src/engine/metadata-modules/ai/ai-write-approval/utils/build-delete-confirmation-token.util';
 import {
@@ -142,6 +143,7 @@ export class ProposalGateService {
     private readonly aiWritePolicyService: AiWritePolicyService,
     private readonly findRecordsService: FindRecordsService,
     private readonly factService: FactService,
+    private readonly proposalSupersessionService: ProposalSupersessionService,
     // Proposals are looked up by (workspaceId, threadId, status) as a single
     // composite condition, not workspaceId-then-filter, so the scoped wrapper's
     // "workspaceId first, merge rest" shape doesn't fit this access pattern.
@@ -285,6 +287,14 @@ export class ProposalGateService {
       baseline,
       factIds,
       status: ProposalItemStatus.PENDING,
+    });
+
+    // Retire older pending drafts for the same record+field in OTHER
+    // proposals. Items inside this same batch are untouched — one turn's
+    // items are one decision, not competing ones.
+    await this.proposalSupersessionService.supersedeOverlappingItems({
+      workspaceId: context.workspaceId,
+      proposalId: proposal.id,
     });
 
     return {
