@@ -214,10 +214,12 @@ describe('IdentityResolutionService', () => {
 
   describe('resolveCompany', () => {
     it('should return EXACT when the domain matches an existing company', async () => {
-      companyRepository.findOne.mockResolvedValue({
-        id: 'company-1',
-        domainName: { primaryLinkUrl: 'https://acme.com' },
-      });
+      companyRepository.find.mockResolvedValue([
+        {
+          id: 'company-1',
+          domainName: { primaryLinkUrl: 'https://acme.com' },
+        },
+      ]);
 
       const match = await service.resolveCompany({
         workspaceId: 'workspace-1',
@@ -232,7 +234,7 @@ describe('IdentityResolutionService', () => {
     });
 
     it('should return NONE when no company matches the domain', async () => {
-      companyRepository.findOne.mockResolvedValue(null);
+      companyRepository.find.mockResolvedValue([]);
 
       const match = await service.resolveCompany({
         workspaceId: 'workspace-1',
@@ -243,10 +245,12 @@ describe('IdentityResolutionService', () => {
     });
 
     it('should return NONE for a suffix collision returned by the ILike prefilter', async () => {
-      companyRepository.findOne.mockResolvedValue({
-        id: 'company-other',
-        domainName: { primaryLinkUrl: 'https://notacme.com/careers' },
-      });
+      companyRepository.find.mockResolvedValue([
+        {
+          id: 'company-other',
+          domainName: { primaryLinkUrl: 'https://notacme.com/careers' },
+        },
+      ]);
 
       const match = await service.resolveCompany({
         workspaceId: 'workspace-1',
@@ -254,6 +258,32 @@ describe('IdentityResolutionService', () => {
       });
 
       expect(match).toEqual({ kind: 'NONE' });
+    });
+
+    it('should find the real company even when a decoy row sorts first', async () => {
+      // The ILike prefilter returns both; a findOne would have taken the
+      // decoy, reported NONE, and let the importer create a duplicate.
+      companyRepository.find.mockResolvedValue([
+        {
+          id: 'company-decoy',
+          domainName: { primaryLinkUrl: 'https://notacme.com/careers' },
+        },
+        {
+          id: 'company-1',
+          domainName: { primaryLinkUrl: 'https://acme.com' },
+        },
+      ]);
+
+      const match = await service.resolveCompany({
+        workspaceId: 'workspace-1',
+        domain: 'acme.com',
+      });
+
+      expect(match).toEqual({
+        kind: 'EXACT',
+        recordId: 'company-1',
+        matchedOn: expect.stringContaining('domain'),
+      });
     });
   });
 });

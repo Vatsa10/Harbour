@@ -173,15 +173,22 @@ export class IdentityResolutionService {
         { shouldBypassPermissionChecks: true },
       );
 
-    const company = await companyRepository.findOne({
+    const companiesAtDomain = await companyRepository.find({
       where: { domainName: { primaryLinkUrl: ILike(`%${domain}%`) } },
     });
 
-    if (
-      !isDefined(company) ||
-      !isDefined(company.domainName?.primaryLinkUrl) ||
-      extractDomainFromLink(company.domainName.primaryLinkUrl) !== domain
-    ) {
+    // ILike is only a cheap prefilter: "notacme.com" contains "acme.com".
+    // Equality on the extracted domain is the actual rule, and it has to be
+    // applied across every prefiltered row — a findOne would let a decoy row
+    // that merely contains the domain hide the real match, and a real company
+    // would then be re-created as a duplicate.
+    const company = companiesAtDomain.find(
+      (candidate) =>
+        isDefined(candidate.domainName?.primaryLinkUrl) &&
+        extractDomainFromLink(candidate.domainName.primaryLinkUrl) === domain,
+    );
+
+    if (!isDefined(company)) {
       return { kind: 'NONE' };
     }
 
