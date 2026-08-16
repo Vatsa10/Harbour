@@ -20,6 +20,7 @@ import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval
 import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services/fact.service';
 import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service';
 import { ProposalGateService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service';
+import { ProposalSupersessionService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-supersession.service';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 // Real seam: ToolExecutorService -> real ProposalGateService -> real
@@ -44,7 +45,10 @@ describe('ToolExecutorService failure envelope', () => {
 
   const keyValuePairService = { get: jest.fn(), set: jest.fn() };
   const proposalRepository = { findOne: jest.fn(), save: jest.fn() };
-  const proposalItemRepository = { save: jest.fn() };
+  // `find` backs the gate's retry-dedupe lookup; the gate calls it on every
+  // PROPOSE decision, so a stub without it turns the denylist guard below into
+  // a TypeError instead of an assertion.
+  const proposalItemRepository = { save: jest.fn(), find: jest.fn() };
   const provider = {
     category: 'messaging',
     isAvailable: jest.fn().mockResolvedValue(true),
@@ -57,6 +61,7 @@ describe('ToolExecutorService failure envelope', () => {
     proposalRepository.findOne.mockResolvedValue(null);
     proposalRepository.save.mockResolvedValue({ id: 'proposal-1' });
     proposalItemRepository.save.mockResolvedValue({ id: 'proposal-item-1' });
+    proposalItemRepository.find.mockResolvedValue([]);
 
     const stub = { execute: jest.fn() };
 
@@ -65,6 +70,10 @@ describe('ToolExecutorService failure envelope', () => {
         ToolExecutorService,
         ProposalGateService,
         AiWritePolicyService,
+        {
+          provide: ProposalSupersessionService,
+          useValue: { supersedeOverlappingItems: jest.fn() },
+        },
         { provide: TOOL_PROVIDERS, useValue: [provider] },
         { provide: KeyValuePairService, useValue: keyValuePairService },
         {
@@ -119,11 +128,13 @@ describe('ToolExecutorService failure envelope', () => {
     expect(result.failure?.code).toBe('FORBIDDEN_BY_POLICY');
     expect(result.failure?.retryable).toBe(false);
     expect(result.failure?.hint.length).toBeGreaterThan(0);
-    expect(result.failure?.allowedActions).toEqual(['get_tool_catalog']);
+    expect(result.failure?.allowedActions).toEqual([
+      'ask_admin_to_change_policy',
+    ]);
     // Legacy consumers that render only `error` must still get the recovery
     // path, not a bare "something went wrong".
     expect(result.error).toContain('send_email');
-    expect(result.error).toContain('Do not retry');
+    expect(result.error).toContain('Ask a workspace admin');
   });
 
   it('should still gate an unenumerated write tool rather than executing it', async () => {
