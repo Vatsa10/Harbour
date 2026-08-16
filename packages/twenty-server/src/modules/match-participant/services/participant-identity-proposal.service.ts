@@ -6,6 +6,7 @@ import { isDefined } from 'twenty-shared/utils';
 
 import { ProposalCreationService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-creation.service';
 import { ProposalActionType } from 'src/engine/metadata-modules/ai/ai-write-approval/types/proposal-status.type';
+import { IngestionSuppressionService } from 'src/modules/ingestion-noise-filter/services/ingestion-suppression.service';
 import { IdentityResolutionService } from 'src/modules/match-participant/services/identity-resolution.service';
 
 export type ParticipantObjectMetadataName =
@@ -31,6 +32,7 @@ export class ParticipantIdentityProposalService implements OnModuleInit {
   // forwardRef can help, so the module graph edge is deliberately not created.
   constructor(
     private readonly identityResolutionService: IdentityResolutionService,
+    private readonly ingestionSuppressionService: IngestionSuppressionService,
     private readonly moduleRef: ModuleRef,
   ) {}
 
@@ -51,8 +53,17 @@ export class ParticipantIdentityProposalService implements OnModuleInit {
   }): Promise<void> {
     const { participants, objectMetadataName, workspaceId } = params;
 
+    // The inbound noise filter runs here too: a noreply/machine participant
+    // must not become a proposal any more than it may become a record.
+    const noiseFilter =
+      await this.ingestionSuppressionService.buildFilter(workspaceId);
+
     for (const participant of participants) {
       if (!isDefined(participant.handle) || participant.handle === '') {
+        continue;
+      }
+
+      if (noiseFilter.isSuppressed(participant.handle)) {
         continue;
       }
 

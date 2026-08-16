@@ -2,6 +2,8 @@ import { ModuleRef } from '@nestjs/core';
 import { Test, type TestingModule } from '@nestjs/testing';
 
 import { ProposalCreationService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-creation.service';
+import { KeyValuePairService } from 'src/engine/core-modules/key-value-pair/key-value-pair.service';
+import { IngestionSuppressionService } from 'src/modules/ingestion-noise-filter/services/ingestion-suppression.service';
 import { IdentityResolutionService } from 'src/modules/match-participant/services/identity-resolution.service';
 import { ParticipantIdentityProposalService } from 'src/modules/match-participant/services/participant-identity-proposal.service';
 
@@ -22,6 +24,13 @@ describe('ParticipantIdentityProposalService', () => {
           useValue: identityResolutionService,
         },
         { provide: ProposalCreationService, useValue: proposalCreationService },
+        // The real suppression service over an empty tenant list, so the
+        // built-in noise layers are exercised rather than mocked away.
+        IngestionSuppressionService,
+        {
+          provide: KeyValuePairService,
+          useValue: { get: jest.fn().mockResolvedValue(undefined) },
+        },
         {
           provide: ModuleRef,
           useValue: { get: () => proposalCreationService },
@@ -45,6 +54,23 @@ describe('ParticipantIdentityProposalService', () => {
     });
 
     expect(identityResolutionService.resolvePerson).not.toHaveBeenCalled();
+  });
+
+  it('should skip a participant the inbound noise filter suppresses', async () => {
+    await service.reviewUnmatchedParticipants({
+      participants: [
+        {
+          id: 'participant-noise',
+          handle: 'noreply@calendar.google.com',
+          displayName: 'Google Calendar',
+        },
+      ],
+      objectMetadataName: 'calendarEventParticipant',
+      workspaceId: 'workspace-1',
+    });
+
+    expect(identityResolutionService.resolvePerson).not.toHaveBeenCalled();
+    expect(proposalCreationService.createFromExtraction).not.toHaveBeenCalled();
   });
 
   it('should skip a participant with no handle', async () => {
