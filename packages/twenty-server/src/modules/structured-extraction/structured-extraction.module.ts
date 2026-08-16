@@ -10,6 +10,7 @@ import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channe
 import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module';
 import { CalendarEventExtractionListener } from 'src/modules/structured-extraction/listeners/calendar-event-extraction.listener';
 import { MessageExtractionListener } from 'src/modules/structured-extraction/listeners/message-extraction.listener';
+import { IngestionNoiseFilterModule } from 'src/modules/ingestion-noise-filter/ingestion-noise-filter.module';
 import { AiExtractionExclusionService } from 'src/modules/structured-extraction/services/ai-extraction-exclusion.service';
 import { StructuredExtractionService } from 'src/modules/structured-extraction/services/structured-extraction.service';
 
@@ -28,6 +29,7 @@ import { StructuredExtractionService } from 'src/modules/structured-extraction/s
     // consulted — extraction has no second route to a CRM record.
     AiWriteApprovalModule,
     AiModelsModule,
+    IngestionNoiseFilterModule,
   ],
   providers: [
     AiExtractionExclusionService,

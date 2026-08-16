@@ -20,6 +20,7 @@ import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connect
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { CONTACTS_CREATION_BATCH_SIZE } from 'src/modules/contact-creation-manager/constants/contacts-creation-batch-size.constant';
+import { ContactAutoCreatePolicyService } from 'src/modules/contact-creation-manager/services/contact-auto-create-policy.service';
 import { CreateCompanyService } from 'src/modules/contact-creation-manager/services/create-company.service';
 import { CreatePersonService } from 'src/modules/contact-creation-manager/services/create-person.service';
 import { type Contact } from 'src/modules/contact-creation-manager/types/contact.type';
@@ -27,6 +28,7 @@ import { filterOutContactsThatBelongToSelfOrWorkspaceMembers } from 'src/modules
 import { getDomainNameFromHandle } from 'src/modules/contact-creation-manager/utils/get-domain-name-from-handle.util';
 import { getFirstNameAndLastNameFromHandleAndDisplayName } from 'src/modules/contact-creation-manager/utils/get-first-name-and-last-name-from-handle-and-display-name.util';
 import { getUniqueContactsAndHandles } from 'src/modules/contact-creation-manager/utils/get-unique-contacts-and-handles.util';
+import { IngestionSuppressionService } from 'src/modules/ingestion-noise-filter/services/ingestion-suppression.service';
 import { addPersonEmailFiltersToQueryBuilder } from 'src/modules/match-participant/utils/add-person-email-filters-to-query-builder';
 import { PersonWorkspaceEntity } from 'src/modules/person/standard-objects/person.workspace-entity';
 import { WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
@@ -40,6 +42,8 @@ export class CreateCompanyAndPersonService {
     private readonly createCompaniesService: CreateCompanyService,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly exceptionHandlerService: ExceptionHandlerService,
+    private readonly ingestionSuppressionService: IngestionSuppressionService,
+    private readonly contactAutoCreatePolicyService: ContactAutoCreatePolicyService,
     @InjectRepository(UserWorkspaceEntity)
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
     @InjectRepository(WorkspaceEntity)
@@ -52,6 +56,12 @@ export class CreateCompanyAndPersonService {
     workspaceId: string,
     source: FieldActorSource,
     accountOwner: WorkspaceMemberWorkspaceEntity | null,
+    // Rules 1 and 2 of the auto-create policy. Handles in this set failed the
+    // reciprocity gate: they may enrich a Person that already exists, but may
+    // never mint a Person, restore a soft-deleted one, or mint a Company. A
+    // gated handle with no existing Person therefore produces nothing at all —
+    // "no company matched and no contact matched, drop the message entirely".
+    enrichOnlyHandles: Set<string> = new Set<string>(),
   ): Promise<DeepPartial<PersonWorkspaceEntity>[]> {
     if (!contactsToCreate || contactsToCreate.length === 0) {
       return [];
@@ -92,8 +102,19 @@ export class CreateCompanyAndPersonService {
             workspace?.isInternalMessagesImportEnabled ?? false,
           );
 
+        // Inbound noise filter. This runs before any Person or Company is
+        // created, and therefore before structured extraction can anchor a
+        // proposal to one: a suppressed participant produces neither a record
+        // nor a proposal.
+        const noiseFilter =
+          await this.ingestionSuppressionService.buildFilter(workspaceId);
+
+        const notSuppressedContacts = peopleToCreateFromOtherCompanies.filter(
+          (contact) => !noiseFilter.isSuppressed(contact.handle),
+        );
+
         const { uniqueContacts, uniqueHandles } = getUniqueContactsAndHandles(
-          peopleToCreateFromOtherCompanies,
+          notSuppressedContacts,
         );
 
         if (uniqueHandles.length === 0) {
@@ -123,6 +144,7 @@ export class CreateCompanyAndPersonService {
             source,
             connectedAccount,
             accountOwner,
+            enrichOnlyHandles,
           );
 
         const companiesMap =
@@ -210,6 +232,16 @@ export class CreateCompanyAndPersonService {
         authContext,
       );
 
+    // Rule 3: the reciprocity verdict is resolved once for the whole run,
+    // per thread, and every batch and every message inherits it. Resolving it
+    // inside the batch loop would let one thread receive two verdicts.
+    const { enrichOnlyHandles } =
+      await this.contactAutoCreatePolicyService.evaluate({
+        workspaceId,
+        connectedAccount,
+        contacts: contactsToCreate,
+      });
+
     for (const contactsBatch of contactsBatches) {
       try {
         await this.createCompaniesAndPeople(
@@ -218,6 +250,7 @@ export class CreateCompanyAndPersonService {
           workspaceId,
           source,
           accountOwner,
+          enrichOnlyHandles,
         );
       } catch (error) {
         this.exceptionHandlerService.captureExceptions([error], {
@@ -235,6 +268,7 @@ export class CreateCompanyAndPersonService {
     source: FieldActorSource,
     connectedAccount: ConnectedAccountEntity,
     accountOwner: WorkspaceMemberWorkspaceEntity | null,
+    enrichOnlyHandles: Set<string> = new Set<string>(),
   ) {
     const shouldCreateOrRestorePeopleByHandleMap = new Map<
       string,
@@ -284,14 +318,24 @@ export class CreateCompanyAndPersonService {
       });
     }
 
+    // Rule 1 (reciprocity gate) and rule 2 (no match, no row): a gated handle
+    // never reaches the create list. If it matched no existing Person it is in
+    // no list at all, so the message contributes nothing — no orphan record.
+    // If it did match, only computePeopleToEnrichNames below still sees it.
     const contactsThatNeedPersonCreate = uniqueContacts.filter(
       (contact) =>
         !shouldCreateOrRestorePeopleByHandleMap.has(
           contact.handle.toLowerCase(),
-        ),
+        ) && !enrichOnlyHandles.has(contact.handle.toLowerCase()),
     );
 
     const contactsThatNeedPersonRestore = uniqueContacts.filter((contact) => {
+      // Restoring a soft-deleted Person re-mints a record a human deleted —
+      // squarely a create for the purposes of the gate.
+      if (enrichOnlyHandles.has(contact.handle.toLowerCase())) {
+        return false;
+      }
+
       const existingPerson = shouldCreateOrRestorePeopleByHandleMap.get(
         contact.handle.toLowerCase(),
       )?.existingPerson;

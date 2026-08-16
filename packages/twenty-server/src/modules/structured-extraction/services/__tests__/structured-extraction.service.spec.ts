@@ -3,6 +3,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { generateText } from 'ai';
 
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
+import { IngestionSuppressionService } from 'src/modules/ingestion-noise-filter/services/ingestion-suppression.service';
 import { EvidenceRecordingService } from 'src/engine/metadata-modules/ai/ai-research/services/evidence-recording.service';
 import { ProposalCreationService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-creation.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
@@ -110,6 +111,14 @@ describe('StructuredExtractionService', () => {
         },
         { provide: ProposalCreationService, useValue: proposalCreationService },
         { provide: AiModelRegistryService, useValue: aiModelRegistryService },
+        {
+          provide: IngestionSuppressionService,
+          useValue: {
+            buildFilter: jest
+              .fn()
+              .mockResolvedValue({ isSuppressed: () => false }),
+          },
+        },
       ],
     }).compile();
 

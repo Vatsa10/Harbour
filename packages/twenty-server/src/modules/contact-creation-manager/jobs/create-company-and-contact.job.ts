@@ -12,6 +12,9 @@ export type CreateCompanyAndContactJobData = {
   contactsToCreate: {
     displayName: string;
     handle: string;
+    // Present when the contact came from an ingested message: the reciprocity
+    // gate resolves it to a thread. Absent on the calendar path.
+    messageId?: string | null;
   }[];
   source: FieldActorSource;
 };
@@ -31,6 +34,7 @@ export class CreateCompanyAndContactJob {
       contactsToCreate.map((contact) => ({
         handle: contact.handle,
         displayName: contact.displayName,
+        messageId: contact.messageId ?? null,
       })),
       workspaceId,
       source,

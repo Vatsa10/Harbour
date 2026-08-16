@@ -27,6 +27,7 @@ import {
   ImportRowMatchAction,
   ImportRowStatus,
 } from 'src/modules/guided-import/types/import-batch-status.type';
+import { computeImportIdentityKey } from 'src/modules/guided-import/utils/compute-import-identity-key.util';
 
 // C7: the same shape ProposalExecutionService.buildApproverContext produces.
 // authContext carries the real user so every write is attributed to them and
@@ -99,6 +100,12 @@ export class ImportExecutionService {
       batch.createdByUserWorkspaceId,
     );
 
+    // Intra-import dedup: normalised identity value -> id of the record this
+    // same import already created for it. Match resolution ran before the
+    // import started, so it could only see pre-existing records; without this
+    // map a CSV naming the same new company on two rows creates it twice.
+    const createdRecordIdByIdentityKey = new Map<string, string>();
+
     let createdRowCount = batch.createdRowCount;
     let updatedRowCount = batch.updatedRowCount;
     let proposedRowCount = batch.proposedRowCount;
@@ -130,6 +137,7 @@ export class ImportExecutionService {
             importBatchId,
             row,
             importer,
+            createdRecordIdByIdentityKey,
           );
 
           // Persist this row's outcome before moving to the next row, so a
@@ -192,6 +200,7 @@ export class ImportExecutionService {
     importBatchId: string,
     row: ImportRowEntity,
     importer: ImportActorContext,
+    createdRecordIdByIdentityKey: Map<string, string>,
   ): Promise<RowOutcome> {
     if (row.matchAction === ImportRowMatchAction.SKIP) {
       return { kind: 'skipped' };
@@ -212,7 +221,28 @@ export class ImportExecutionService {
     // them as createdBy/updatedBy — the same shape ProposalExecutionService
     // .applyItem uses on approval. A user who cannot write a field the CSV
     // maps to now gets the same permission error a manual create would.
+    const identityKey = computeImportIdentityKey(
+      objectNameSingular,
+      mappedData,
+    );
+
     if (row.matchAction === ImportRowMatchAction.CREATE) {
+      // An earlier row of this same import already created this entity:
+      // promote the CREATE to an UPDATE against that new id rather than
+      // creating a second record for it.
+      const alreadyCreatedRecordId = isDefined(identityKey)
+        ? createdRecordIdByIdentityKey.get(identityKey)
+        : undefined;
+
+      if (isDefined(alreadyCreatedRecordId)) {
+        return this.updateRecord(
+          objectNameSingular,
+          alreadyCreatedRecordId,
+          mappedData,
+          importer,
+        );
+      }
+
       const output = await this.createRecordService.execute({
         objectName: objectNameSingular,
         objectRecord: mappedData,
@@ -229,6 +259,10 @@ export class ImportExecutionService {
       const record = (output.result as { record?: { id: string } } | undefined)
         ?.record;
 
+      if (isDefined(identityKey) && isDefined(record?.id)) {
+        createdRecordIdByIdentityKey.set(identityKey, record.id);
+      }
+
       return { kind: 'created', recordId: record?.id };
     }
 
@@ -237,21 +271,12 @@ export class ImportExecutionService {
         throw new Error('UPDATE row has no matchedRecordId.');
       }
 
-      const output = await this.updateRecordService.execute({
-        objectName: objectNameSingular,
-        objectRecordId: row.matchedRecordId,
-        objectRecord: mappedData,
-        authContext: importer.authContext,
-        rolePermissionConfig: importer.rolePermissionConfig,
-        updatedBy: importer.actorMetadata,
-        slimResponse: true,
-      });
-
-      if (!output.success) {
-        throw new Error(output.error ?? output.message);
-      }
-
-      return { kind: 'updated', recordId: row.matchedRecordId };
+      return this.updateRecord(
+        objectNameSingular,
+        row.matchedRecordId,
+        mappedData,
+        importer,
+      );
     }
 
     // PROPOSE: the row matched an existing record only by a CANDIDATE signal
@@ -286,6 +311,29 @@ export class ImportExecutionService {
     });
 
     return { kind: 'proposed', recordId: row.matchedRecordId };
+  }
+
+  private async updateRecord(
+    objectNameSingular: string,
+    recordId: string,
+    mappedData: Record<string, unknown>,
+    importer: ImportActorContext,
+  ): Promise<RowOutcome> {
+    const output = await this.updateRecordService.execute({
+      objectName: objectNameSingular,
+      objectRecordId: recordId,
+      objectRecord: mappedData,
+      authContext: importer.authContext,
+      rolePermissionConfig: importer.rolePermissionConfig,
+      updatedBy: importer.actorMetadata,
+      slimResponse: true,
+    });
+
+    if (!output.success) {
+      throw new Error(output.error ?? output.message);
+    }
+
+    return { kind: 'updated', recordId };
   }
 
   private async readBaseline(

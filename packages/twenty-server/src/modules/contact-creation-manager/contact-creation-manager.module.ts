@@ -9,8 +9,10 @@ import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { WorkspaceDataSourceModule } from 'src/engine/workspace-datasource/workspace-datasource.module';
 import { CreateCompanyAndPersonService } from 'src/modules/contact-creation-manager/services/create-company-and-contact.service';
+import { ContactAutoCreatePolicyService } from 'src/modules/contact-creation-manager/services/contact-auto-create-policy.service';
 import { CreateCompanyService } from 'src/modules/contact-creation-manager/services/create-company.service';
 import { CreatePersonService } from 'src/modules/contact-creation-manager/services/create-person.service';
+import { IngestionNoiseFilterModule } from 'src/modules/ingestion-noise-filter/ingestion-noise-filter.module';
 
 @Module({
   imports: [
@@ -22,12 +24,14 @@ import { CreatePersonService } from 'src/modules/contact-creation-manager/servic
     ]),
     TypeOrmModule.forFeature([ObjectMetadataEntity, FieldMetadataEntity]),
     SecureHttpClientModule,
+    IngestionNoiseFilterModule,
   ],
   providers: [
+    ContactAutoCreatePolicyService,
     CreateCompanyService,
     CreatePersonService,
     CreateCompanyAndPersonService,
   ],
-  exports: [CreateCompanyAndPersonService],
+  exports: [CreateCompanyAndPersonService, ContactAutoCreatePolicyService],
 })
 export class ContactCreationManagerModule {}

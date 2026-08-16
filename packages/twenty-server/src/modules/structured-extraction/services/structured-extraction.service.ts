@@ -14,6 +14,7 @@ import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspac
 import { type CalendarEventParticipantWorkspaceEntity } from 'src/modules/calendar/common/standard-objects/calendar-event-participant.workspace-entity';
 import { type CalendarEventWorkspaceEntity } from 'src/modules/calendar/common/standard-objects/calendar-event.workspace-entity';
 import { type MessageParticipantWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-participant.workspace-entity';
+import { IngestionSuppressionService } from 'src/modules/ingestion-noise-filter/services/ingestion-suppression.service';
 import { type MessageWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message.workspace-entity';
 import { type PersonWorkspaceEntity } from 'src/modules/person/standard-objects/person.workspace-entity';
 import { AiExtractionExclusionService } from 'src/modules/structured-extraction/services/ai-extraction-exclusion.service';
@@ -71,6 +72,7 @@ export class StructuredExtractionService {
     private readonly evidenceRecordingService: EvidenceRecordingService,
     private readonly proposalCreationService: ProposalCreationService,
     private readonly aiModelRegistryService: AiModelRegistryService,
+    private readonly ingestionSuppressionService: IngestionSuppressionService,
   ) {}
 
   async extract(request: ExtractionRequest): Promise<ExtractionResult> {
@@ -191,6 +193,20 @@ export class StructuredExtractionService {
         });
   }
 
+  private async isSuppressedHandle(
+    workspaceId: string,
+    handle: string | null | undefined,
+  ): Promise<boolean> {
+    if (!isDefined(handle) || handle === '') {
+      return false;
+    }
+
+    const noiseFilter =
+      await this.ingestionSuppressionService.buildFilter(workspaceId);
+
+    return noiseFilter.isSuppressed(handle);
+  }
+
   private async loadMessageSubject(
     workspaceId: string,
     messageId: string,
@@ -231,6 +247,14 @@ export class StructuredExtractionService {
     );
 
     if (!isDefined(sender?.personId)) {
+      return null;
+    }
+
+    // Defence in depth. Contact creation already refuses to mint a Person for
+    // a suppressed participant, so normally there is no personId to anchor to
+    // — but a Person created before the handle was suppressed (or before this
+    // filter existed) must not keep generating proposals either.
+    if (await this.isSuppressedHandle(workspaceId, sender.handle)) {
       return null;
     }
 
@@ -278,6 +302,10 @@ export class StructuredExtractionService {
     );
 
     if (!isDefined(organizer?.personId)) {
+      return null;
+    }
+
+    if (await this.isSuppressedHandle(workspaceId, organizer.handle)) {
       return null;
     }
 

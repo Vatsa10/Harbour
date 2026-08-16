@@ -12,6 +12,7 @@ import { CreateCompanyAndPersonService } from 'src/modules/contact-creation-mana
 import { CreateCompanyService } from 'src/modules/contact-creation-manager/services/create-company.service';
 import { CreatePersonService } from 'src/modules/contact-creation-manager/services/create-person.service';
 import { type Contact } from 'src/modules/contact-creation-manager/types/contact.type';
+import { IngestionSuppressionService } from 'src/modules/ingestion-noise-filter/services/ingestion-suppression.service';
 import { type PersonWorkspaceEntity } from 'src/modules/person/standard-objects/person.workspace-entity';
 
 describe('CreateCompanyAndPersonService', () => {
@@ -51,6 +52,14 @@ describe('CreateCompanyAndPersonService', () => {
         {
           provide: ExceptionHandlerService,
           useValue: {},
+        },
+        {
+          provide: IngestionSuppressionService,
+          useValue: {
+            buildFilter: jest
+              .fn()
+              .mockResolvedValue({ isSuppressed: () => false }),
+          },
         },
         {
           provide: getRepositoryToken(UserWorkspaceEntity),
