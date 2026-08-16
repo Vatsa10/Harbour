@@ -8,6 +8,7 @@ import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
 import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service';
+import { ProposalSupersessionService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-supersession.service';
 import { ProposalCreationService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-creation.service';
 import { type AiWritePolicy } from 'src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type';
 import { type ExtractionProposalItemInput } from 'src/engine/metadata-modules/ai/ai-write-approval/types/extraction-proposal.type';
@@ -47,6 +48,13 @@ describe('ProposalCreationService', () => {
   // key-value store. Mocking resolveMode would let this service build
   // override keys the policy can never match and the test would still pass.
   const keyValuePairService = { get: jest.fn(), set: jest.fn() };
+  // Supersession is covered by its own spec; here it only has to be
+  // reachable, so the collaborator is stubbed.
+  const proposalSupersessionService = {
+    supersedeOverlappingItems: jest
+      .fn()
+      .mockResolvedValue({ supersededItemIds: [], supersededProposalIds: [] }),
+  };
   const factService = { findCurrentFactIdsForFields: jest.fn() };
   const proposalRepository = { findOne: jest.fn(), save: jest.fn() };
   const proposalItemRepository = { save: jest.fn(), find: jest.fn() };
@@ -88,6 +96,10 @@ describe('ProposalCreationService', () => {
         AiWritePolicyService,
         { provide: KeyValuePairService, useValue: keyValuePairService },
         { provide: FactService, useValue: factService },
+        {
+          provide: ProposalSupersessionService,
+          useValue: proposalSupersessionService,
+        },
         {
           provide: getRepositoryToken(ProposalEntity),
           useValue: proposalRepository,

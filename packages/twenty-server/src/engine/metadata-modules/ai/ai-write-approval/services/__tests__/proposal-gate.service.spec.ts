@@ -13,6 +13,7 @@ import { FactStatus } from 'src/engine/metadata-modules/ai/ai-research/types/fac
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
 import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service';
+import { ProposalSupersessionService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-supersession.service';
 import { ProposalGateService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service';
 import { type AiWritePolicy } from 'src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type';
 
@@ -60,6 +61,13 @@ describe('ProposalGateService', () => {
   // never match and every test agreed with the mock.
   const keyValuePairService = { get: jest.fn(), set: jest.fn() };
   const findRecordsService = { execute: jest.fn() };
+  // Supersession is covered by its own spec; here it only has to be
+  // reachable, so the collaborator is stubbed.
+  const proposalSupersessionService = {
+    supersedeOverlappingItems: jest
+      .fn()
+      .mockResolvedValue({ supersededItemIds: [], supersededProposalIds: [] }),
+  };
   const factService = { findCurrentFactIdsForFields: jest.fn() };
   const proposalRepository = { findOne: jest.fn(), save: jest.fn() };
   const proposalItemRepository = { save: jest.fn(), find: jest.fn() };
@@ -96,6 +104,10 @@ describe('ProposalGateService', () => {
         { provide: KeyValuePairService, useValue: keyValuePairService },
         { provide: FindRecordsService, useValue: findRecordsService },
         { provide: FactService, useValue: factService },
+        {
+          provide: ProposalSupersessionService,
+          useValue: proposalSupersessionService,
+        },
         {
           provide: getRepositoryToken(ProposalEntity),
           useValue: proposalRepository,
@@ -514,6 +526,10 @@ describe('ProposalGateService', () => {
           ProposalGateService,
           AiWritePolicyService,
           FactService,
+          {
+            provide: ProposalSupersessionService,
+            useValue: proposalSupersessionService,
+          },
           { provide: KeyValuePairService, useValue: keyValuePairService },
           { provide: FindRecordsService, useValue: findRecordsService },
           {

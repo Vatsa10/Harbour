@@ -38,6 +38,7 @@ import {
   buildToolFailure,
   toFailedToolOutput,
 } from 'src/engine/core-modules/tool/utils/build-tool-failure.util';
+import { ensureToolFailureEnvelope } from 'src/engine/core-modules/tool/utils/ensure-tool-failure-envelope.util';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { ProposalGateService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
@@ -95,6 +96,19 @@ export class ToolExecutorService {
       return toFailedToolOutput(decision.failure);
     }
 
+    // Tool results pass through untouched otherwise: the record-crud services
+    // and the static providers still report failure as a bare English string,
+    // which is the exact class of failure the envelope exists to fix.
+    return ensureToolFailureEnvelope(
+      await this.dispatchToExecutor(descriptor, safeArgs, context),
+    );
+  }
+
+  private async dispatchToExecutor(
+    descriptor: ToolIndexEntry | ToolDescriptor,
+    safeArgs: Record<string, unknown>,
+    context: ToolProviderContext,
+  ): Promise<ToolOutput> {
     switch (descriptor.executionRef.kind) {
       case 'database_crud':
         return this.dispatchDatabaseCrud(

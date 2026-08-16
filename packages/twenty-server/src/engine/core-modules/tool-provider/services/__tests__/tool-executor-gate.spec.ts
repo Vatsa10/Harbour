@@ -188,6 +188,48 @@ describe('ToolExecutorService gating', () => {
     expect(result.failure?.retryable).toBe(true);
   });
 
+  it.each([
+    ['Record not found', 'NOT_FOUND', false],
+    ['Field jobTitle is restricted by permission', 'PERMISSION_DENIED', false],
+    ['Unknown field "jobTitel"', 'INVALID_ARGUMENTS', true],
+    ['Something exploded', 'INTERNAL_ERROR', false],
+  ])(
+    'should wrap the untyped record-crud failure %s in an envelope',
+    async (error, expectedCode, expectedRetryable) => {
+      gateService.evaluate.mockResolvedValue({ kind: 'ALLOW' });
+      updateRecordService.execute.mockResolvedValue({
+        success: false,
+        message: error,
+        error,
+      });
+
+      const result = await service.dispatch(
+        updateDescriptor,
+        { id: 'record-1', jobTitle: 'New title' },
+        context,
+      );
+
+      expect(result.failure?.code).toBe(expectedCode);
+      expect(result.failure?.retryable).toBe(expectedRetryable);
+      expect(result.failure?.hint.length).toBeGreaterThan(0);
+      // The legacy string the tool wrote must survive untouched.
+      expect(result.error).toBe(error);
+    },
+  );
+
+  it('should leave a successful tool result alone', async () => {
+    gateService.evaluate.mockResolvedValue({ kind: 'ALLOW' });
+
+    const result = await service.dispatch(
+      updateDescriptor,
+      { id: 'record-1', jobTitle: 'New title' },
+      context,
+    );
+
+    expect(result.failure).toBeUndefined();
+    expect(result.success).toBe(true);
+  });
+
   it('should still execute reads', async () => {
     gateService.evaluate.mockResolvedValue({ kind: 'ALLOW' });
 

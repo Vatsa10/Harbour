@@ -32,13 +32,27 @@ AI-requested deletes under an `AUTO`-mode policy require a two-call confirmation
 2. The response is a `CONFIRMATION_REQUIRED` failure whose `hint` names the exact token to pass.
 3. Repeat the identical call with `confirm: "<token>"` set.
 
+**What this control is, precisely.** The token is a deterministic hash of the
+workspace, object and delete basis — the record id for `delete_one`, the
+canonicalized filter for `delete_many`. It is not keyed by a server secret, has
+no TTL, and is not bound to a human turn: the failure response hands the agent
+the token it needs, so an agent satisfies the gate by calling twice. It is a
+**speed bump against one-shot model mistakes and against silently widening a
+delete** — a token minted for one record or one filter is rejected for any
+other — and it is deliberately *not* human-in-the-loop. Human review of a
+delete comes from the default `PROPOSE` policy, not from this token.
+
 Deletes under the default `PROPOSE` policy do not need a confirm token — the human approval step in the proposal inbox already is the confirmation.
 
 Human-initiated deletes through the ordinary product UI are entirely unaffected by this — confirmation tokens exist only on the AI tool-call path.
 
 ## Failure shape
 
-Every failure this contract governs — from the gate, the tool executor, the tool registry, or the MCP transport — includes, in addition to the legacy `success`/`error`/`message` fields:
+Every failure returned by `ToolExecutorService.dispatch` — whether authored by
+the gate, the tool executor, the tool registry or the MCP transport, or raised
+as a bare string by an underlying record-crud service or static tool and
+classified on the way out — includes, in addition to the legacy
+`success`/`error`/`message` fields:
 
 ```json
 {
@@ -46,7 +60,7 @@ Every failure this contract governs — from the gate, the tool executor, the to
   "message": "...",
   "error": "...",
   "failure": {
-    "code": "NOT_FOUND | UNKNOWN_TOOL | INVALID_ARGUMENTS | FORBIDDEN_BY_POLICY | PERMISSION_DENIED | CONFIRMATION_REQUIRED | DUPLICATE_PROPOSAL | RATE_LIMITED | INTERNAL_ERROR",
+    "code": "NOT_FOUND | UNKNOWN_TOOL | INVALID_ARGUMENTS | FORBIDDEN_BY_POLICY | PERMISSION_DENIED | CONFIRMATION_REQUIRED | INTERNAL_ERROR",
     "message": "...",
     "hint": "an imperative sentence describing exactly what to do next",
     "retryable": true,
@@ -54,6 +68,13 @@ Every failure this contract governs — from the gate, the tool executor, the to
   }
 }
 ```
+
+`DUPLICATE_PROPOSAL` and `RATE_LIMITED` are declared in `ToolFailureCode` but
+have no producer today; treat them as reserved rather than expected.
+
+Classification of an underlying tool's English error is best-effort: an
+unrecognised message becomes `INTERNAL_ERROR` with `retryable: false`, never a
+guess that invites a retry loop.
 
 `retryable: false` means retrying the identical call will not succeed — stop and either change the request or ask a human. `retryable: true` means a transient condition (a dropped connection, a wrong confirmation token) may resolve on a corrected retry.
 
