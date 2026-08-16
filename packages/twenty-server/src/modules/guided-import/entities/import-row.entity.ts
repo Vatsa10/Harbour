@@ -62,6 +62,12 @@ export class ImportRowEntity {
   @Column({ type: 'timestamptz', nullable: true })
   processedAt: Date | null;
 
+  // When this row was claimed by an executing worker. The lease is what makes
+  // the claim recoverable: a worker that dies mid-chunk leaves the row
+  // IN_PROGRESS, and a later run reclaims it once the lease has expired.
+  @Column({ type: 'timestamptz', nullable: true })
+  leasedAt: Date | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 

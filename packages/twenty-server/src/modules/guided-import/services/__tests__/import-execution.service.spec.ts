@@ -1,3 +1,5 @@
+import { isDefined } from 'twenty-shared/utils';
+
 import { CreateRecordService } from 'src/engine/core-modules/record-crud/services/create-record.service';
 import { FindRecordsService } from 'src/engine/core-modules/record-crud/services/find-records.service';
 import { UpdateRecordService } from 'src/engine/core-modules/record-crud/services/update-record.service';
@@ -39,9 +41,54 @@ const buildRowTable = (rows: StoredRow[]) => {
         return options.take ? found.slice(0, options.take) : found;
       },
     ),
+    // Models the atomic claim: takes only rows that are PENDING or whose
+    // lease has expired, flips them to IN_PROGRESS and stamps leasedAt, in
+    // one step. A fixed-array mock here would double the very seam under test.
+    query: jest.fn(
+      async (_sql: string, parameters: unknown[]) => {
+        const [inProgressStatus, importBatchId, pendingStatus, leaseMinutes, limit] =
+          parameters as [string, string, string, string, number];
+        const leaseCutoff =
+          Date.now() - Number(leaseMinutes) * 60 * 1000;
+
+        const claimable = [...store.values()]
+          .filter(
+            (row) =>
+              row.importBatchId === importBatchId &&
+              (row.status === pendingStatus ||
+                (row.status === inProgressStatus &&
+                  isDefined(row.leasedAt) &&
+                  new Date(row.leasedAt as string | Date).getTime() <
+                    leaseCutoff)),
+          )
+          .sort((a, b) => Number(a.rowNumber ?? 0) - Number(b.rowNumber ?? 0))
+          .slice(0, limit);
+
+        return claimable.map((row) => {
+          const claimed = {
+            ...row,
+            status: inProgressStatus,
+            leasedAt: new Date(),
+          } as StoredRow;
+
+          store.set(claimed.id, claimed);
+
+          return claimed;
+        });
+      },
+    ),
     count: jest.fn(
-      async (options: { where?: Record<string, unknown> }) =>
-        [...store.values()].filter((row) => matches(row, options.where)).length,
+      async (options: {
+        where?: Record<string, unknown> | Record<string, unknown>[];
+      }) => {
+        const clauses = Array.isArray(options.where)
+          ? options.where
+          : [options.where];
+
+        return [...store.values()].filter((row) =>
+          clauses.some((clause) => matches(row, clause)),
+        ).length;
+      },
     ),
     save: jest.fn(async (entity: StoredRow) => {
       store.set(entity.id, { ...entity });
@@ -302,28 +349,100 @@ describe('ImportExecutionService', () => {
   // interrupted (the process "crashes" mid-batch by throwing out of the row
   // loop), then the SAME service instance and the SAME table are re-run.
   // Rows already durably PROCESSED must not be written a second time.
+  // The behavioural lease tests below drive the in-memory table, which models
+  // the claim rather than executing it. These assert the shape of the SQL that
+  // actually runs, so deleting the atomicity or the lease expiry from the
+  // statement goes red instead of passing against a mock that still models it.
+  it('should claim rows with a single atomic, lease-aware statement', async () => {
+    await execute();
+
+    const [sql] = importRowRepository.query.mock.calls[0] as unknown as [string];
+
+    expect(sql).toMatch(/UPDATE\s+"core"\."importRow"/);
+    expect(sql).toContain('FOR UPDATE SKIP LOCKED');
+    expect(sql).toContain('"leasedAt" = now()');
+    // The expired-lease reclaim predicate.
+    expect(sql).toMatch(/"leasedAt"\s*<\s*now\(\)\s*-/);
+  });
+
+  it('should not touch a row another worker holds a live lease on', async () => {
+    service = buildService([
+      buildRow({
+        id: 'row-1',
+        rowNumber: 1,
+        status: 'IN_PROGRESS',
+        leasedAt: new Date(),
+      }),
+    ]);
+
+    await execute();
+
+    expect(createRecordService.execute).not.toHaveBeenCalled();
+    expect(importRowRepository.store.get('row-1')?.status).toBe('IN_PROGRESS');
+    // Still outstanding, so the batch is not reported COMPLETED.
+    expect(importBatchRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'RUNNING' }),
+    );
+  });
+
+  it('should reclaim a row whose lease expired with the worker that held it', async () => {
+    service = buildService([
+      buildRow({
+        id: 'row-1',
+        rowNumber: 1,
+        status: 'IN_PROGRESS',
+        leasedAt: new Date(Date.now() - 60 * 60 * 1000),
+      }),
+    ]);
+
+    await execute();
+
+    expect(createRecordService.execute).toHaveBeenCalledTimes(1);
+    expect(importRowRepository.store.get('row-1')?.status).toBe('PROCESSED');
+  });
+
   it('should resume an interrupted run without re-writing already processed rows', async () => {
     service = buildService([
       buildRow({ id: 'row-1', rowNumber: 1 }),
-      buildRow({ id: 'row-2', rowNumber: 2 }),
-      buildRow({ id: 'row-3', rowNumber: 3 }),
+      // Distinct identities: the intra-import dedup map would otherwise
+      // promote the third row to an UPDATE of the record the second one
+      // created, which is correct behaviour but not what this test is about.
+      buildRow({
+        id: 'row-2',
+        rowNumber: 2,
+        mappedData: { emails: { primaryEmail: 'bob@acme.com' } },
+      }),
+      buildRow({
+        id: 'row-3',
+        rowNumber: 3,
+        mappedData: { emails: { primaryEmail: 'carol@acme.com' } },
+      }),
     ]);
 
     // First chunk yields row 1 only (as a smaller take would); the worker is
     // then killed while claiming the next chunk. Row 1 is durably PROCESSED,
     // rows 2-3 are still PENDING.
-    const realFind = importRowRepository.find.getMockImplementation();
+    const realQuery = importRowRepository.query.getMockImplementation();
 
-    importRowRepository.find.mockImplementationOnce(async () => [
-      importRowRepository.store.get('row-1') as never,
-    ]);
-    importRowRepository.find.mockImplementationOnce(async () => {
+    importRowRepository.query.mockImplementationOnce(async () => {
+      const row = importRowRepository.store.get('row-1') as StoredRow;
+      const claimed = {
+        ...row,
+        status: 'IN_PROGRESS',
+        leasedAt: new Date(),
+      } as StoredRow;
+
+      importRowRepository.store.set('row-1', claimed);
+
+      return [claimed] as never;
+    });
+    importRowRepository.query.mockImplementationOnce(async () => {
       throw new Error('worker killed');
     });
 
     await expect(execute()).rejects.toThrow('worker killed');
 
-    importRowRepository.find.mockImplementation(realFind as never);
+    importRowRepository.query.mockImplementation(realQuery as never);
 
     expect(createRecordService.execute).toHaveBeenCalledTimes(1);
     expect(importRowRepository.store.get('row-1')?.status).toBe('PROCESSED');
@@ -361,12 +480,21 @@ describe('ImportExecutionService', () => {
       buildRow({ id: 'row-1', rowNumber: 1 }),
       buildRow({ id: 'row-2', rowNumber: 2, status: 'PENDING' }),
     ]);
-    // Simulate a row the loop cannot claim (left PENDING by a concurrent
-    // worker): the batch must not be reported COMPLETED.
-    importRowRepository.find.mockImplementationOnce(async () => [
-      importRowRepository.store.get('row-1') as ImportRowEntity & StoredRow,
-    ]);
-    importRowRepository.find.mockImplementationOnce(async () => []);
+    // Simulate a row the loop cannot claim (already claimed by a concurrent
+    // worker, lease still live): the batch must not be reported COMPLETED.
+    importRowRepository.query.mockImplementationOnce(async () => {
+      const row = importRowRepository.store.get('row-1') as StoredRow;
+      const claimed = {
+        ...row,
+        status: 'IN_PROGRESS',
+        leasedAt: new Date(),
+      } as StoredRow;
+
+      importRowRepository.store.set('row-1', claimed);
+
+      return [claimed] as never;
+    });
+    importRowRepository.query.mockImplementationOnce(async () => [] as never);
 
     await execute();
 

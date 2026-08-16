@@ -15,6 +15,7 @@ import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-worksp
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
 import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
+import { IMPORT_BATCH_MAX_ROWS } from 'src/modules/guided-import/constants/import-batch-limits.constant';
 import { CreateImportBatchInput } from 'src/modules/guided-import/dtos/create-import-batch.input';
 import { ImportBatchPreviewDTO } from 'src/modules/guided-import/dtos/import-batch-preview.dto';
 import { ImportBatchDTO } from 'src/modules/guided-import/dtos/import-batch.dto';
@@ -61,6 +62,12 @@ export class ImportBatchResolver {
   ): Promise<ImportBatchDTO> {
     if (input.rawRows.length === 0) {
       throw new BadRequestException('Cannot import an empty file.');
+    }
+
+    if (input.rawRows.length > IMPORT_BATCH_MAX_ROWS) {
+      throw new BadRequestException(
+        `Cannot import more than ${IMPORT_BATCH_MAX_ROWS} rows in one batch.`,
+      );
     }
 
     if (input.rawRows.length !== input.mappedRows.length) {
@@ -172,15 +179,31 @@ export class ImportBatchResolver {
       throw new BadRequestException('Import batch not found.');
     }
 
+    // A batch that is still RUNNING already has a job working its rows.
+    // Enqueueing a second one over it would put two executions on the same
+    // batch, and would reset rows the live run is about to write.
+    if (batch.status === ImportBatchStatus.RUNNING) {
+      throw new BadRequestException(
+        'This import is still running. Wait for it to finish before retrying failed rows.',
+      );
+    }
+
     const failedRows = await this.importRowRepository.find({
       where: { importBatchId, status: ImportRowStatus.FAILED },
     });
+
+    // Nothing to retry: leave the batch COMPLETED rather than flipping it to
+    // RUNNING for a job that would immediately find no work.
+    if (failedRows.length === 0) {
+      return batch as unknown as ImportBatchDTO;
+    }
 
     for (const row of failedRows) {
       await this.importRowRepository.save({
         ...row,
         status: ImportRowStatus.PENDING,
         errorMessage: null,
+        leasedAt: null,
       });
     }
 

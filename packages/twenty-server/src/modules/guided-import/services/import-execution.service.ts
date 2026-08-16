@@ -47,6 +47,12 @@ type RowOutcome = {
 // be held in memory, and each chunk boundary is a natural resume point.
 const IMPORT_ROW_CHUNK_SIZE = 100;
 
+// How long a claimed row stays claimed before another run may take it back.
+// Long enough that a slow chunk is never stolen mid-flight, short enough that
+// a worker killed mid-chunk does not strand its rows for an operator to
+// unpick by hand.
+const IMPORT_ROW_LEASE_MINUTES = 15;
+
 @Injectable()
 export class ImportExecutionService {
   private readonly logger = new Logger(ImportExecutionService.name);
@@ -74,10 +80,11 @@ export class ImportExecutionService {
     private readonly importRowRepository: Repository<ImportRowEntity>,
   ) {}
 
-  // Only PENDING rows are ever fetched — a row already PROCESSED or FAILED
+  // Only unclaimed rows are ever fetched — a row already PROCESSED or FAILED
   // from an earlier, crashed run of this same job is never touched again.
-  // That single WHERE clause is the entire resumability mechanism: no
-  // separate "resume from checkpoint N" bookkeeping is needed.
+  // Claiming is a single atomic UPDATE ... FOR UPDATE SKIP LOCKED, so two
+  // concurrent executions of the same batch take disjoint chunks instead of
+  // both processing (and double-writing) the same rows.
   async executeBatch(params: {
     workspaceId: string;
     importBatchId: string;
@@ -117,11 +124,7 @@ export class ImportExecutionService {
     // slice. A row that somehow stayed PENDING would loop forever, so the
     // loop also breaks when a chunk yields no state change.
     for (;;) {
-      const rows = await this.importRowRepository.find({
-        where: { importBatchId, status: ImportRowStatus.PENDING },
-        order: { rowNumber: 'ASC' },
-        take: IMPORT_ROW_CHUNK_SIZE,
-      });
+      const rows = await this.claimRowChunk(importBatchId);
 
       if (rows.length === 0) {
         break;
@@ -176,7 +179,10 @@ export class ImportExecutionService {
     }
 
     const remainingPending = await this.importRowRepository.count({
-      where: { importBatchId, status: ImportRowStatus.PENDING },
+      where: [
+        { importBatchId, status: ImportRowStatus.PENDING },
+        { importBatchId, status: ImportRowStatus.IN_PROGRESS },
+      ],
     });
 
     await this.importBatchRepository.save({
@@ -192,6 +198,43 @@ export class ImportExecutionService {
           ? ImportBatchStatus.COMPLETED
           : ImportBatchStatus.RUNNING,
     });
+  }
+
+  // Claims the next chunk atomically. A row is claimable when it is still
+  // PENDING, or when it was claimed by a worker that then died and its lease
+  // has expired. SKIP LOCKED lets a second worker take the following chunk
+  // instead of blocking on this one.
+  private async claimRowChunk(
+    importBatchId: string,
+  ): Promise<ImportRowEntity[]> {
+    const rows: ImportRowEntity[] = await this.importRowRepository.query(
+      `UPDATE "core"."importRow" AS r
+         SET "status" = $1, "leasedAt" = now()
+       WHERE r."id" IN (
+         SELECT c."id" FROM "core"."importRow" AS c
+         WHERE c."importBatchId" = $2
+           AND (
+             c."status" = $3
+             OR (
+               c."status" = $1
+               AND c."leasedAt" < now() - ($4 || ' minutes')::interval
+             )
+           )
+         ORDER BY c."rowNumber" ASC
+         LIMIT $5
+         FOR UPDATE SKIP LOCKED
+       )
+       RETURNING r.*`,
+      [
+        ImportRowStatus.IN_PROGRESS,
+        importBatchId,
+        ImportRowStatus.PENDING,
+        String(IMPORT_ROW_LEASE_MINUTES),
+        IMPORT_ROW_CHUNK_SIZE,
+      ],
+    );
+
+    return rows;
   }
 
   private async processRow(

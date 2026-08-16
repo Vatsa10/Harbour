@@ -11,6 +11,10 @@ export enum ImportBatchStatus {
 
 export enum ImportRowStatus {
   PENDING = 'PENDING',
+  // Claimed by a worker and not yet resolved. Set atomically together with
+  // leasedAt so two concurrent executions of the same batch cannot both take
+  // the same row.
+  IN_PROGRESS = 'IN_PROGRESS',
   PROCESSED = 'PROCESSED',
   FAILED = 'FAILED',
 }

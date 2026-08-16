@@ -216,7 +216,8 @@ describe('ImportExecutionService — intra-import Create to Update promotion', (
       }),
     );
 
-    const savedBatch = importBatchRepository.save.mock.calls.at(-1)?.[0];
+    const saveCalls = importBatchRepository.save.mock.calls;
+    const savedBatch = saveCalls[saveCalls.length - 1][0];
 
     expect(savedBatch.createdRowCount).toBe(1);
     expect(savedBatch.updatedRowCount).toBe(1);
