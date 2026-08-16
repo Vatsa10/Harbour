@@ -115,9 +115,14 @@ describe('ProposalGateService delete confirmation', () => {
     });
 
     expect(decision.kind).toBe('CONFIRMATION_REQUIRED');
-    expect(decision.failure?.code).toBe('CONFIRMATION_REQUIRED');
-    expect(decision.failure?.retryable).toBe(true);
-    expect(decision.failure?.allowedActions).toEqual([
+
+    if (decision.kind !== 'CONFIRMATION_REQUIRED') {
+      throw new Error('expected a CONFIRMATION_REQUIRED decision');
+    }
+
+    expect(decision.failure.code).toBe('CONFIRMATION_REQUIRED');
+    expect(decision.failure.retryable).toBe(true);
+    expect(decision.failure.allowedActions).toEqual([
       'retry_with_confirm_token',
     ]);
   });

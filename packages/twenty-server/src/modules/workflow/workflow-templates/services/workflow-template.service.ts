@@ -22,7 +22,9 @@ import {
   type WorkflowTemplateDefinition,
   type WorkflowTemplateKey,
 } from 'src/modules/workflow/workflow-templates/types/workflow-template.type';
+import { buildInstalledWorkflowId } from 'src/modules/workflow/workflow-templates/utils/build-installed-workflow-id.util';
 import { normalizeWorkflowTemplateSteps } from 'src/modules/workflow/workflow-templates/utils/normalize-workflow-template-steps.util';
+import { validateWorkflowTemplateDefinition } from 'src/modules/workflow/workflow-templates/utils/validate-workflow-template-definition.util';
 import { WorkflowTriggerWorkspaceService } from 'src/modules/workflow/workflow-trigger/workspace-services/workflow-trigger.workspace-service';
 import { type WorkflowTrigger } from 'src/modules/workflow/workflow-trigger/types/workflow-trigger.type';
 
@@ -76,18 +78,25 @@ export class WorkflowTemplateService {
   }): Promise<InstalledWorkflow> {
     const { definition, workspaceId, activate } = params;
 
-    // Idempotent by name: re-running an app's post-install hook, or
-    // reinstalling the app, must not create a second copy of the workflow.
-    const existing = await this.findWorkflowByName(
-      workspaceId,
-      definition.name,
-    );
+    // The wire type is JSON, so this is the only place a malformed trigger or
+    // step can be refused before it becomes a stored, possibly-active
+    // workflow.
+    validateWorkflowTemplateDefinition(definition);
+
+    // Idempotent by installer-owned id, not by name: a name lookup would
+    // return a workflow the user hand-built in the builder and report a
+    // successful install that installed nothing. The id is derived from the
+    // workspace and the definition name, so re-running an app's post-install
+    // hook finds exactly the row this installer created.
+    const workflowId = buildInstalledWorkflowId(workspaceId, definition.name);
+
+    const existing = await this.findInstalledWorkflow(workspaceId, workflowId);
 
     if (isDefined(existing)) {
       return existing;
     }
 
-    const workflowId = await this.createWorkflow(workspaceId, definition.name);
+    await this.createWorkflow(workspaceId, definition.name, workflowId);
     const workflowVersionId = await this.createWorkflowVersion(
       workspaceId,
       workflowId,
@@ -114,6 +123,7 @@ export class WorkflowTemplateService {
   private async createWorkflow(
     workspaceId: string,
     name: string,
+    workflowId: string,
   ): Promise<string> {
     const authContext = buildSystemAuthContext(workspaceId);
 
@@ -135,7 +145,7 @@ export class WorkflowTemplateService {
         });
 
         const workflow = {
-          id: uuidv4(),
+          id: workflowId,
           name,
           statuses: [WorkflowStatus.DRAFT],
           position,
@@ -209,10 +219,11 @@ export class WorkflowTemplateService {
 
   // The whole of installDefinition's idempotency. A post-install hook re-runs
   // on every app upgrade, so "already installed" must be a cheap, total lookup
-  // rather than a duplicate workflow.
-  async findWorkflowByName(
+  // rather than a duplicate workflow — scoped to the installer's own
+  // deterministic id so a user's hand-built workflow is never mistaken for it.
+  async findInstalledWorkflow(
     workspaceId: string,
-    name: string,
+    workflowId: string,
   ): Promise<InstalledWorkflow | null> {
     const authContext = buildSystemAuthContext(workspaceId);
 
@@ -225,7 +236,9 @@ export class WorkflowTemplateService {
             { shouldBypassPermissionChecks: true },
           );
 
-        const workflow = await workflowRepository.findOne({ where: { name } });
+        const workflow = await workflowRepository.findOne({
+          where: { id: workflowId },
+        });
 
         if (!isDefined(workflow)) {
           return null;

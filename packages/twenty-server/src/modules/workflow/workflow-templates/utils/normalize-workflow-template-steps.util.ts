@@ -12,6 +12,9 @@ export const normalizeWorkflowTemplateSteps = (
   const withIds = steps.map((step) => ({
     ...step,
     id: step.id ?? uuidv4(),
+    // The default is only sound because installDefinition runs
+    // validateWorkflowTemplateDefinition first: without it this flag asserted
+    // a validity nothing had checked. An explicit `false` is still honoured.
     valid: step.valid ?? true,
   }));
 

@@ -6,6 +6,8 @@ import { RecordPositionService } from 'src/engine/core-modules/record-position/s
 import { WorkflowVersionCoreSyncService } from 'src/engine/core-modules/workflow/services/workflow-version-core-sync.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { WorkflowTemplateService } from 'src/modules/workflow/workflow-templates/services/workflow-template.service';
+import { buildInstalledWorkflowId } from 'src/modules/workflow/workflow-templates/utils/build-installed-workflow-id.util';
+import { InvalidWorkflowDefinitionError } from 'src/modules/workflow/workflow-templates/utils/validate-workflow-template-definition.util';
 import { type WorkflowStepInput } from 'src/modules/workflow/workflow-templates/types/workflow-template.type';
 import { WorkflowTriggerWorkspaceService } from 'src/modules/workflow/workflow-trigger/workspace-services/workflow-trigger.workspace-service';
 import {
@@ -94,6 +96,87 @@ describe('WorkflowTemplateService', () => {
     }).compile();
 
     service = module.get<WorkflowTemplateService>(WorkflowTemplateService);
+  });
+
+  it('should look the existing install up by the installer-owned id, not by name', async () => {
+    await service.installDefinition({
+      definition: {
+        name: 'New ticket triage',
+        trigger: manualTrigger,
+        steps: [appSuppliedStep],
+      },
+      workspaceId: 'workspace-1',
+      activate: false,
+    });
+
+    const expectedId = buildInstalledWorkflowId(
+      'workspace-1',
+      'New ticket triage',
+    );
+
+    // A user's hand-built "New ticket triage" must not answer this lookup.
+    expect(workflowRepository.findOne).toHaveBeenCalledWith({
+      where: { id: expectedId },
+    });
+    expect(workflowRepository.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ id: expectedId }),
+    );
+  });
+
+  it.each([
+    ['an unknown trigger type', { type: 'NOT_A_TRIGGER', name: 'x' }, [appSuppliedStep]],
+    ['no steps at all', manualTrigger, []],
+  ])('should refuse a definition with %s', async (_label, trigger, steps) => {
+    await expect(
+      service.installDefinition({
+        definition: {
+          name: 'Malformed',
+          trigger: trigger as never,
+          steps: steps as never,
+        },
+        workspaceId: 'workspace-1',
+        activate: true,
+      }),
+    ).rejects.toThrow(InvalidWorkflowDefinitionError);
+
+    expect(workflowRepository.insert).not.toHaveBeenCalled();
+    expect(
+      workflowTriggerService.activateWorkflowVersion,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('should refuse a step with an unknown action type before inserting anything', async () => {
+    await expect(
+      service.installDefinition({
+        definition: {
+          name: 'Malformed',
+          trigger: manualTrigger,
+          steps: [
+            { type: 'DROP_EVERYTHING', name: 'boom', settings: {} } as never,
+          ],
+        },
+        workspaceId: 'workspace-1',
+        activate: true,
+      }),
+    ).rejects.toThrow(/unknown type "DROP_EVERYTHING"/);
+
+    expect(workflowVersionRepository.insert).not.toHaveBeenCalled();
+  });
+
+  it('should refuse a step with no settings object', async () => {
+    await expect(
+      service.installDefinition({
+        definition: {
+          name: 'Malformed',
+          trigger: manualTrigger,
+          steps: [{ type: WorkflowActionType.AI_AGENT, name: 'x' } as never],
+        },
+        workspaceId: 'workspace-1',
+        activate: true,
+      }),
+    ).rejects.toThrow(/missing a settings object/);
+
+    expect(workflowRepository.insert).not.toHaveBeenCalled();
   });
 
   it('should list exactly the three named templates', () => {
