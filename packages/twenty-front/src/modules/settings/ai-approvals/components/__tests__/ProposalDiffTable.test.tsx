@@ -137,7 +137,9 @@ describe('ProposalDiffTable', () => {
     );
 
     expect(
-      screen.getByText(/This record changed since it was proposed/),
+      screen.getByText(
+        /could not be re-verified.*may have changed, been deleted, or become inaccessible/,
+      ),
     ).toBeInTheDocument();
   });
 

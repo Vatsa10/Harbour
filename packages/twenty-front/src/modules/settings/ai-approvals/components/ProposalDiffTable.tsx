@@ -185,7 +185,17 @@ export const ProposalDiffTable = ({
                   <div>{describeItem(item)}</div>
                   {item.status === 'CONFLICTED' && (
                     <StyledConflict>
-                      This record changed since it was proposed.
+                      {/* The server marks CONFLICTED whenever it cannot
+                          confirm the baseline still matches — that covers a
+                          genuine field edit, a deletion, and a record that
+                          became unreadable under the approver's permissions,
+                          and it does not tell us which. Claiming "it
+                          changed" when the true cause may be "you can no
+                          longer read it" is misleading, so the message
+                          names all three rather than picking one. */}
+                      This record could not be re-verified against its
+                      original values — it may have changed, been deleted, or
+                      become inaccessible to you since it was proposed.
                     </StyledConflict>
                   )}
                   {fieldNames.length === 0 &&
