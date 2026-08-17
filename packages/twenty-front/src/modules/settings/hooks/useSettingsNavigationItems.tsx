@@ -19,6 +19,7 @@ import {
   IconApps,
   IconAt,
   IconCalendarEvent,
+  IconChartBar,
   IconCheckbox,
   IconColorSwatch,
   type IconComponent,
@@ -179,6 +180,14 @@ const useSettingsNavigationItems = (): SettingsNavigationSection[] => {
           path: SettingsPath.AiApprovals,
           Icon: IconCheckbox,
           isHidden: !permissionMap[PermissionFlagType.AI],
+        },
+        {
+          label: t`AI evidence & cost`,
+          path: SettingsPath.AiTrustDashboard,
+          Icon: IconChartBar,
+          // AI_SETTINGS, matching the resolver guard: this page reports
+          // workspace-wide spend and every reviewer's approval record.
+          isHidden: !permissionMap[PermissionFlagType.AI_SETTINGS],
         },
         {
           label: t`Workflow templates`,

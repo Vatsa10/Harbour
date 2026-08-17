@@ -250,6 +250,12 @@ const SettingsAI = lazy(() =>
   })),
 );
 
+const SettingsAiTrustDashboard = lazy(() =>
+  import('~/pages/settings/ai/SettingsAiTrustDashboard').then((module) => ({
+    default: module.SettingsAiTrustDashboard,
+  })),
+);
+
 const SettingsAiApprovals = lazy(() =>
   import('~/pages/settings/ai/SettingsAiApprovals').then((module) => ({
     default: module.SettingsAiApprovals,
@@ -788,6 +794,23 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
         <Route
           path={SettingsPath.AiApprovals}
           element={<SettingsAiApprovals />}
+        />
+      </Route>
+      {/* AI_SETTINGS, matching SettingsPermissionGuard on
+          AiTrustDashboardResolver. This page reports workspace-wide AI spend
+          and every reviewer's approve/reject record, which is administrator
+          information — a narrower flag here would show the page to users
+          whose query fails, a wider one would leak it. */}
+      <Route
+        element={
+          <SettingsProtectedRouteWrapper
+            settingsPermission={PermissionFlagType.AI_SETTINGS}
+          />
+        }
+      >
+        <Route
+          path={SettingsPath.AiTrustDashboard}
+          element={<SettingsAiTrustDashboard />}
         />
       </Route>
       {/* Both template resolvers are guarded by SettingsPermissionGuard(WORKFLOWS)
