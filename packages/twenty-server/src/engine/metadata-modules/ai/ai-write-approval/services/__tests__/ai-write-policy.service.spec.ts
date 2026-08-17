@@ -165,6 +165,46 @@ describe('AiWritePolicyService', () => {
       );
     });
 
+    // Defect 3.6: `policy.overrides` is a plain object literal, so a key
+    // naming an inherited Object.prototype member resolves through the
+    // prototype chain instead of returning undefined, bypassing
+    // `?? policy.default` entirely.
+    it('should fall to the default for an object name matching Object.prototype, not the prototype member', () => {
+      const emptyPolicy: AiWritePolicy = { default: 'FORBID', overrides: {} };
+
+      expect(
+        service.resolveMode(emptyPolicy, recordTarget('constructor', [])),
+      ).toBe('FORBID');
+      expect(
+        service.resolveMode(emptyPolicy, recordTarget('toString', [])),
+      ).toBe('FORBID');
+      expect(
+        service.resolveMode(emptyPolicy, {
+          kind: 'tool',
+          toolId: 'hasOwnProperty',
+        }),
+      ).toBe('FORBID');
+    });
+
+    it('should still let an explicit override on such a key win', () => {
+      const overrides: Record<string, AiWritePolicy['overrides'][string]> =
+        {};
+
+      overrides['constructor'] = 'AUTO';
+
+      const policyWithConstructorOverride: AiWritePolicy = {
+        default: 'PROPOSE',
+        overrides,
+      };
+
+      expect(
+        service.resolveMode(
+          policyWithConstructorOverride,
+          recordTarget('constructor', []),
+        ),
+      ).toBe('AUTO');
+    });
+
     it('should resolve a static tool on its tool id', () => {
       expect(
         service.resolveMode(

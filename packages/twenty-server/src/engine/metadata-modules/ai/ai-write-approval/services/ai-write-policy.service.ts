@@ -78,20 +78,20 @@ export class AiWritePolicyService {
   // independently and the most restrictive result governs the whole call.
   resolveMode(policy: AiWritePolicy, target: AiWritePolicyTarget): AiWriteMode {
     if (target.kind === 'tool') {
-      return policy.overrides[target.toolId] ?? policy.default;
+      return getOverride(policy.overrides, target.toolId) ?? policy.default;
     }
 
     const { objectNameSingular, fieldNames } = target;
 
     if (fieldNames.length === 0) {
-      return policy.overrides[objectNameSingular] ?? policy.default;
+      return getOverride(policy.overrides, objectNameSingular) ?? policy.default;
     }
 
     return fieldNames
       .map(
         (fieldName) =>
-          policy.overrides[`${objectNameSingular}.${fieldName}`] ??
-          policy.overrides[objectNameSingular] ??
+          getOverride(policy.overrides, `${objectNameSingular}.${fieldName}`) ??
+          getOverride(policy.overrides, objectNameSingular) ??
           policy.default,
       )
       .reduce((mostRestrictive, mode) =>
@@ -101,3 +101,19 @@ export class AiWritePolicyService {
       );
   }
 }
+
+// `policy.overrides` is a plain object literal, so a key that names an
+// inherited Object.prototype member — `constructor`, `toString`,
+// `hasOwnProperty`, `__proto__` — resolves through the prototype chain
+// instead of returning undefined. An agent-controlled object name or field
+// name reaching here (e.g. an object literally named "constructor") would
+// then bypass the `?? policy.default` fallback and hand a live function
+// into MODE_SEVERITY lookups, which is neither AUTO, PROPOSE, nor FORBID.
+// hasOwnProperty scopes every lookup to keys the admin actually set.
+const getOverride = (
+  overrides: Record<string, AiWriteMode>,
+  key: string,
+): AiWriteMode | undefined =>
+  Object.prototype.hasOwnProperty.call(overrides, key)
+    ? overrides[key]
+    : undefined;

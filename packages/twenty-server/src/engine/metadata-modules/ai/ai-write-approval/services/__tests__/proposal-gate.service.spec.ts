@@ -247,6 +247,45 @@ describe('ProposalGateService', () => {
       expect(savedItem()).toMatchObject({ proposalId: 'proposal-existing' });
     });
 
+    // Defect 3.1: getOrCreatePendingProposal is a read-then-insert. Two tool
+    // calls in the same turn can both miss the first findOne() and both call
+    // save() — IDX_PROPOSAL_THREAD_PENDING_UNIQUE is what turns the loser's
+    // insert into a unique-violation instead of a second proposal, and the
+    // gate must catch that violation and join the winner's row rather than
+    // let it propagate as an unhandled error.
+    it('should join the concurrent winner instead of creating a second proposal on a unique violation', async () => {
+      // First call: nothing pending yet. Second call (the concurrent insert
+      // this test is simulating): still nothing pending from this findOne's
+      // point of view, but the insert below will lose the race anyway.
+      proposalRepository.findOne.mockResolvedValueOnce(null);
+      proposalRepository.save.mockRejectedValueOnce(
+        Object.assign(new Error('duplicate key'), { code: '23505' }),
+      );
+      proposalRepository.findOne.mockResolvedValueOnce({
+        id: 'proposal-winner',
+      });
+
+      const decision = await evaluate(crudDescriptor('update_one'), {
+        id: 'record-1',
+        jobTitle: 'New title',
+      });
+
+      expect(decision.kind).toBe('PROPOSED');
+      expect(savedItem()).toMatchObject({ proposalId: 'proposal-winner' });
+    });
+
+    it('should rethrow a save error that is not a unique violation', async () => {
+      proposalRepository.findOne.mockResolvedValue(null);
+      proposalRepository.save.mockRejectedValue(new Error('connection reset'));
+
+      await expect(
+        evaluate(crudDescriptor('update_one'), {
+          id: 'record-1',
+          jobTitle: 'New title',
+        }),
+      ).rejects.toThrow('connection reset');
+    });
+
     // A delete carries no proposed values, so without this the record could be
     // edited by a human and still silently deleted on approval.
     it('should capture a staleness baseline for a delete', async () => {
@@ -409,12 +448,25 @@ describe('ProposalGateService', () => {
   });
 
   describe('denylist', () => {
-    it('should gate a CRUD operation nobody has classified', async () => {
+    // Defect 3.4: an unclassified CRUD op used to gate as STATIC_TOOL with a
+    // null toolId, which applyStaticTool can never replay — the proposal item
+    // reached FAILED on the very first approval attempt and, because reject()
+    // only clears a PENDING proposal, stayed stuck forever with no way for a
+    // human to dismiss it. Refusing it outright, before any proposal or item
+    // exists, is fail-closed in a way that actually resolves.
+    it('should FORBID a CRUD operation nobody has classified, never proposing it', async () => {
       const decision = await evaluate(crudDescriptor('merge_many'), {
         ids: ['a', 'b'],
       });
 
-      expect(decision.kind).toBe('PROPOSED');
+      expect(decision.kind).toBe('FORBID');
+
+      if (decision.kind === 'FORBID') {
+        expect(decision.failure.code).toBe('UNSUPPORTED_OPERATION');
+      }
+
+      expect(proposalRepository.save).not.toHaveBeenCalled();
+      expect(proposalItemRepository.save).not.toHaveBeenCalled();
     });
 
     it('should gate an unknown static tool', async () => {

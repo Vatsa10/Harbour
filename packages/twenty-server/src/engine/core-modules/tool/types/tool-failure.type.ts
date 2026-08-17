@@ -11,6 +11,7 @@ export type ToolFailureCode =
   | 'CONFIRMATION_REQUIRED'
   | 'DUPLICATE_PROPOSAL'
   | 'RATE_LIMITED'
+  | 'UNSUPPORTED_OPERATION'
   | 'INTERNAL_ERROR';
 
 export type ToolFailure = {

@@ -28,6 +28,7 @@ import {
   ProposalStatus,
 } from 'src/engine/metadata-modules/ai/ai-write-approval/types/proposal-status.type';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { isPostgresUniqueViolation } from 'src/utils/is-postgres-unique-violation.util';
 
 export type GateDecision =
   | { kind: 'ALLOW' }
@@ -52,6 +53,13 @@ type GateInput = {
   // confirmation check scoped to deletes.
   confirm?: string | null;
   confirmationBasis?: string | null;
+  // Set only by the buildCrudGateInput fallback branch, for a CRUD operation
+  // string that matches none of the known ones. There is no toolId to record
+  // and no apply-time code path that knows how to replay it, so a proposal
+  // item built from this input could never be approved — it would sit FAILED
+  // forever, unrejectable, after the very first approval attempt. Caught in
+  // evaluate() before any proposal or item is written.
+  unclassified?: boolean;
 };
 
 // Denylist, not allowlist: every CRUD operation is gated except these three
@@ -169,6 +177,22 @@ export class ProposalGateService {
 
     if (!isDefined(gateInput)) {
       return { kind: 'ALLOW' };
+    }
+
+    // Fail-closed in a way that can actually resolve: a CRUD operation this
+    // gate cannot classify is refused outright rather than turned into a
+    // proposal item nothing can ever apply. See the `unclassified` field.
+    if (gateInput.unclassified === true) {
+      return {
+        kind: 'FORBID',
+        failure: buildToolFailure({
+          code: 'UNSUPPORTED_OPERATION',
+          message: `"${descriptor.name}" is not a recognized database operation and cannot be proposed for approval.`,
+          hint: 'This is a bug in the tool definition, not a policy setting — report it rather than retrying.',
+          retryable: false,
+          allowedActions: [],
+        }),
+      };
     }
 
     const policy = await this.aiWritePolicyService.getPolicy(
@@ -498,9 +522,9 @@ export class ProposalGateService {
       };
     }
 
-    // An operation nobody classified is still gated — object-level policy,
-    // whole args replayed. Approval will refuse to apply an action type it
-    // does not know rather than guess.
+    // An operation nobody classified. Marked unclassified rather than turned
+    // into an approvable proposal item — see the `unclassified` field and its
+    // evaluate() check.
     return {
       ...base,
       actionType: actionType ?? ProposalActionType.STATIC_TOOL,
@@ -508,6 +532,7 @@ export class ProposalGateService {
       recordId: typeof args.id === 'string' ? args.id : null,
       payload: args,
       baselineFieldNames: [],
+      unclassified: true,
     };
   }
 
@@ -589,6 +614,13 @@ export class ProposalGateService {
 
   // One agent turn produces one reviewable batch rather than one proposal per
   // tool call. Falls back to a fresh proposal when there is no thread to key on.
+  //
+  // find-then-save is not atomic: two tool calls in the same turn (concurrent
+  // dispatch, or a retry racing the original) can both miss the find() below.
+  // IDX_PROPOSAL_THREAD_PENDING_UNIQUE settles the race in the database — a
+  // unique violation here means the concurrent caller already created the
+  // PENDING proposal for this thread, so this call re-reads and joins it
+  // instead of creating a second one.
   private async getOrCreatePendingProposal(
     context: ToolProviderContext,
   ): Promise<ProposalEntity> {
@@ -610,12 +642,35 @@ export class ProposalGateService {
 
     expiresAt.setDate(expiresAt.getDate() + PROPOSAL_TTL_DAYS);
 
-    return this.proposalRepository.save({
-      workspaceId: context.workspaceId,
-      threadId: context.threadId ?? null,
-      createdByActor: context.actorContext ?? null,
-      status: ProposalStatus.PENDING,
-      expiresAt,
-    });
+    try {
+      return await this.proposalRepository.save({
+        workspaceId: context.workspaceId,
+        threadId: context.threadId ?? null,
+        createdByActor: context.actorContext ?? null,
+        status: ProposalStatus.PENDING,
+        expiresAt,
+      });
+    } catch (error) {
+      if (!isPostgresUniqueViolation(error) || !isDefined(context.threadId)) {
+        throw error;
+      }
+
+      const winner = await this.proposalRepository.findOne({
+        where: {
+          workspaceId: context.workspaceId,
+          threadId: context.threadId,
+          status: ProposalStatus.PENDING,
+        },
+      });
+
+      if (!isDefined(winner)) {
+        // The row that won the race is gone by the time we re-read (approved,
+        // rejected, or expired in the interim) — surface the original error
+        // rather than silently fabricate a proposal.
+        throw error;
+      }
+
+      return winner;
+    }
   }
 }
