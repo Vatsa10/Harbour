@@ -715,4 +715,76 @@ describe('ProposalGateService', () => {
       expect(proposalItemRepository.save).toHaveBeenCalled();
     });
   });
+
+  // Record scope is enforced against the *principal*, which comes from the
+  // auth context - not from rolePermissionConfig, which only carries roles.
+  // Reading the baseline as SYSTEM therefore reads past the agent's own row
+  // scope, and an empty result was indistinguishable from "unchanged": the
+  // item was written with baseline {}, hasBaselineConflict short-circuits on
+  // an empty baseline, and conflict detection silently switched off.
+  describe('baseline principal', () => {
+    const agentAuthContext = {
+      type: 'user',
+      workspace: { id: 'workspace-1' },
+      userWorkspaceId: 'user-workspace-agent',
+      user: { id: 'user-agent' },
+      workspaceMemberId: 'workspace-member-agent',
+      workspaceMember: { id: 'workspace-member-agent' },
+    } as unknown as ToolProviderContext['authContext'];
+
+    const scopedContext = {
+      ...context,
+      authContext: agentAuthContext,
+    } satisfies ToolProviderContext;
+
+    it('should read the baseline as the proposing principal, not as system', async () => {
+      await service.evaluate({
+        descriptor: crudDescriptor('update_one'),
+        args: { id: 'record-1', jobTitle: 'New title' },
+        context: scopedContext,
+      });
+
+      expect(findRecordsService.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          authContext: agentAuthContext,
+          rolePermissionConfig: scopedContext.rolePermissionConfig,
+        }),
+      );
+    });
+
+    it('should forbid rather than propose when the proposing principal cannot see the record', async () => {
+      findRecordsService.execute.mockResolvedValue({
+        success: true,
+        message: 'ok',
+        result: { records: [] },
+      });
+
+      const decision = await service.evaluate({
+        descriptor: crudDescriptor('update_one'),
+        args: { id: 'record-1', jobTitle: 'New title' },
+        context: scopedContext,
+      });
+
+      // A blind write laundered through the approval queue is still a blind
+      // write: the agent would be proposing a change to a row it may not read.
+      expect(decision.kind).toBe('FORBID');
+      expect(proposalItemRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should still propose a create, which targets no existing record', async () => {
+      findRecordsService.execute.mockResolvedValue({
+        success: true,
+        message: 'ok',
+        result: { records: [] },
+      });
+
+      const decision = await service.evaluate({
+        descriptor: crudDescriptor('create_one'),
+        args: { name: 'New person' },
+        context: scopedContext,
+      });
+
+      expect(decision.kind).toBe('PROPOSED');
+    });
+  });
 });

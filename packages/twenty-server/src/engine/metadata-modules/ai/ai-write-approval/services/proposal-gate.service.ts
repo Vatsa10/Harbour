@@ -298,12 +298,26 @@ export class ProposalGateService {
       };
     }
 
-    const baseline = await this.readBaseline({
+    const { baseline, visible } = await this.readBaseline({
       objectNameSingular: gateInput.objectNameSingular,
       recordId: gateInput.recordId,
       fieldNames: gateInput.baselineFieldNames,
       context,
     });
+
+    // An agent must not be able to launder a write to a row it cannot read
+    // through the approval queue. FORBID, not PROPOSE: a reviewer shown a
+    // change to a record the agent never saw has no way to judge it.
+    if (!visible && isDefined(gateInput.recordId)) {
+      return {
+        kind: 'FORBID',
+        output: {
+          success: false,
+          message: `You cannot propose a change to ${gateInput.objectNameSingular} ${gateInput.recordId} because you cannot read it.`,
+          error: 'PERMISSION_DENIED',
+        },
+      };
+    }
 
     // The facts standing for these fields right now. This is a read: it
     // attaches justification to an item the gate was already creating, and
@@ -557,22 +571,31 @@ export class ProposalGateService {
   }
 
   // Reads the fields the write would change, so approval can detect that a
-  // human edited them in the meantime. Uses the agent's own role config, so a
-  // field the agent cannot read never lands in the baseline.
+  // human edited them in the meantime. Uses the agent's own role config *and*
+  // its own auth context: the role config carries field permissions, but
+  // record scope is enforced against the principal, and a principal only
+  // comes from the auth context.
+  //
+  // Returns `visible` separately from `baseline`. Collapsing "I read nothing"
+  // into `{}` is what hid the bug: hasBaselineConflict short-circuits to false
+  // on an empty baseline, so every proposal against a row the agent could not
+  // read silently had conflict detection turned off.
   private async readBaseline(params: {
     objectNameSingular: string | null;
     recordId: string | null;
     fieldNames: string[];
     context: ToolProviderContext;
-  }): Promise<Record<string, unknown>> {
+  }): Promise<{ baseline: Record<string, unknown>; visible: boolean }> {
     const { objectNameSingular, recordId, fieldNames, context } = params;
 
+    // No record to read means nothing to be scoped out of - a create, an
+    // outbound send, a static tool. Visible by definition.
     if (
       !isDefined(objectNameSingular) ||
       !isDefined(recordId) ||
       fieldNames.length === 0
     ) {
-      return {};
+      return { baseline: {}, visible: true };
     }
 
     const output = await this.findRecordsService.execute({
@@ -581,16 +604,22 @@ export class ProposalGateService {
       limit: 1,
       select: fieldNames,
       shouldBuildEffectiveSelectFields: true,
-      authContext: buildSystemAuthContext(context.workspaceId),
+      // Falls back to a system context only for callers that carry no
+      // principal at all (crons, jobs). Those already run unscoped everywhere
+      // else, so this neither widens nor narrows them.
+      authContext:
+        context.authContext ?? buildSystemAuthContext(context.workspaceId),
       rolePermissionConfig: context.rolePermissionConfig,
     });
 
     if (!output.success) {
+      // Load-bearing now: a failed read means the gate cannot tell whether the
+      // agent may see this row, and the safe reading of that is "it may not".
       this.logger.warn(
         `Could not read baseline for ${objectNameSingular}:${recordId} — ${output.error}`,
       );
 
-      return {};
+      return { baseline: {}, visible: false };
     }
 
     const records = (output.result as { records?: Record<string, unknown>[] })
@@ -598,12 +627,15 @@ export class ProposalGateService {
     const record = records?.[0];
 
     if (!isDefined(record)) {
-      return {};
+      return { baseline: {}, visible: false };
     }
 
-    return Object.fromEntries(
-      fieldNames.map((fieldName) => [fieldName, record[fieldName]]),
-    );
+    return {
+      baseline: Object.fromEntries(
+        fieldNames.map((fieldName) => [fieldName, record[fieldName]]),
+      ),
+      visible: true,
+    };
   }
 
   // A retried tool call inside the same turn must not create a second
