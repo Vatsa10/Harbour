@@ -272,6 +272,19 @@ export type { RecordGqlOperationGqlRecordFields } from './RecordGqlOperationGqlR
 export type { RecordGqlOperationOrderBy } from './RecordGqlOperationOrderBy';
 export type { RecordGqlOperationSignature } from './RecordGqlOperationSignature';
 export type { RecordGqlOperationVariables } from './RecordGqlOperationVariables';
+export type { RecordScopeOperator } from './RecordScopeOperator';
+export { RECORD_SCOPE_OPERATORS } from './RecordScopeOperator';
+export type {
+  RecordScopeComparisonNode,
+  RecordScopeGroupNode,
+  RecordScopeLiteral,
+  RecordScopeNode,
+  RecordScopeNotNode,
+  RecordScopeValue,
+} from './RecordScopeNode';
+export type { RecordScopePrincipalAttribute } from './RecordScopePrincipalAttribute';
+export { RECORD_SCOPE_PRINCIPAL_ATTRIBUTES } from './RecordScopePrincipalAttribute';
+export type { RecordScopeRule } from './RecordScopeRule';
 export type { RelationAndMorphRelationFieldMetadataType } from './RelationAndMorphRelationFieldMetadataType';
 export type { RelationCreationPayload } from './RelationCreationPayload';
 export { RelationOnDeleteAction } from './RelationOnDeleteAction.type';
