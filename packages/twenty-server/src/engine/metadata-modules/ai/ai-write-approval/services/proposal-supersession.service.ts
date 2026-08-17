@@ -379,6 +379,8 @@ export class ProposalSupersessionService {
   ): boolean {
     const successorFields = new Set(Object.keys(successorPayload));
 
-    return Object.keys(olderPayload).some((field) => field !== undefined);
+    return Object.keys(olderPayload).some((field) =>
+      successorFields.has(field),
+    );
   }
 }
