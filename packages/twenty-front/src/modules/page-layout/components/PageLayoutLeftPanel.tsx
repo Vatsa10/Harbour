@@ -4,6 +4,7 @@ import { PageLayoutContentProvider } from '@/page-layout/contexts/PageLayoutCont
 import { useCurrentPageLayout } from '@/page-layout/hooks/useCurrentPageLayout';
 import { usePageLayoutTabWithVisibleWidgetsOrThrow } from '@/page-layout/hooks/usePageLayoutTabWithVisibleWidgetsOrThrow';
 import { getTabLayoutMode } from '@/page-layout/utils/getTabLayoutMode';
+import { RecordBriefPanel } from '@/record-brief/components/RecordBriefPanel';
 import { useLayoutRenderingContext } from '@/ui/layout/contexts/LayoutRenderingContext';
 import { useTargetRecord } from '@/ui/layout/contexts/useTargetRecord';
 import { ScrollWrapper } from '@/ui/utilities/scroll/components/ScrollWrapper';
@@ -19,7 +20,9 @@ const StyledContainer = styled.div`
   box-sizing: border-box;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto 1fr;
+  /* Summary card, then the brief (which collapses to nothing when the record
+     has no evidence behind it), then the scrolling widget column. */
+  grid-template-rows: auto auto 1fr;
   height: 100%;
 `;
 
@@ -50,6 +53,11 @@ export const PageLayoutLeftPanel = ({
         objectNameSingular={targetRecordIdentifier.targetObjectNameSingular}
         objectRecordId={targetRecordIdentifier.id}
         isInSidePanel={isInSidePanel}
+      />
+
+      <RecordBriefPanel
+        objectNameSingular={targetRecordIdentifier.targetObjectNameSingular}
+        recordId={targetRecordIdentifier.id}
       />
 
       {/* The pinned left panel is always a column of cards, even with a single
