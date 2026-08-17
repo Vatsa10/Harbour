@@ -311,11 +311,13 @@ export class ProposalGateService {
     if (!visible && isDefined(gateInput.recordId)) {
       return {
         kind: 'FORBID',
-        output: {
-          success: false,
-          message: `You cannot propose a change to ${gateInput.objectNameSingular} ${gateInput.recordId} because you cannot read it.`,
-          error: 'PERMISSION_DENIED',
-        },
+        failure: buildToolFailure({
+          code: 'FORBIDDEN_BY_POLICY',
+          message: `You cannot propose a change to ${gateInput.objectNameSingular} ${gateInput.recordId} because you cannot read that record.`,
+          hint: 'Your role does not grant you access to this record. Ask an administrator to widen your record scope rather than retrying.',
+          retryable: false,
+          allowedActions: [],
+        }),
       };
     }
 

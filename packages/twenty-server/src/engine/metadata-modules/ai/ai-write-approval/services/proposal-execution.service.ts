@@ -540,6 +540,7 @@ export class ProposalExecutionService {
         filter: { id: { eq: recordId } },
         limit: 1,
         select: ['id'],
+        shouldBuildEffectiveSelectFields: true,
         authContext,
         rolePermissionConfig,
       });
