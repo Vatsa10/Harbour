@@ -14,6 +14,7 @@ import { EvidenceEntity } from 'src/engine/metadata-modules/ai/ai-research/entit
 import { FactEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/fact.entity';
 import { RecordBriefEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/record-brief.entity';
 import { AgentTaskRunJob } from 'src/engine/metadata-modules/ai/ai-research/jobs/agent-task-run.job';
+import { RecordSweepService } from 'src/engine/metadata-modules/ai/ai-research/services/record-sweep.service';
 import { AgentTaskResolver } from 'src/engine/metadata-modules/ai/ai-research/resolvers/agent-task.resolver';
 import { RecordBriefResolver } from 'src/engine/metadata-modules/ai/ai-research/resolvers/record-brief.resolver';
 import { AgentTaskService } from 'src/engine/metadata-modules/ai/ai-research/services/agent-task.service';
@@ -22,6 +23,7 @@ import { FactDerivationService } from 'src/engine/metadata-modules/ai/ai-researc
 import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services/fact.service';
 import { RecordBriefService } from 'src/engine/metadata-modules/ai/ai-research/services/record-brief.service';
 import { ResearchAgentService } from 'src/engine/metadata-modules/ai/ai-research/services/research-agent.service';
+import { RecordCrudModule } from 'src/engine/core-modules/record-crud/record-crud.module';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { RoleTargetEntity } from 'src/engine/metadata-modules/role-target/role-target.entity';
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
@@ -40,6 +42,8 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
       RecordBriefEntity,
     ]),
     AiAgentRoleModule,
+    // RecordSweepService reads open opportunities through FindRecordsService.
+    RecordCrudModule,
     // AgentTaskResolver injects PermissionsService to gate createAgentTask;
     // without this import Nest cannot resolve it and the app fails to boot.
     PermissionsModule,
@@ -51,6 +55,7 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
   ],
   providers: [
     AgentTaskService,
+    RecordSweepService,
     ResearchAgentService,
     CreateAgentTaskTool,
     RecordEvidenceTool,
@@ -75,6 +80,9 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
   // exactly the evidence-contract violation this module exists to prevent.
   exports: [
     AgentTaskService,
+    // Selection only. The monitoring sweep job in ai-write-approval drives it,
+    // because that is where the write policy lives.
+    RecordSweepService,
     ResearchAgentService,
     CreateAgentTaskTool,
     RecordEvidenceTool,

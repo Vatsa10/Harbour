@@ -37,6 +37,14 @@ export type RecordBriefFact = {
   evidenceCount: number;
 };
 
+// A record the monitoring sweep may want re-researched, with the timestamp
+// that made it a candidate. Flat, like the projections above.
+export type StaleRecordTarget = {
+  objectNameSingular: string;
+  recordId: string;
+  lastObservedAt: Date;
+};
+
 // One flat count row. Same boundary rule as the projections above: the
 // dashboard gets keys and numbers, never a Fact.
 export type FactCountByKey = {
@@ -193,6 +201,55 @@ export class FactService {
     // A cited id with no row at all counts as non-current: the citation is
     // dangling, which is strictly worse than superseded, not better.
     return ids.filter((id) => !currentIds.has(id));
+  }
+
+  // Records whose freshest CURRENT fact was last observed before `staleBefore`.
+  // The monitoring sweep asks this to decide what to re-research.
+  //
+  // MAX(lastObservedAt) per record and a HAVING clause, not a row scan: one
+  // fresh fact on a record means somebody looked at that record recently, and
+  // a record with 200 facts must not out-vote a record with two. Aggregated in
+  // SQL for the same reason the dashboard counts are — a year of research is
+  // far more rows than a sweep tick should pull into memory.
+  //
+  // Returns the flat projection, never FactEntity: same boundary rule as every
+  // other read on this service.
+  async findStaleRecordTargets(params: {
+    workspaceId: string;
+    staleBefore: Date;
+    limit: number;
+  }): Promise<StaleRecordTarget[]> {
+    const rows = await this.factRepository
+      .createQueryBuilder('fact')
+      .select('fact.objectNameSingular', 'objectNameSingular')
+      .addSelect('fact.recordId', 'recordId')
+      .addSelect('MAX(fact."lastObservedAt")', 'lastObservedAt')
+      // createQueryBuilder is an unscoped escape hatch — the workspace
+      // predicate is ours to add.
+      .where('fact.workspaceId = :workspaceId', {
+        workspaceId: params.workspaceId,
+      })
+      .andWhere('fact.status = :status', { status: FactStatus.CURRENT })
+      .groupBy('fact.objectNameSingular')
+      .addGroupBy('fact.recordId')
+      .having('MAX(fact."lastObservedAt") < :staleBefore', {
+        staleBefore: params.staleBefore,
+      })
+      // Stalest first: a tick that can only afford N tasks should spend them
+      // on the records that have been wrong the longest.
+      .orderBy('MAX(fact."lastObservedAt")', 'ASC')
+      .limit(params.limit)
+      .getRawMany<{
+        objectNameSingular: string;
+        recordId: string;
+        lastObservedAt: Date;
+      }>();
+
+    return rows.map((row) => ({
+      objectNameSingular: row.objectNameSingular,
+      recordId: row.recordId,
+      lastObservedAt: new Date(row.lastObservedAt),
+    }));
   }
 
   // ---------------------------------------------------------------------

@@ -56,6 +56,7 @@ import { MessagingImportManagerModule } from 'src/modules/messaging/message-impo
 import { WorkflowRunQueueModule } from 'src/modules/workflow/workflow-runner/workflow-run-queue/workflow-run-queue.module';
 import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/automated-trigger/automated-trigger.module';
 import { WorkflowCoreConsistencyModule } from 'src/modules/workflow/workflow-core-consistency/workflow-core-consistency.module';
+import { AiWriteApprovalModule } from 'src/engine/metadata-modules/ai/ai-write-approval/ai-write-approval.module';
 import { AiResearchModule } from 'src/engine/metadata-modules/ai/ai-research/ai-research.module';
 
 @Module({
@@ -103,6 +104,7 @@ import { AiResearchModule } from 'src/engine/metadata-modules/ai/ai-research/ai-
     SecretEncryptionRotationModule,
     UserSessionModule,
     AiResearchModule,
+    AiWriteApprovalModule,
   ],
   providers: [
     DataSeedWorkspaceCommand,

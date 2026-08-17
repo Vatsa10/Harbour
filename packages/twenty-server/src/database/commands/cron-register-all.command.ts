@@ -9,6 +9,7 @@ import { ApplicationVersionCheckCronCommand } from 'src/engine/core-modules/appl
 import { BillingReminderCronCommand } from 'src/engine/core-modules/billing/reminders/crons/commands/billing-reminder.cron.command';
 import { EnterpriseKeyValidationCronCommand } from 'src/engine/core-modules/enterprise/cron/command/enterprise-key-validation.cron.command';
 import { EventLogCleanupCronCommand } from 'src/engine/core-modules/event-logs/cleanup/commands/event-log-cleanup.cron.command';
+import { AiMonitoringSweepCronCommand } from 'src/engine/metadata-modules/ai/ai-write-approval/crons/commands/ai-monitoring-sweep.cron.command';
 import { AgentTaskDispatchCronCommand } from 'src/engine/metadata-modules/ai/ai-research/crons/commands/agent-task-dispatch.cron.command';
 import { PendingFileCleanupCronCommand } from 'src/engine/core-modules/file/file-upload/crons/commands/pending-file-cleanup.cron.command';
 import { RotateSigningKeysCronCommand } from 'src/engine/core-modules/jwt/crons/commands/rotate-signing-keys.cron.command';
@@ -77,6 +78,7 @@ export class CronRegisterAllCommand extends CommandRunner {
     private readonly billingReminderCronCommand: BillingReminderCronCommand,
     private readonly userSessionCleanupCronCommand: UserSessionCleanupCronCommand,
     private readonly agentTaskDispatchCronCommand: AgentTaskDispatchCronCommand,
+    private readonly aiMonitoringSweepCronCommand: AiMonitoringSweepCronCommand,
     private readonly twentyConfigService: TwentyConfigService,
   ) {
     super();
@@ -218,6 +220,10 @@ export class CronRegisterAllCommand extends CommandRunner {
       {
         name: 'AgentTaskDispatch',
         command: this.agentTaskDispatchCronCommand,
+      },
+      {
+        name: 'AiMonitoringSweep',
+        command: this.aiMonitoringSweepCronCommand,
       },
     ];
 

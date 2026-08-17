@@ -277,6 +277,40 @@ export class AgentTaskService {
     });
   }
 
+  // Which of these records already had a task scheduled since `since`, in any
+  // status. The monitoring sweep asks before enqueueing so a record that was
+  // researched yesterday is not researched again today.
+  //
+  // Any status on purpose, including FAILED and CANCELLED: a record whose
+  // research just failed three times does not want a fourth attempt scheduled
+  // an hour later by a different code path. The idempotency key on createTask
+  // dedups concurrent *open* tasks; this dedups across the cooldown window,
+  // which is a different question.
+  async findRecordIdsScheduledSince(params: {
+    workspaceId: string;
+    recordIds: string[];
+    since: Date;
+  }): Promise<Set<string>> {
+    if (params.recordIds.length === 0) {
+      return new Set();
+    }
+
+    const rows = await this.agentTaskRepository
+      .createQueryBuilder('task')
+      .select('task.recordId', 'recordId')
+      .where('task."workspaceId" = :workspaceId', {
+        workspaceId: params.workspaceId,
+      })
+      .andWhere('task."recordId" IN (:...recordIds)', {
+        recordIds: params.recordIds,
+      })
+      .andWhere('task."createdAt" >= :since', { since: params.since })
+      .groupBy('task.recordId')
+      .getRawMany<{ recordId: string }>();
+
+    return new Set(rows.map((row) => row.recordId));
+  }
+
   async cancelTask(params: {
     taskId: string;
     workspaceId: string;

@@ -11,6 +11,10 @@ import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permi
 import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { AiResearchModule } from 'src/engine/metadata-modules/ai/ai-research/ai-research.module';
+import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { AiMonitoringSweepCronCommand } from 'src/engine/metadata-modules/ai/ai-write-approval/crons/commands/ai-monitoring-sweep.cron.command';
+import { AiMonitoringSweepCronJob } from 'src/engine/metadata-modules/ai/ai-write-approval/crons/jobs/ai-monitoring-sweep.cron.job';
+import { AiMonitoringSweepJob } from 'src/engine/metadata-modules/ai/ai-write-approval/jobs/ai-monitoring-sweep.job';
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
 import { AiWritePolicyResolver } from 'src/engine/metadata-modules/ai/ai-write-approval/resolvers/ai-write-policy.resolver';
@@ -32,6 +36,8 @@ import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.
       ProposalItemEntity,
       UserEntity,
       UserWorkspaceEntity,
+      // The monitoring sweep cron fans out over active workspaces.
+      WorkspaceEntity,
     ]),
     KeyValuePairModule,
     NotificationModule,
@@ -51,6 +57,9 @@ import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.
     ProposalResolver,
     AiWritePolicyResolver,
     ProposalItemFieldsResolver,
+    AiMonitoringSweepCronJob,
+    AiMonitoringSweepCronCommand,
+    AiMonitoringSweepJob,
   ],
   exports: [
     AiWritePolicyService,
@@ -60,6 +69,9 @@ import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.
     // Exported for the monitoring sweep, which owns the per-workspace tick
     // this service's pull-based half runs on.
     ProposalSupersessionService,
+    // cron-register-all injects this to register the monitoring sweep at
+    // bootstrap — the only reason it needs to leave this module.
+    AiMonitoringSweepCronCommand,
   ],
 })
 export class AiWriteApprovalModule {}

@@ -49,11 +49,21 @@ describe('ProposalSupersessionService', () => {
   const itemUpdates: Record<string, unknown>[] = [];
   const proposalUpdates: Record<string, unknown>[] = [];
 
+  // Explicitly typed: the object is self-referential (every chained method
+  // returns it), which TypeScript cannot infer on its own.
+  type UpdateBuilderStub = {
+    update: jest.Mock;
+    set: jest.Mock;
+    where: jest.Mock;
+    andWhere: jest.Mock;
+    execute: jest.Mock;
+  };
+
   const buildUpdateBuilder = (
     sink: Record<string, unknown>[],
     affected: number,
-  ) => {
-    const builder = {
+  ): UpdateBuilderStub => {
+    const builder: UpdateBuilderStub = {
       update: jest.fn(() => builder),
       set: jest.fn((values: Record<string, unknown>) => {
         sink.push(values);
