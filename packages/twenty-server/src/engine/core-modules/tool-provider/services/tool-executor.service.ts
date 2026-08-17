@@ -96,9 +96,10 @@ export class ToolExecutorService {
       return toFailedToolOutput(decision.failure);
     }
 
-    // Tool results pass through untouched otherwise: the record-crud services
-    // and the static providers still report failure as a bare English string,
-    // which is the exact class of failure the envelope exists to fix.
+    // The record-crud services and the static providers still report failure
+    // as a bare English string. That is the exact class of failure the
+    // envelope exists to fix, so classify it on the way out rather than
+    // leaving the agent to parse prose.
     return ensureToolFailureEnvelope(
       await this.dispatchToExecutor(descriptor, safeArgs, context),
     );
