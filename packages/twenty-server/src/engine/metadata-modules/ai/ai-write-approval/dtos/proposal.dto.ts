@@ -120,6 +120,12 @@ export class ApprovalResultDTO {
   @Field(() => [ID])
   conflictedItemIds: string[];
 
+  // Separate from conflictedItemIds because the reviewer needs a different
+  // instruction: a conflicted item can be re-read and re-approved, an
+  // out-of-scope one has to be handed to someone whose scope covers the row.
+  @Field(() => [ID])
+  outOfScopeItemIds: string[];
+
   @Field(() => [ID])
   failedItemIds: string[];
 

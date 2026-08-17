@@ -20,6 +20,11 @@ export enum ProposalItemStatus {
   APPLIED = 'APPLIED',
   REJECTED = 'REJECTED',
   CONFLICTED = 'CONFLICTED',
+  // The target row lies outside the approving user's record scope. Distinct
+  // from CONFLICTED on purpose: CONFLICTED tells the reviewer the record
+  // changed and to re-read it, which is advice they cannot follow for a record
+  // they are not allowed to see.
+  OUT_OF_SCOPE = 'OUT_OF_SCOPE',
   FAILED = 'FAILED',
   SUPERSEDED = 'SUPERSEDED',
 }

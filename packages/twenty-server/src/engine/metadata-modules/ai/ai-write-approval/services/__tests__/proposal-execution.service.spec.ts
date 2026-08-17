@@ -724,6 +724,28 @@ describe('ProposalExecutionService', () => {
       expect(itemStatusWrite('item-1')?.status).toBe('APPLIED');
     });
 
+    // The automation-blocklist exemption and a record-scope exemption look
+    // identical from four lines away, and the next person here will be tempted
+    // to make them one. isHumanApproved waives the blocklist and nothing else:
+    // the write still runs as the approver, under the approver's roles, so
+    // object, field and record-scope checks all still apply.
+    it('should still pass the approver principal on the automation-blocked branch', async () => {
+      proposalItemRepository.find.mockResolvedValue([participantItem()]);
+
+      await approve(['item-1']);
+
+      expect(updateRecordService.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isHumanApproved: true,
+          rolePermissionConfig: { unionOf: ['role-1'] },
+          authContext: expect.objectContaining({
+            type: 'user',
+            workspaceMemberId: 'workspace-member-1',
+          }),
+        }),
+      );
+    });
+
     it('should fail the item with a reason when the row no longer exists', async () => {
       proposalItemRepository.find.mockResolvedValue([participantItem()]);
       updateRecordService.execute.mockResolvedValue({
@@ -778,4 +800,99 @@ describe('ProposalExecutionService', () => {
     ]);
   });
 
+  // The approver-scope boundary. Approval executes as the approving user, so
+  // a row outside that user's record scope must be refused at the same
+  // strength as an object or field denial � and must be told apart from a row
+  // that is simply gone, because the two need different things from the human.
+  describe('approver record scope', () => {
+    const outOfScope = () =>
+      findRecordsService.execute
+        // As the approver: the scoped read returns nothing.
+        .mockResolvedValueOnce({ success: true, result: { records: [] } })
+        // With bypass: the row is there, so the approver simply cannot see it.
+        .mockResolvedValueOnce({
+          success: true,
+          result: { records: [{ id: 'record-1' }] },
+        });
+
+    it('should refuse to apply an item whose target row is outside the approver scope', async () => {
+      proposalItemRepository.find.mockResolvedValue([buildItem()]);
+      outOfScope();
+
+      const result = await approve(['item-1']);
+
+      expect(result.outOfScopeItemIds).toEqual(['item-1']);
+      expect(result.conflictedItemIds).toEqual([]);
+      expect(result.appliedItemIds).toEqual([]);
+      expect(result.aborted).toBe(true);
+      // The point of the whole feature: no write reached the ORM at all.
+      expect(updateRecordService.execute).not.toHaveBeenCalled();
+      expect(itemStatusWrite('item-1')).toMatchObject({
+        status: 'OUT_OF_SCOPE',
+      });
+    });
+
+    it('should return the proposal to PENDING so the reviewer can deselect the blocked item', async () => {
+      proposalItemRepository.find.mockResolvedValue([buildItem()]);
+      outOfScope();
+
+      await approve(['item-1']);
+
+      expect(proposalStatusWrites()).toContain('PENDING');
+    });
+
+    it('should mark an item CONFLICTED, not OUT_OF_SCOPE, when the record is genuinely gone', async () => {
+      proposalItemRepository.find.mockResolvedValue([buildItem()]);
+      // Three reads: the scoped probe, the bypass probe, and then the baseline
+      // conflict read. The row is gone, so all three come back empty.
+      findRecordsService.execute.mockResolvedValue({
+        success: true,
+        result: { records: [] },
+      });
+
+      const result = await approve(['item-1']);
+
+      expect(result.outOfScopeItemIds).toEqual([]);
+      expect(result.conflictedItemIds).toEqual(['item-1']);
+    });
+
+    it('should not scope-check an outbound send, which targets no record', async () => {
+      sendEmailTool.execute.mockResolvedValue({ success: true, message: 'sent' });
+      proposalItemRepository.find.mockResolvedValue([
+        buildItem({
+          actionType: 'SEND_EMAIL',
+          objectNameSingular: null,
+          recordId: null,
+          baseline: {},
+          payload: { to: 'a@b.dev', subject: 's', body: 'b' },
+        }),
+      ]);
+
+      const result = await approve(['item-1']);
+
+      expect(result.outOfScopeItemIds).toEqual([]);
+      expect(sendEmailTool.execute).toHaveBeenCalled();
+    });
+
+    it('should apply normally when the target row is inside the approver scope', async () => {
+      proposalItemRepository.find.mockResolvedValue([buildItem()]);
+
+      const result = await approve(['item-1']);
+
+      expect(result.outOfScopeItemIds).toEqual([]);
+      expect(result.appliedItemIds).toEqual(['item-1']);
+    });
+
+    // The scope probe reads with bypass on purpose. It must convert that read
+    // into a single boolean and never let a bypassed value reach an apply.
+    it('should never approve with a bypass config, even after a bypass probe', async () => {
+      proposalItemRepository.find.mockResolvedValue([buildItem()]);
+
+      await approve(['item-1']);
+
+      for (const call of updateRecordService.execute.mock.calls) {
+        expect(call[0].rolePermissionConfig).toEqual({ unionOf: ['role-1'] });
+      }
+    });
+  });
 });

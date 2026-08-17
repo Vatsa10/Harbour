@@ -39,6 +39,7 @@ import {
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 // Why an item failed, carried back to the caller. Without it an approver sees
@@ -53,6 +54,9 @@ export type ApprovalResult = {
   proposalId: string;
   appliedItemIds: string[];
   conflictedItemIds: string[];
+  // Items the approving user is not permitted to see, kept apart from
+  // conflictedItemIds so the reviewer is told the truth about why.
+  outOfScopeItemIds: string[];
   failedItemIds: string[];
   failures: ApprovalFailure[];
   aborted: boolean;
@@ -202,10 +206,53 @@ export class ProposalExecutionService {
       approverUserWorkspaceId,
     );
 
+    // Scope first, conflict second. hasBaselineConflict reports an empty read
+    // as a conflict, and under record scope an empty read now has two causes:
+    // the row is gone, or the approver may not see it. Running the scope
+    // pre-flight first is what keeps the second cause from being mislabelled
+    // as "the record changed" - advice a reviewer cannot act on for a record
+    // they are not allowed to open.
+    const conflictedItemIds: string[] = [];
+    const outOfScopeItemIds: string[] = [];
+
+    for (const item of selectedItems) {
+      const { exists, visible } = await this.isItemWithinApproverScope(
+        item,
+        approver,
+      );
+
+      if (exists && !visible) {
+        outOfScopeItemIds.push(item.id);
+      }
+    }
+
+    if (outOfScopeItemIds.length > 0) {
+      await this.proposalItemRepository.update(
+        { id: In(outOfScopeItemIds) },
+        { status: ProposalItemStatus.OUT_OF_SCOPE },
+      );
+
+      await this.proposalRepository.update(
+        { id: proposalId, workspaceId, status: ProposalStatus.APPLYING },
+        { status: ProposalStatus.PENDING },
+      );
+
+      // The whole batch aborts rather than applying the visible half. Silently
+      // applying part of an agent's plan would hand a narrow-scoped approver a
+      // way to split it with nobody seeing which half went through.
+      return {
+        proposalId,
+        appliedItemIds: [],
+        conflictedItemIds: [],
+        outOfScopeItemIds,
+        failedItemIds: [],
+        failures: [],
+        aborted: true,
+      };
+    }
+
     // Validate every selected item before writing anything. One stale baseline
     // aborts the batch — a partially applied change set is worse than none.
-    const conflictedItemIds: string[] = [];
-
     for (const item of selectedItems) {
       const hasConflict = await this.hasBaselineConflict(item, approver);
 
@@ -232,6 +279,7 @@ export class ProposalExecutionService {
         proposalId,
         appliedItemIds: [],
         conflictedItemIds,
+        outOfScopeItemIds: [],
         failedItemIds: [],
         failures: [],
         aborted: true,
@@ -321,6 +369,7 @@ export class ProposalExecutionService {
       proposalId,
       appliedItemIds,
       conflictedItemIds: [],
+      outOfScopeItemIds: [],
       failedItemIds,
       failures,
       aborted: false,
@@ -463,6 +512,58 @@ export class ProposalExecutionService {
       userWorkspaceId: approverUserWorkspaceId,
       roleId,
     };
+  }
+
+  // Distinguishes "the row is gone" from "the row is invisible to you". The
+  // second read uses bypass, but converts it into a single boolean - no field
+  // value ever crosses back - so it answers the scope question without itself
+  // becoming a scope hole.
+  private async isItemWithinApproverScope(
+    item: ProposalItemEntity,
+    approver: ApproverContext,
+  ): Promise<{ exists: boolean; visible: boolean }> {
+    const { objectNameSingular, recordId } = item;
+
+    // Outbound sends and static-tool items target no record, and a create has
+    // no pre-existing row to be scoped out of. Those are governed by tool
+    // permission flags at applyOutboundSend / applyStaticTool, not by scope.
+    if (!isDefined(objectNameSingular) || !isDefined(recordId)) {
+      return { exists: true, visible: true };
+    }
+
+    const canReadRecord = async (
+      authContext: WorkspaceAuthContext,
+      rolePermissionConfig: RolePermissionConfig,
+    ) => {
+      const output = await this.findRecordsService.execute({
+        objectName: objectNameSingular,
+        filter: { id: { eq: recordId } },
+        limit: 1,
+        select: ['id'],
+        authContext,
+        rolePermissionConfig,
+      });
+
+      return isDefined(
+        (output.result as { records?: { id: string }[] })?.records?.[0],
+      );
+    };
+
+    const visible = await canReadRecord(
+      approver.authContext,
+      approver.rolePermissionConfig,
+    );
+
+    if (visible) {
+      return { exists: true, visible: true };
+    }
+
+    const exists = await canReadRecord(
+      buildSystemAuthContext(approver.workspaceId),
+      { shouldBypassPermissionChecks: true },
+    );
+
+    return { exists, visible: false };
   }
 
   // Compares the values captured when the proposal was made against the record
@@ -748,6 +849,7 @@ export class ProposalExecutionService {
       proposalId,
       appliedItemIds: [],
       conflictedItemIds: [],
+      outOfScopeItemIds: [],
       failedItemIds: [],
       failures: [],
       aborted,
