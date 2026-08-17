@@ -35,6 +35,11 @@ import { getRoleIdsFromRolePermissionConfig } from 'src/engine/twenty-orm/utils/
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { ToolCategory } from 'twenty-shared/ai';
 
+// Creates and updates both answer to canUpdateObjectRecords, matching how the
+// catalog decides whether to advertise them.
+const READ_CRUD_OPERATIONS = ['find_many', 'find_one', 'group_by'];
+const DELETE_CRUD_OPERATIONS = ['delete_one', 'delete_many'];
+
 @Injectable()
 export class DatabaseToolProvider implements ToolProvider {
   readonly category = ToolCategory.DATABASE_CRUD;
@@ -61,6 +66,78 @@ export class DatabaseToolProvider implements ToolProvider {
     throw new Error(
       `DatabaseToolProvider does not emit static-kind descriptors (tool: ${toolName})`,
     );
+  }
+
+  // I5: discovery and enforcement used to compute permissions two different
+  // ways. The catalog is derived from what the role was actually granted; the
+  // record-crud enforcement layer still reads the composed cache, which grants
+  // every role full CRUD on any `isSystem` object. That left the invariant --
+  // a zero-permission role cannot write -- held only by the fact that
+  // discovery never emits the tool. This re-checks the *catalog's* computation
+  // at dispatch, so the AI write path is enforced by the same rule that
+  // advertises it, whatever descriptor it was handed.
+  async isCrudOperationPermitted({
+    objectNameSingular,
+    operation,
+    context,
+  }: {
+    objectNameSingular: string;
+    operation: string;
+    context: ToolProviderContext;
+  }): Promise<boolean> {
+    if (READ_CRUD_OPERATIONS.includes(operation)) {
+      return true;
+    }
+
+    const roleIds = getRoleIdsFromRolePermissionConfig(
+      context.rolePermissionConfig,
+    );
+
+    // No resolvable role means a bypass/system context, which the record-crud
+    // layer already treats as unrestricted.
+    if (roleIds.length === 0) {
+      return true;
+    }
+
+    const { flatObjectPermissionMaps, flatRoleMaps } =
+      await this.workspaceCacheService.getOrRecompute(context.workspaceId, [
+        'flatObjectPermissionMaps',
+        'flatRoleMaps',
+      ]);
+
+    const { flatObjectMetadataMaps } =
+      await this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
+        {
+          workspaceId: context.workspaceId,
+          flatMapsKeys: ['flatObjectMetadataMaps'],
+        },
+      );
+
+    const flatObject = getDatabaseCrudToolFlatObjects(
+      flatObjectMetadataMaps.byUniversalIdentifier,
+    ).find((candidate) => candidate.nameSingular === objectNameSingular);
+
+    // An object the catalog does not cover is not an object this path may
+    // write. Refusing is the safe direction.
+    if (!isDefined(flatObject)) {
+      return false;
+    }
+
+    const grant = getCatalogObjectGrants({
+      roleIds,
+      combineWith:
+        'intersectionOf' in context.rolePermissionConfig
+          ? 'intersection'
+          : 'union',
+      flatRoleMaps,
+      flatObjectPermissionMaps,
+    })(flatObject.id);
+
+    if (DELETE_CRUD_OPERATIONS.includes(operation)) {
+      return grant.canSoftDeleteObjectRecords;
+    }
+
+    return grant.canUpdateObjectRecords;
   }
 
   async generateDescriptors(

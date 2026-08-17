@@ -29,6 +29,7 @@ import { UpdateRecordService } from 'src/engine/core-modules/record-crud/service
 import { UpsertManyRecordsService } from 'src/engine/core-modules/record-crud/services/upsert-many-records.service';
 import { type FindRecordsParams } from 'src/engine/core-modules/record-crud/types/find-records-params.type';
 import { TOOL_PROVIDERS } from 'src/engine/core-modules/tool-provider/constants/tool-providers.token';
+import { DatabaseToolProvider } from 'src/engine/core-modules/tool-provider/providers/database-tool.provider';
 import { type ToolProvider } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider.interface';
 import { type ToolDescriptor } from 'src/engine/core-modules/tool-provider/types/tool-descriptor.type';
 import { type ToolExecutionRef } from 'src/engine/core-modules/tool-provider/types/tool-execution-ref.type';
@@ -133,6 +134,34 @@ export class ToolExecutorService {
     args: Record<string, unknown>,
     context: ToolProviderContext,
   ): Promise<ToolOutput> {
+    // I5: the catalog decides what a role may write from its explicit grants,
+    // while record-crud enforcement reads the composed cache with its isSystem
+    // full-CRUD fallback. Re-check the catalog's rule here so a descriptor that
+    // reached dispatch by any other route is still refused.
+    const databaseProvider = this.providers.find(
+      (provider): provider is DatabaseToolProvider =>
+        provider instanceof DatabaseToolProvider,
+    );
+
+    if (
+      isDefined(databaseProvider) &&
+      !(await databaseProvider.isCrudOperationPermitted({
+        objectNameSingular: ref.objectNameSingular,
+        operation: ref.operation,
+        context,
+      }))
+    ) {
+      return toFailedToolOutput(
+        buildToolFailure({
+          code: 'PERMISSION_DENIED',
+          message: `Your role may not perform "${ref.operation}" on ${ref.objectNameSingular}.`,
+          hint: 'Ask a human with the right permissions to make this change, or call get_tool_catalog to see what you may do.',
+          retryable: false,
+          allowedActions: ['get_tool_catalog'],
+        }),
+      );
+    }
+
     const authContext =
       context.authContext ?? (await this.buildAuthContext(context));
 

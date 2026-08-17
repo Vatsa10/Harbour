@@ -67,7 +67,7 @@ type GenerateDescriptorsTestOptions = {
 };
 
 describe('DatabaseToolProvider', () => {
-  const generateDescriptors = async (
+  const buildProvider = (
     objects: FlatObjectMetadata[],
     options?: GenerateDescriptorsTestOptions,
   ) => {
@@ -140,22 +140,28 @@ describe('DatabaseToolProvider', () => {
       })),
     } as unknown as I18nService;
 
-    const provider = new DatabaseToolProvider(
+    return new DatabaseToolProvider(
       workspaceCacheService,
       flatEntityMapsCacheService,
       i18nService,
     );
+  };
 
-    return (await provider.generateDescriptors(
-      {
-        workspaceId,
-        roleId,
-        rolePermissionConfig: { unionOf: [roleId] },
-        requireExplicitObjectGrants: options?.requireExplicitObjectGrants,
-      },
+  const contextFor = (options?: GenerateDescriptorsTestOptions) => ({
+    workspaceId,
+    roleId,
+    rolePermissionConfig: { unionOf: [roleId] },
+    requireExplicitObjectGrants: options?.requireExplicitObjectGrants,
+  });
+
+  const generateDescriptors = async (
+    objects: FlatObjectMetadata[],
+    options?: GenerateDescriptorsTestOptions,
+  ) =>
+    (await buildProvider(objects, options).generateDescriptors(
+      contextFor(options),
       { includeSchemas: false },
     )) as (ToolIndexEntry | ToolDescriptor)[];
-  };
 
   const generateDescriptorNames = async (
     objects: FlatObjectMetadata[],
@@ -443,6 +449,87 @@ describe('DatabaseToolProvider', () => {
 
       expect(descriptorNames).toContain('find_many_people');
       expect(descriptorNames).toContain('create_one_person');
+    });
+  });
+
+  // Phase-4 review I5: discovery and enforcement computed permissions two
+  // different ways, and the invariant "a zero-permission role cannot write"
+  // was held only by discovery never emitting the tool. These pin the
+  // enforcement-side re-check, which ToolExecutorService.dispatchDatabaseCrud
+  // consults before touching a record-crud service.
+  describe('isCrudOperationPermitted', () => {
+    const noteTarget = () =>
+      createFlatObject({
+        nameSingular: 'noteTarget',
+        namePlural: 'noteTargets',
+        isSystem: true,
+      });
+
+    const permitted = (
+      operation: string,
+      options?: GenerateDescriptorsTestOptions,
+    ) =>
+      buildProvider([noteTarget()], options).isCrudOperationPermitted({
+        objectNameSingular: 'noteTarget',
+        operation,
+        context: contextFor(options),
+      });
+
+    const zeroPermissionRole: GenerateDescriptorsTestOptions = {
+      roleFlags: NO_RECORDS_ROLE_FLAGS,
+      explicitPermissionRows: [],
+    };
+
+    it('refuses a zero-permission role a create on an isSystem object', async () => {
+      // The composed rolesPermissions cache would grant full CRUD here via its
+      // isSystem fallback. The catalog's rule must win.
+      await expect(permitted('create_one', zeroPermissionRole)).resolves.toBe(
+        false,
+      );
+    });
+
+    it('refuses a zero-permission role an update and a delete', async () => {
+      await expect(permitted('update_one', zeroPermissionRole)).resolves.toBe(
+        false,
+      );
+      await expect(permitted('delete_many', zeroPermissionRole)).resolves.toBe(
+        false,
+      );
+    });
+
+    it('permits a role that actually holds the grant', async () => {
+      await expect(permitted('create_one')).resolves.toBe(true);
+      await expect(permitted('delete_one')).resolves.toBe(true);
+    });
+
+    it('separates the delete grant from the update grant', async () => {
+      const updateOnly: GenerateDescriptorsTestOptions = {
+        roleFlags: {
+          canReadAllObjectRecords: true,
+          canUpdateAllObjectRecords: true,
+          canSoftDeleteAllObjectRecords: false,
+        },
+        explicitPermissionRows: [],
+      };
+
+      await expect(permitted('update_one', updateOnly)).resolves.toBe(true);
+      await expect(permitted('delete_one', updateOnly)).resolves.toBe(false);
+    });
+
+    it('never blocks a read', async () => {
+      await expect(permitted('find_many', zeroPermissionRole)).resolves.toBe(
+        true,
+      );
+    });
+
+    it('refuses an object the catalog does not cover', async () => {
+      await expect(
+        buildProvider([noteTarget()]).isCrudOperationPermitted({
+          objectNameSingular: 'notAnObject',
+          operation: 'create_one',
+          context: contextFor(),
+        }),
+      ).resolves.toBe(false);
     });
   });
 });
