@@ -5,6 +5,7 @@ import { In } from 'typeorm';
 
 import { EvidenceEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/evidence.entity';
 import { FactEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/fact.entity';
+import { UNATTRIBUTED_SOURCE_TYPE } from 'src/engine/metadata-modules/ai/ai-research/types/fact-freshness.type';
 import { FactStatus } from 'src/engine/metadata-modules/ai/ai-research/types/fact-status.type';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
@@ -35,6 +36,24 @@ export type RecordBriefFact = {
   lastObservedAt: Date;
   evidenceCount: number;
 };
+
+// One flat count row. Same boundary rule as the projections above: the
+// dashboard gets keys and numbers, never a Fact.
+export type FactCountByKey = {
+  key: string;
+  count: number;
+};
+
+// Bucketing runs in SQL against now(), so "fresh" is evaluated at query time
+// on the database clock rather than against a timestamp the caller passed in.
+// Duplicated verbatim in SELECT and GROUP BY because Postgres will not group
+// by a select alias in this position.
+const FRESHNESS_BUCKET_EXPRESSION = `CASE
+  WHEN fact."lastObservedAt" >= now() - interval '7 days' THEN 'LAST_7_DAYS'
+  WHEN fact."lastObservedAt" >= now() - interval '30 days' THEN 'LAST_30_DAYS'
+  WHEN fact."lastObservedAt" >= now() - interval '90 days' THEN 'LAST_90_DAYS'
+  ELSE 'OLDER_THAN_90_DAYS'
+END`;
 
 @Injectable()
 export class FactService {
@@ -174,6 +193,84 @@ export class FactService {
     // A cited id with no row at all counts as non-current: the citation is
     // dangling, which is strictly worse than superseded, not better.
     return ids.filter((id) => !currentIds.has(id));
+  }
+
+  // ---------------------------------------------------------------------
+  // Aggregates for the evidence & cost dashboard.
+  //
+  // Owner Decision 1 again: the dashboard module never sees FactEntity or a
+  // Fact repository, only these flat count rows. That is also why the
+  // fact-to-evidence join lives here rather than in the dashboard service —
+  // it is a Fact-internal detail (evidenceIds[0] is the originating
+  // observation) and moving it out would leak the schema this boundary hides.
+  // ---------------------------------------------------------------------
+
+  // Facts grouped by the source type of the evidence that created them.
+  // Aggregated in SQL, not by loading rows: a workspace with a year of
+  // research has far more facts than a request should pull into memory.
+  async countCurrentFactsBySourceType(
+    workspaceId: string,
+  ): Promise<FactCountByKey[]> {
+    const rows = await this.factRepository
+      .createQueryBuilder('fact')
+      .leftJoin(
+        EvidenceEntity,
+        'evidence',
+        // NULLIF guards the empty-array case: `'[]'::jsonb ->> 0` is NULL
+        // already, but a stored empty string would fail the uuid cast and
+        // take the whole query down. Re-asserting workspaceId on the joined
+        // side keeps a cross-tenant evidence row unreachable even if a fact
+        // somehow cited one.
+        `evidence.id = NULLIF(fact."evidenceIds" ->> 0, '')::uuid
+         AND evidence."workspaceId" = fact."workspaceId"`,
+      )
+      .select('evidence.sourceType', 'key')
+      .addSelect('COUNT(*)::int', 'count')
+      // createQueryBuilder is an unscoped escape hatch — the workspace
+      // predicate is ours to add.
+      .where('fact.workspaceId = :workspaceId', { workspaceId })
+      .andWhere('fact.status = :status', { status: FactStatus.CURRENT })
+      .groupBy('evidence.sourceType')
+      .getRawMany<{ key: string | null; count: number }>();
+
+    return rows.map((row) => ({
+      key: row.key ?? UNATTRIBUTED_SOURCE_TYPE,
+      count: Number(row.count),
+    }));
+  }
+
+  async countCurrentFactsByFreshness(
+    workspaceId: string,
+  ): Promise<FactCountByKey[]> {
+    const rows = await this.factRepository
+      .createQueryBuilder('fact')
+      .select(FRESHNESS_BUCKET_EXPRESSION, 'key')
+      .addSelect('COUNT(*)::int', 'count')
+      .where('fact.workspaceId = :workspaceId', { workspaceId })
+      .andWhere('fact.status = :status', { status: FactStatus.CURRENT })
+      .groupBy(FRESHNESS_BUCKET_EXPRESSION)
+      .getRawMany<{ key: string; count: number }>();
+
+    return rows.map((row) => ({ key: row.key, count: Number(row.count) }));
+  }
+
+  // Facts currently asserting a value, and how many of those are contradicted.
+  // Returned together because the conflict count is meaningless without its
+  // denominator — "12 conflicts" reads very differently against 40 facts than
+  // against 40,000.
+  async countCurrentAndConflictedFacts(
+    workspaceId: string,
+  ): Promise<{ currentCount: number; conflictedCount: number }> {
+    const [currentCount, conflictedCount] = await Promise.all([
+      this.factRepository.count(workspaceId, {
+        where: { status: FactStatus.CURRENT },
+      }),
+      this.factRepository.count(workspaceId, {
+        where: { status: FactStatus.CURRENT, hasConflict: true },
+      }),
+    ]);
+
+    return { currentCount, conflictedCount };
   }
 
   // Permanently dismisses the facts behind a rejected proposal item, so a
