@@ -21,7 +21,9 @@ const CLASSIFIERS: {
     pattern: /not\s*found|does not exist|no record/i,
     hint: 'Confirm the record still exists with a find_many call before retrying with a different id or filter.',
     retryable: false,
-    allowedActions: ['find_records'],
+    // Not 'find_records': the real tools are find_many_<object>, so point the
+    // agent at the catalog rather than at a name it cannot invoke.
+    allowedActions: ['get_tool_catalog'],
   },
   {
     code: 'PERMISSION_DENIED',
