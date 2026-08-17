@@ -72,6 +72,16 @@ classified on the way out — includes, in addition to the legacy
 `DUPLICATE_PROPOSAL` and `RATE_LIMITED` are declared in `ToolFailureCode` but
 have no producer today; treat them as reserved rather than expected.
 
+The legacy `error` string is deliberately `"<failure.message> <failure.hint>"`,
+because today's agent-facing surfaces render `error` alone and would otherwise
+drop the recovery path. **A consumer that renders `failure` must not also render
+`error`** — it will print the message and the hint twice.
+
+Each entry in `allowedActions` is either the name of a tool the agent may call
+instead, or one of the three pseudo-actions `retry`,
+`retry_with_confirm_token`, `ask_admin_to_change_policy`
+(`TOOL_FAILURE_PSEUDO_ACTIONS`). Nothing else appears there.
+
 Classification of an underlying tool's English error is best-effort: an
 unrecognised message becomes `INTERNAL_ERROR` with `retryable: false`, never a
 guess that invites a retry loop.
