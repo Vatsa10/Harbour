@@ -8,6 +8,7 @@ import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
 import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service';
+import { NotificationService } from 'src/engine/core-modules/notification/services/notification.service';
 import { ProposalSupersessionService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-supersession.service';
 import { ProposalCreationService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-creation.service';
 import { type AiWritePolicy } from 'src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type';
@@ -56,6 +57,7 @@ describe('ProposalCreationService', () => {
       .mockResolvedValue({ supersededItemIds: [], supersededProposalIds: [] }),
   };
   const factService = { findCurrentFactIdsForFields: jest.fn() };
+  const notificationService = { raise: jest.fn().mockResolvedValue(null) };
   const proposalRepository = { findOne: jest.fn(), save: jest.fn() };
   const proposalItemRepository = { save: jest.fn(), find: jest.fn() };
 
@@ -99,6 +101,10 @@ describe('ProposalCreationService', () => {
         {
           provide: ProposalSupersessionService,
           useValue: proposalSupersessionService,
+        },
+        {
+          provide: NotificationService,
+          useValue: notificationService,
         },
         {
           provide: getRepositoryToken(ProposalEntity),
@@ -277,5 +283,37 @@ describe('ProposalCreationService', () => {
     await expect(createFromExtraction([jobTitleItem])).rejects.toThrow(
       'connection terminated',
     );
+  });
+  // A proposal nobody can see is a proposal nobody approves.
+  it('should raise one in-app notification, deduped on the proposal id, when a proposal is created', async () => {
+    await createFromExtraction([jobTitleItem]);
+
+    expect(notificationService.raise).toHaveBeenCalledTimes(1);
+    expect(notificationService.raise).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        title: 'A proposal is waiting for review',
+        linkPath: '/settings/ai/approvals',
+        dedupeKey: 'proposal:proposal-1',
+      }),
+    );
+  });
+
+  it('should raise no notification when policy suppression means nothing is reviewable', async () => {
+    setPolicy({ default: 'FORBID', overrides: {} });
+
+    const result = await createFromExtraction([jobTitleItem]);
+
+    expect(result).toBeNull();
+    expect(notificationService.raise).not.toHaveBeenCalled();
+  });
+
+  // The proposal is already captured; losing the bell must not lose the draft.
+  it('should still return the proposal when raising the notification throws', async () => {
+    notificationService.raise.mockRejectedValueOnce(new Error('redis down'));
+
+    const result = await createFromExtraction([jobTitleItem]);
+
+    expect(result?.proposalId).toBe('proposal-1');
   });
 });

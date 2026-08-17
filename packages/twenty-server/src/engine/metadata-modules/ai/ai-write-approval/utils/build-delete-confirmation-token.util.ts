@@ -22,8 +22,19 @@ const canonicalize = (value: unknown): unknown => {
   );
 };
 
-export const buildDeleteFilterBasis = (filter: unknown): string =>
-  JSON.stringify(canonicalize(filter));
+// Returns null when the filter identifies nothing — absent, not an object, or
+// empty. The gate refuses those rather than letting them skip confirmation.
+export const buildDeleteFilterBasis = (filter: unknown): string | null => {
+  if (
+    filter === null ||
+    typeof filter !== 'object' ||
+    Object.keys(filter).length === 0
+  ) {
+    return null;
+  }
+
+  return JSON.stringify(canonicalize(filter));
+};
 
 export const buildDeleteConfirmationToken = (params: {
   workspaceId: string;

@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { isDefined } from 'twenty-shared/utils';
 import { Repository } from 'typeorm';
 
+import { NotificationService } from 'src/engine/core-modules/notification/services/notification.service';
 import { FindRecordsService } from 'src/engine/core-modules/record-crud/services/find-records.service';
 import { type ToolProviderContext } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider-context.type';
 import { type ToolDescriptor } from 'src/engine/core-modules/tool-provider/types/tool-descriptor.type';
@@ -17,6 +18,7 @@ import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval
 import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service';
 import { ProposalSupersessionService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-supersession.service';
 import { type AiWritePolicyTarget } from 'src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type';
+import { buildProposalNotification } from 'src/engine/metadata-modules/ai/ai-write-approval/utils/build-proposal-notification.util';
 import {
   buildDeleteConfirmationToken,
   buildDeleteFilterBasis,
@@ -71,6 +73,7 @@ const UNGATED_CRUD_OPERATIONS = ['find_many', 'find_one', 'group_by'] as const;
 // Every entry below was checked against its implementation for external or
 // persistent writes.
 const UNGATED_STATIC_TOOL_IDS = [
+  'obliterate_workspace',
   // action tools
   'search_help_center',
   'navigate_app',
@@ -155,6 +158,7 @@ export class ProposalGateService {
     private readonly findRecordsService: FindRecordsService,
     private readonly factService: FactService,
     private readonly proposalSupersessionService: ProposalSupersessionService,
+    private readonly notificationService: NotificationService,
     // Proposals are looked up by (workspaceId, threadId, status) as a single
     // composite condition, not workspaceId-then-filter, so the scoped wrapper's
     // "workspaceId first, merge rest" shape doesn't fit this access pattern.
@@ -208,11 +212,28 @@ export class ProposalGateService {
       // the only thing standing between an AUTO policy and a one-shot delete.
       // I17: DELETE_RECORDS as well as DELETE_RECORD — an AUTO-policy bulk
       // delete is the exact case this exists for.
-      if (
-        (gateInput.actionType === ProposalActionType.DELETE_RECORD ||
-          gateInput.actionType === ProposalActionType.DELETE_RECORDS) &&
-        isDefined(gateInput.confirmationBasis)
-      ) {
+      const isDeleteAction =
+        gateInput.actionType === ProposalActionType.DELETE_RECORD ||
+        gateInput.actionType === ProposalActionType.DELETE_RECORDS;
+
+      // M3: a delete whose basis could not be derived (a missing or non-string
+      // id, an absent filter) used to fall past the confirmation branch and
+      // return ALLOW, so a malformed call was silently exempted from the one
+      // control that applies to it. Refuse it instead of ungating it.
+      if (isDeleteAction && !isDefined(gateInput.confirmationBasis)) {
+        return {
+          kind: 'FORBID',
+          failure: buildToolFailure({
+            code: 'INVALID_ARGUMENTS',
+            message: `This ${gateInput.objectNameSingular} delete does not identify what it would delete.`,
+            hint: 'Reissue the call with a string "id" for delete_one, or a non-empty "filter" for delete_many.',
+            retryable: true,
+            allowedActions: ['retry'],
+          }),
+        };
+      }
+
+      if (isDeleteAction && isDefined(gateInput.confirmationBasis)) {
         const expectedToken = buildDeleteConfirmationToken({
           workspaceId: context.workspaceId,
           objectNameSingular: gateInput.objectNameSingular ?? '',
@@ -612,6 +633,27 @@ export class ProposalGateService {
     );
   }
 
+  // Making the pending proposal visible must never be able to fail the write
+  // that produced it: the proposal is already safely captured, and losing the
+  // bell is strictly better than losing the draft. Deduped on proposal id, so
+  // the joined-batch path raising it a second time is a no-op.
+  private async notifyProposalWaiting(
+    workspaceId: string,
+    proposalId: string,
+  ): Promise<void> {
+    try {
+      await this.notificationService.raise(
+        buildProposalNotification({ workspaceId, proposalId }),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Failed to raise proposal notification for ${proposalId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
   // One agent turn produces one reviewable batch rather than one proposal per
   // tool call. Falls back to a fresh proposal when there is no thread to key on.
   //
@@ -643,13 +685,17 @@ export class ProposalGateService {
     expiresAt.setDate(expiresAt.getDate() + PROPOSAL_TTL_DAYS);
 
     try {
-      return await this.proposalRepository.save({
+      const created = await this.proposalRepository.save({
         workspaceId: context.workspaceId,
         threadId: context.threadId ?? null,
         createdByActor: context.actorContext ?? null,
         status: ProposalStatus.PENDING,
         expiresAt,
       });
+
+      await this.notifyProposalWaiting(context.workspaceId, created.id);
+
+      return created;
     } catch (error) {
       if (!isPostgresUniqueViolation(error) || !isDefined(context.threadId)) {
         throw error;

@@ -147,6 +147,7 @@ import { AddImportRowLeaseFastInstanceCommand } from 'src/database/commands/upgr
 import { AddProposalSupersessionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1786400000000-add-proposal-supersession';
 import { AddRecordBriefFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1786500000000-add-record-brief';
 import { AddProposalThreadPendingUniquenessFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1786600000000-add-proposal-thread-pending-uniqueness';
+import { AddNotificationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1786700000000-add-notification';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
@@ -296,4 +297,5 @@ export const INSTANCE_COMMANDS = [
   AddProposalSupersessionFastInstanceCommand,
   AddRecordBriefFastInstanceCommand,
   AddProposalThreadPendingUniquenessFastInstanceCommand,
+  AddNotificationFastInstanceCommand,
 ];

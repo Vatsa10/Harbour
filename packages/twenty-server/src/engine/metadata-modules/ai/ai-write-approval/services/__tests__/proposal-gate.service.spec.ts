@@ -13,6 +13,7 @@ import { FactStatus } from 'src/engine/metadata-modules/ai/ai-research/types/fac
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
 import { AiWritePolicyService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service';
+import { NotificationService } from 'src/engine/core-modules/notification/services/notification.service';
 import { ProposalSupersessionService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-supersession.service';
 import { ProposalGateService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service';
 import { type AiWritePolicy } from 'src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type';
@@ -69,6 +70,7 @@ describe('ProposalGateService', () => {
       .mockResolvedValue({ supersededItemIds: [], supersededProposalIds: [] }),
   };
   const factService = { findCurrentFactIdsForFields: jest.fn() };
+  const notificationService = { raise: jest.fn().mockResolvedValue(null) };
   const proposalRepository = { findOne: jest.fn(), save: jest.fn() };
   const proposalItemRepository = { save: jest.fn(), find: jest.fn() };
 
@@ -107,6 +109,10 @@ describe('ProposalGateService', () => {
         {
           provide: ProposalSupersessionService,
           useValue: proposalSupersessionService,
+        },
+        {
+          provide: NotificationService,
+          useValue: notificationService,
         },
         {
           provide: getRepositoryToken(ProposalEntity),
@@ -581,6 +587,10 @@ describe('ProposalGateService', () => {
           {
             provide: ProposalSupersessionService,
             useValue: proposalSupersessionService,
+          },
+          {
+            provide: NotificationService,
+            useValue: notificationService,
           },
           { provide: KeyValuePairService, useValue: keyValuePairService },
           { provide: FindRecordsService, useValue: findRecordsService },

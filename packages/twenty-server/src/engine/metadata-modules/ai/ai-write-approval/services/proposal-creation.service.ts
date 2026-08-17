@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { isDefined } from 'twenty-shared/utils';
 import { Repository } from 'typeorm';
 
+import { NotificationService } from 'src/engine/core-modules/notification/services/notification.service';
 import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services/fact.service';
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
@@ -18,6 +19,7 @@ import {
   ProposalItemStatus,
   ProposalStatus,
 } from 'src/engine/metadata-modules/ai/ai-write-approval/types/proposal-status.type';
+import { buildProposalNotification } from 'src/engine/metadata-modules/ai/ai-write-approval/utils/build-proposal-notification.util';
 import { isPostgresUniqueViolation } from 'src/utils/is-postgres-unique-violation.util';
 
 // The non-agent entry point into the proposal model. Background jobs
@@ -28,10 +30,13 @@ import { isPostgresUniqueViolation } from 'src/utils/is-postgres-unique-violatio
 // SAME AiWritePolicyService, deliberately not a second approval system.
 @Injectable()
 export class ProposalCreationService {
+  private readonly logger = new Logger(ProposalCreationService.name);
+
   constructor(
     private readonly aiWritePolicyService: AiWritePolicyService,
     private readonly factService: FactService,
     private readonly proposalSupersessionService: ProposalSupersessionService,
+    private readonly notificationService: NotificationService,
     // Looked up by (workspaceId, sourceKey) as a single composite condition,
     // which the scoped wrapper's "workspaceId first, merge rest" shape does
     // not fit — same reason ProposalGateService opts out.
@@ -138,6 +143,25 @@ export class ProposalCreationService {
       workspaceId,
       proposalId: proposal.id,
     });
+
+    // Raised after supersession, so the bell never points at an inbox whose
+    // only card was already retired. Failing here must not fail the job: the
+    // proposal is captured either way.
+    try {
+      await this.notificationService.raise(
+        buildProposalNotification({
+          workspaceId,
+          proposalId: proposal.id,
+          reason,
+        }),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Failed to raise proposal notification for ${proposal.id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
 
     return { proposalId: proposal.id, itemIds };
   }

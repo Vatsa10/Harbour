@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { NotificationModule } from 'src/engine/core-modules/notification/notification.module';
 import { KeyValuePairModule } from 'src/engine/core-modules/key-value-pair/key-value-pair.module';
 import { RecordCrudModule } from 'src/engine/core-modules/record-crud/record-crud.module';
 import { ToolModule } from 'src/engine/core-modules/tool/tool.module';
@@ -33,6 +34,7 @@ import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.
       UserWorkspaceEntity,
     ]),
     KeyValuePairModule,
+    NotificationModule,
     RecordCrudModule,
     UserRoleModule,
     PermissionsModule,

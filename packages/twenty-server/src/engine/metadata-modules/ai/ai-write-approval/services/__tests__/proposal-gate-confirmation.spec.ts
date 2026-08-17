@@ -40,11 +40,11 @@ const deleteDescriptor = (operation: 'delete_one' | 'delete_many') =>
     },
   }) as unknown as ToolDescriptor;
 
-const tokenFor = (basis: string) =>
+const tokenFor = (basis: string | null) =>
   buildDeleteConfirmationToken({
     workspaceId: context.workspaceId,
     objectNameSingular: 'person',
-    basis,
+    basis: basis ?? '',
   });
 
 describe('ProposalGateService delete confirmation', () => {
@@ -153,7 +153,9 @@ describe('ProposalGateService delete confirmation', () => {
 
   it('rejects a token minted for a narrow filter against a widened delete_many', async () => {
     const narrowFilter = { city: { eq: 'Paris' } };
-    const widenedFilter = {};
+    // A genuinely wider filter, not `{}` — an empty filter identifies nothing
+    // and is refused outright (see the INVALID_ARGUMENTS test below).
+    const widenedFilter = { country: { eq: 'France' } };
 
     const confirmed = await evaluate(deleteDescriptor('delete_many'), {
       filter: narrowFilter,
@@ -177,5 +179,42 @@ describe('ProposalGateService delete confirmation', () => {
     });
 
     expect(decision.kind).toBe('ALLOW');
+  });
+
+  // M3: these three used to return ALLOW. A delete the gate cannot describe is
+  // a delete the confirmation control cannot cover, so it must be refused
+  // rather than exempted.
+  it('refuses a delete_one whose id is not a string instead of exempting it', async () => {
+    const decision = await evaluate(deleteDescriptor('delete_one'), {
+      id: { eq: 'record-1' },
+    });
+
+    expect(decision.kind).toBe('FORBID');
+
+    if (decision.kind !== 'FORBID') {
+      throw new Error('expected a FORBID decision');
+    }
+
+    expect(decision.failure.code).toBe('INVALID_ARGUMENTS');
+  });
+
+  it('refuses a delete_one with no id at all', async () => {
+    const decision = await evaluate(deleteDescriptor('delete_one'), {});
+
+    expect(decision.kind).toBe('FORBID');
+  });
+
+  it('refuses a delete_many with an empty filter', async () => {
+    const decision = await evaluate(deleteDescriptor('delete_many'), {
+      filter: {},
+    });
+
+    expect(decision.kind).toBe('FORBID');
+
+    if (decision.kind !== 'FORBID') {
+      throw new Error('expected a FORBID decision');
+    }
+
+    expect(decision.failure.code).toBe('INVALID_ARGUMENTS');
   });
 });
