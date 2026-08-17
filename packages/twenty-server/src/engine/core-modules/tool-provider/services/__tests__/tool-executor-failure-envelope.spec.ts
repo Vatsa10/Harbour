@@ -14,6 +14,7 @@ import { UpdateRecordService } from 'src/engine/core-modules/record-crud/service
 import { UpsertManyRecordsService } from 'src/engine/core-modules/record-crud/services/upsert-many-records.service';
 import { TOOL_PROVIDERS } from 'src/engine/core-modules/tool-provider/constants/tool-providers.token';
 import { ToolExecutorService } from 'src/engine/core-modules/tool-provider/services/tool-executor.service';
+import { NotificationService } from 'src/engine/core-modules/notification/services/notification.service';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
@@ -73,6 +74,10 @@ describe('ToolExecutorService failure envelope', () => {
         {
           provide: ProposalSupersessionService,
           useValue: { supersedeOverlappingItems: jest.fn() },
+        },
+        {
+          provide: NotificationService,
+          useValue: { raise: jest.fn().mockResolvedValue(undefined) },
         },
         { provide: TOOL_PROVIDERS, useValue: [provider] },
         { provide: KeyValuePairService, useValue: keyValuePairService },
