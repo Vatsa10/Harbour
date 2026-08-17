@@ -73,7 +73,6 @@ const UNGATED_CRUD_OPERATIONS = ['find_many', 'find_one', 'group_by'] as const;
 // Every entry below was checked against its implementation for external or
 // persistent writes.
 const UNGATED_STATIC_TOOL_IDS = [
-  'obliterate_workspace',
   // action tools
   'search_help_center',
   'navigate_app',

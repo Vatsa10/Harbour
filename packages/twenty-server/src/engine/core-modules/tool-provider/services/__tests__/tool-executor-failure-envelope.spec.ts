@@ -73,7 +73,14 @@ describe('ToolExecutorService failure envelope', () => {
         AiWritePolicyService,
         {
           provide: ProposalSupersessionService,
-          useValue: { supersedeOverlappingItems: jest.fn() },
+          useValue: {
+            // The gate destructures this result; a bare jest.fn() resolving to
+            // undefined throws inside dispatch and takes the guard down again.
+            supersedeOverlappingItems: jest.fn().mockResolvedValue({
+              supersededItemIds: [],
+              supersededProposalIds: [],
+            }),
+          },
         },
         {
           provide: NotificationService,
