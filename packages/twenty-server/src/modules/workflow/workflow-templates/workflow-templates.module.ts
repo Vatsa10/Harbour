@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { RecordPositionModule } from 'src/engine/core-modules/record-position/record-position.module';
 import { WorkflowVersionCoreModule } from 'src/engine/core-modules/workflow/workflow-version-core.module';
+import { AiAgentModule } from 'src/engine/metadata-modules/ai/ai-agent/ai-agent.module';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { WorkflowDefinitionInstallResolver } from 'src/modules/workflow/workflow-templates/resolvers/workflow-definition-install.resolver';
 import { WorkflowTemplateResolver } from 'src/modules/workflow/workflow-templates/resolvers/workflow-template.resolver';
@@ -19,6 +20,7 @@ import { WorkflowTriggerModule } from 'src/modules/workflow/workflow-trigger/wor
     WorkflowVersionCoreModule,
     WorkflowTriggerModule,
     PermissionsModule,
+    AiAgentModule,
   ],
   providers: [
     WorkflowTemplateService,

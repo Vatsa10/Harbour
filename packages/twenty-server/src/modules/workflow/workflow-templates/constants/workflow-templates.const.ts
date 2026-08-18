@@ -9,8 +9,14 @@ const errorHandlingOptions = {
   continueOnFailure: { value: false },
 };
 
-// agentId is intentionally omitted so the step runs as an ad-hoc agent against
-// the given prompt — AiAgentWorkflowAction only resolves an agent if (agentId).
+// agentId is deliberately left unset here: these are static, module-load-time
+// definitions with no workspace to resolve an agent against yet.
+// WorkflowTemplateService.install() resolves each template's agentName (see
+// STANDARD_AGENT) to a real, workspace-scoped agentId and injects it into
+// every AI_AGENT step before the definition is validated and stored — an
+// AI_AGENT step with no agentId is refused by
+// validateWorkflowTemplateDefinition, so a template can never install as a
+// silent, tool-less LLM call.
 const buildAiAgentStep = (params: {
   id: string;
   name: string;
@@ -31,6 +37,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
   {
     key: 'RESEARCH_BRIEF',
     name: 'Research brief',
+    agentName: 'researcher',
     description:
       'Run on demand from the command menu. Researches a company or person using existing CRM history and any connected enrichment tools, then proposes record updates for review.',
     trigger: {
@@ -50,6 +57,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
   {
     key: 'FOLLOW_UP_DIGEST',
     name: 'Daily follow-up digest',
+    agentName: 'researcher',
     description:
       'Runs every morning. Finds opportunities with no recent activity and proposes a next action for each.',
     trigger: {
@@ -73,6 +81,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
   {
     key: 'ACCOUNT_MONITORING',
     name: 'Weekly account monitoring',
+    agentName: 'researcher',
     description:
       'Runs weekly. Reviews high-value accounts for material changes since the last review and proposes updates.',
     trigger: {

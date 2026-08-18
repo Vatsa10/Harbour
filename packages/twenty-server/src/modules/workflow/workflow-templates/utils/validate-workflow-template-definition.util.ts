@@ -64,5 +64,19 @@ export const validateWorkflowTemplateDefinition = (
         `Workflow step at index ${index} is missing a settings object.`,
       );
     }
+
+    // A bare LLM call with no agent has no tools and no way to act on the
+    // CRM — it can still report success while doing nothing. Refuse the
+    // install outright rather than storing a workflow that silently no-ops.
+    if (step.type === WorkflowActionType.AI_AGENT) {
+      const input = isPlainObject(step.settings) ? step.settings.input : null;
+      const agentId = isPlainObject(input) ? input.agentId : undefined;
+
+      if (typeof agentId !== 'string' || agentId.trim().length === 0) {
+        throw new InvalidWorkflowDefinitionError(
+          `Workflow step at index ${index} is an AI_AGENT step with no agentId — it would run as a tool-less LLM call and cannot be installed.`,
+        );
+      }
+    }
   });
 };

@@ -4,6 +4,7 @@ import { WorkflowActionType } from 'twenty-shared/workflow';
 
 import { RecordPositionService } from 'src/engine/core-modules/record-position/services/record-position.service';
 import { WorkflowVersionCoreSyncService } from 'src/engine/core-modules/workflow/services/workflow-version-core-sync.service';
+import { AgentService } from 'src/engine/metadata-modules/ai/ai-agent/agent.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { WorkflowTemplateService } from 'src/modules/workflow/workflow-templates/services/workflow-template.service';
 import { buildInstalledWorkflowId } from 'src/modules/workflow/workflow-templates/utils/build-installed-workflow-id.util';
@@ -32,7 +33,7 @@ const appSuppliedStep: WorkflowStepInput = {
       retryOnFailure: { value: false },
       continueOnFailure: { value: false },
     },
-    input: { prompt: 'do the thing' },
+    input: { prompt: 'do the thing', agentId: 'agent-1' },
   },
 };
 
@@ -70,6 +71,11 @@ describe('WorkflowTemplateService', () => {
   const workflowTriggerService = {
     activateWorkflowVersion: jest.fn().mockResolvedValue(undefined),
   };
+  const agentService = {
+    findOneAgentByName: jest
+      .fn()
+      .mockResolvedValue({ id: 'resolved-researcher-agent-id' }),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -92,6 +98,7 @@ describe('WorkflowTemplateService', () => {
           provide: WorkflowTriggerWorkspaceService,
           useValue: workflowTriggerService,
         },
+        { provide: AgentService, useValue: agentService },
       ],
     }).compile();
 
@@ -331,6 +338,73 @@ describe('WorkflowTemplateService', () => {
     expect(insertedVersion.steps[0]).toMatchObject({ valid: true });
     expect(insertedVersion.steps[0].id).toEqual(expect.any(String));
     expect(insertedVersion.steps[0].nextStepIds).toEqual([]);
+  });
+
+  it('should resolve a real, non-null agentId for a template AI_AGENT step by binding the template agent name for the installing workspace', async () => {
+    await service.install({
+      key: 'RESEARCH_BRIEF',
+      workspaceId: 'workspace-1',
+      activate: false,
+    });
+
+    expect(agentService.findOneAgentByName).toHaveBeenCalledWith({
+      name: 'researcher',
+      workspaceId: 'workspace-1',
+    });
+
+    const [insertedVersion] = workflowVersionRepository.insert.mock.calls[0];
+
+    expect(insertedVersion.steps[0].settings.input.agentId).toBe(
+      'resolved-researcher-agent-id',
+    );
+    expect(insertedVersion.steps[0].settings.input.agentId).toEqual(
+      expect.any(String),
+    );
+  });
+
+  it('should refuse to install a template when its required agent cannot be resolved for the workspace, instead of silently installing a tool-less step', async () => {
+    agentService.findOneAgentByName.mockRejectedValueOnce(
+      new Error('Agent with name "researcher" not found'),
+    );
+
+    await expect(
+      service.install({
+        key: 'RESEARCH_BRIEF',
+        workspaceId: 'workspace-1',
+        activate: false,
+      }),
+    ).rejects.toThrow(/researcher/);
+
+    expect(workflowRepository.insert).not.toHaveBeenCalled();
+  });
+
+  it('should refuse to install an app-supplied definition whose AI_AGENT step has no agentId', async () => {
+    await expect(
+      service.installDefinition({
+        definition: {
+          name: 'Unbound triage',
+          trigger: manualTrigger,
+          steps: [
+            {
+              type: WorkflowActionType.AI_AGENT,
+              name: 'Triage',
+              settings: {
+                outputSchema: {},
+                errorHandlingOptions: {
+                  retryOnFailure: { value: false },
+                  continueOnFailure: { value: false },
+                },
+                input: { prompt: 'do the thing' },
+              },
+            },
+          ],
+        },
+        workspaceId: 'workspace-1',
+        activate: true,
+      }),
+    ).rejects.toThrow(InvalidWorkflowDefinitionError);
+
+    expect(workflowRepository.insert).not.toHaveBeenCalled();
   });
 
   it('should return the workflow and version ids it created', async () => {

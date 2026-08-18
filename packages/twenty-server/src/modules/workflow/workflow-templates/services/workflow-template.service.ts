@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 
 import { isDefined } from 'twenty-shared/utils';
+import { WorkflowActionType } from 'twenty-shared/workflow';
 import { v4 as uuidv4 } from 'uuid';
 
 import { RecordPositionService } from 'src/engine/core-modules/record-position/services/record-position.service';
+import { AgentService } from 'src/engine/metadata-modules/ai/ai-agent/agent.service';
 import { WorkflowVersionCoreSyncService } from 'src/engine/core-modules/workflow/services/workflow-version-core-sync.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
@@ -40,6 +42,7 @@ export class WorkflowTemplateService {
     private readonly recordPositionService: RecordPositionService,
     private readonly workflowVersionCoreSyncService: WorkflowVersionCoreSyncService,
     private readonly workflowTriggerService: WorkflowTriggerWorkspaceService,
+    private readonly agentService: AgentService,
   ) {}
 
   list(): WorkflowTemplateDefinition[] {
@@ -59,8 +62,33 @@ export class WorkflowTemplateService {
       throw new Error(`Unknown workflow template "${key}"`);
     }
 
+    // Templates ship agent-less (see workflow-templates.const.ts): resolve
+    // the real, workspace-scoped agent by name here — findOneAgentByName
+    // throws if it's missing, which is the honest failure this install must
+    // have. A template that silently installed without an agent would run as
+    // a tool-less LLM call that still reports success.
+    const agent = await this.agentService.findOneAgentByName({
+      name: template.agentName,
+      workspaceId,
+    });
+
+    const boundDefinition = {
+      ...template,
+      steps: template.steps.map((step) =>
+        step.type === WorkflowActionType.AI_AGENT
+          ? {
+              ...step,
+              settings: {
+                ...step.settings,
+                input: { ...step.settings.input, agentId: agent.id },
+              },
+            }
+          : step,
+      ),
+    };
+
     return this.installDefinition({
-      definition: template,
+      definition: boundDefinition,
       workspaceId,
       activate,
     });

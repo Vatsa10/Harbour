@@ -12,6 +12,11 @@ export type WorkflowTemplateDefinition = {
   description: string;
   trigger: WorkflowTrigger;
   steps: WorkflowAction[];
+  // Name of the standard agent (see STANDARD_AGENT) this template's AI_AGENT
+  // steps must be bound to. install() resolves it to a real agentId for the
+  // installing workspace — a template must never ship with an unbound
+  // AI_AGENT step, so this field is required, not optional.
+  agentName: string;
 };
 
 // What an installable application supplies (Phase 5). id / valid /
