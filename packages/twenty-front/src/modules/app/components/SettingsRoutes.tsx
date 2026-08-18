@@ -256,6 +256,12 @@ const SettingsAiTrustDashboard = lazy(() =>
   })),
 );
 
+const SettingsAiAgentRuns = lazy(() =>
+  import('~/pages/settings/ai/SettingsAiAgentRuns').then((module) => ({
+    default: module.SettingsAiAgentRuns,
+  })),
+);
+
 const SettingsAiApprovals = lazy(() =>
   import('~/pages/settings/ai/SettingsAiApprovals').then((module) => ({
     default: module.SettingsAiApprovals,
@@ -794,6 +800,12 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
         <Route
           path={SettingsPath.AiApprovals}
           element={<SettingsAiApprovals />}
+        />
+        {/* AI, matching SettingsPermissionGuard(PermissionFlagType.AI) on
+            AgentTaskResolver.agentTasks. */}
+        <Route
+          path={SettingsPath.AiAgentRuns}
+          element={<SettingsAiAgentRuns />}
         />
       </Route>
       {/* AI_SETTINGS, matching SettingsPermissionGuard on

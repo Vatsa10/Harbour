@@ -27,6 +27,7 @@ import {
   IconDoorEnter,
   IconHelpCircle,
   IconHierarchy2,
+  IconHistory,
   IconLayout,
   IconMail,
   IconMessage,
@@ -179,6 +180,13 @@ const useSettingsNavigationItems = (): SettingsNavigationSection[] => {
           label: t`AI approvals`,
           path: SettingsPath.AiApprovals,
           Icon: IconCheckbox,
+          isHidden: !permissionMap[PermissionFlagType.AI],
+        },
+        {
+          label: t`AI agent runs`,
+          path: SettingsPath.AiAgentRuns,
+          Icon: IconHistory,
+          // AI, matching SettingsPermissionGuard on AgentTaskResolver.agentTasks.
           isHidden: !permissionMap[PermissionFlagType.AI],
         },
         {
