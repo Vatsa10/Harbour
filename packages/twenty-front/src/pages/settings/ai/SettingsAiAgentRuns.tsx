@@ -1,13 +1,17 @@
 import { useQuery } from '@apollo/client/react';
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
+import { Fragment, useState } from 'react';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
+import { IconChevronDown, IconChevronRight } from 'twenty-ui/icon';
 import { Tag } from 'twenty-ui/data-display';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
+import { AGENT_RUNS } from '@/settings/ai-agent-runs/graphql/queries/agentRuns';
 import { AGENT_TASKS } from '@/settings/ai-agent-runs/graphql/queries/agentTasks';
 import { type AgentTask, type AgentTasksData } from '@/settings/ai-agent-runs/types/AgentTask';
+import { type AgentRunsData } from '@/settings/ai-agent-runs/types/AgentRun';
 import { getAgentTaskStatusTagColor } from '@/settings/ai-agent-runs/utils/getAgentTaskStatusTagColor';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
@@ -18,11 +22,31 @@ const StyledMessage = styled.div`
 
 const StyledTable = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) repeat(3, auto) minmax(
+  grid-template-columns: auto minmax(0, 2fr) minmax(0, 1fr) repeat(3, auto) minmax(
       0,
       2fr
     );
   overflow-x: auto;
+`;
+
+const StyledExpandButton = styled.button`
+  align-items: center;
+  background: none;
+  border: none;
+  color: ${themeCssVariables.font.color.tertiary};
+  cursor: pointer;
+  display: flex;
+  padding: 0;
+`;
+
+const StyledRunsPanel = styled.div`
+  grid-column: 1 / -1;
+`;
+
+const StyledRunsTable = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto minmax(0, 2fr);
+  margin: 0 ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[2]};
 `;
 
 const StyledHeaderCell = styled.div`
@@ -53,32 +77,96 @@ const StyledOutcomeCell = styled(StyledCell)`
 
 const formatDate = (value: string): string => new Date(value).toLocaleString();
 
-// The dueAt/createdAt pair is the closest thing to a queue-latency signal
-// this DTO exposes. There is no updatedAt/finishedAt on AgentTaskDTO and no
-// agentRuns query at all, so per-run elapsed time, model id, and token/
-// credit usage — the audit's other asks — cannot be surfaced without adding
-// server GraphQL, which is out of scope for this change (front only).
-const AgentTaskRow = ({ task }: { task: AgentTask }) => (
-  <>
-    <StyledCell title={task.reason}>{task.reason}</StyledCell>
-    <StyledCell title={`${task.objectNameSingular} / ${task.recordId}`}>
-      {task.objectNameSingular}
-    </StyledCell>
-    <StyledCell>
-      <Tag
-        color={getAgentTaskStatusTagColor(task.status)}
-        text={task.status}
-      />
-    </StyledCell>
-    <StyledCell>
-      {task.attempts}/{task.maxAttempts}
-    </StyledCell>
-    <StyledCell title={formatDate(task.createdAt)}>
-      {formatDate(task.createdAt)}
-    </StyledCell>
-    <StyledOutcomeCell>{task.outcome ?? t`No outcome recorded yet.`}</StyledOutcomeCell>
-  </>
-);
+const formatElapsed = (elapsedMs: number | null): string =>
+  elapsedMs === null ? '—' : `${(elapsedMs / 1000).toFixed(1)}s`;
+
+const formatCredits = (creditsUsedMicro: number): string =>
+  (creditsUsedMicro / 1_000_000).toFixed(4);
+
+const AgentTaskRuns = ({ taskId }: { taskId: string }) => {
+  const { data, loading, error } = useQuery<AgentRunsData>(AGENT_RUNS, {
+    variables: { agentTaskId: taskId },
+  });
+
+  const runs = data?.agentRuns ?? [];
+
+  if (loading) {
+    return <StyledMessage>{t`Loading runs…`}</StyledMessage>;
+  }
+
+  if (error !== undefined) {
+    return <StyledMessage>{t`Could not load runs.`}</StyledMessage>;
+  }
+
+  if (runs.length === 0) {
+    return <StyledMessage>{t`No runs recorded for this task.`}</StyledMessage>;
+  }
+
+  return (
+    <StyledRunsTable>
+      <StyledHeaderCell>{t`Model`}</StyledHeaderCell>
+      <StyledHeaderCell>{t`Elapsed`}</StyledHeaderCell>
+      <StyledHeaderCell>{t`Tokens (in/out)`}</StyledHeaderCell>
+      <StyledHeaderCell>{t`Credits`}</StyledHeaderCell>
+      <StyledHeaderCell>{t`Result / error`}</StyledHeaderCell>
+      {runs.map((run) => (
+        <Fragment key={run.id}>
+          <StyledCell title={run.modelId ?? undefined}>
+            {run.modelId ?? '—'}
+          </StyledCell>
+          <StyledCell>{formatElapsed(run.elapsedMs)}</StyledCell>
+          <StyledCell>
+            {run.inputTokens}/{run.outputTokens}
+          </StyledCell>
+          <StyledCell>{formatCredits(run.creditsUsedMicro)}</StyledCell>
+          <StyledOutcomeCell>
+            {run.errorMessage ?? run.resultSummary ?? '—'}
+          </StyledOutcomeCell>
+        </Fragment>
+      ))}
+    </StyledRunsTable>
+  );
+};
+
+const AgentTaskRow = ({ task }: { task: AgentTask }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <>
+      <StyledCell>
+        <StyledExpandButton
+          type="button"
+          onClick={() => setIsExpanded((previous) => !previous)}
+          aria-label={isExpanded ? t`Collapse runs` : t`Expand runs`}
+        >
+          {isExpanded ? <IconChevronDown /> : <IconChevronRight />}
+        </StyledExpandButton>
+      </StyledCell>
+      <StyledCell title={task.reason}>{task.reason}</StyledCell>
+      <StyledCell title={`${task.objectNameSingular} / ${task.recordId}`}>
+        {task.objectNameSingular}
+      </StyledCell>
+      <StyledCell>
+        <Tag
+          color={getAgentTaskStatusTagColor(task.status)}
+          text={task.status}
+        />
+      </StyledCell>
+      <StyledCell>
+        {task.attempts}/{task.maxAttempts}
+      </StyledCell>
+      <StyledCell title={formatDate(task.createdAt)}>
+        {formatDate(task.createdAt)}
+      </StyledCell>
+      <StyledOutcomeCell>{task.outcome ?? t`No outcome recorded yet.`}</StyledOutcomeCell>
+      {isExpanded && (
+        <StyledRunsPanel>
+          <AgentTaskRuns taskId={task.id} />
+        </StyledRunsPanel>
+      )}
+    </>
+  );
+};
 
 export const SettingsAiAgentRuns = () => {
   const { data, loading, error } = useQuery<AgentTasksData>(AGENT_TASKS);
@@ -117,6 +205,7 @@ export const SettingsAiAgentRuns = () => {
           <StyledMessage>{t`No agent tasks have been scheduled yet.`}</StyledMessage>
         ) : (
           <StyledTable>
+            <StyledHeaderCell />
             <StyledHeaderCell>{t`Reason`}</StyledHeaderCell>
             <StyledHeaderCell>{t`Object`}</StyledHeaderCell>
             <StyledHeaderCell>{t`Status`}</StyledHeaderCell>

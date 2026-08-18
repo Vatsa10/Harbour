@@ -15,6 +15,7 @@ import { FactEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/
 import { RecordBriefEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/record-brief.entity';
 import { AgentTaskRunJob } from 'src/engine/metadata-modules/ai/ai-research/jobs/agent-task-run.job';
 import { RecordSweepService } from 'src/engine/metadata-modules/ai/ai-research/services/record-sweep.service';
+import { AgentRunResolver } from 'src/engine/metadata-modules/ai/ai-research/resolvers/agent-run.resolver';
 import { AgentTaskResolver } from 'src/engine/metadata-modules/ai/ai-research/resolvers/agent-task.resolver';
 import { RecordBriefResolver } from 'src/engine/metadata-modules/ai/ai-research/resolvers/record-brief.resolver';
 import { AgentTaskService } from 'src/engine/metadata-modules/ai/ai-research/services/agent-task.service';
@@ -66,6 +67,7 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     AgentTaskDispatchCronCommand,
     AgentTaskRunJob,
     AgentTaskResolver,
+    AgentRunResolver,
     RecordBriefService,
     RecordBriefResolver,
     provideWorkspaceScopedRepository(EvidenceEntity),
