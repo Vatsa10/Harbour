@@ -207,6 +207,7 @@ export class CalendarEventParticipantService {
                 id: participant.id,
                 handle: participant.handle,
                 displayName: participant.displayName,
+                calendarEventId: participant.calendarEventId,
               })),
               objectMetadataName: 'calendarEventParticipant',
               workspaceId,

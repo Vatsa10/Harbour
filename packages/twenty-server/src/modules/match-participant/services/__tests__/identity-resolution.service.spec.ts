@@ -210,6 +210,92 @@ describe('IdentityResolutionService', () => {
       expect(match).toEqual({ kind: 'NONE' });
       expect(personRepository.find).not.toHaveBeenCalled();
     });
+
+    it('should return CANDIDATE via the relationship lane when a related company has a matching name but the email domain does not match', async () => {
+      // Email domain lookup returns nothing (no company at that domain) —
+      // the relationship signal is the only path to a match here.
+      companyRepository.find.mockResolvedValue([]);
+      personRepository.find.mockResolvedValue([
+        {
+          id: 'person-1',
+          name: { firstName: 'Jane', lastName: 'Doe' },
+          companyId: 'company-related',
+        },
+      ]);
+
+      const match = await service.resolvePerson({
+        workspaceId: 'workspace-1',
+        email: 'jane.doe@personal-email.com',
+        displayName: 'Jane Doe',
+        relatedCompanyIds: ['company-related'],
+      });
+
+      expect(match).toEqual({
+        kind: 'CANDIDATE',
+        recordId: 'person-1',
+        explanation: expect.stringContaining('already linked'),
+      });
+      expect(personRepository.find).toHaveBeenCalledWith({
+        where: { companyId: 'company-related' },
+      });
+    });
+
+    it('should return NONE when a related company has no person with a matching name', async () => {
+      companyRepository.find.mockResolvedValue([]);
+      personRepository.find.mockResolvedValue([
+        {
+          id: 'person-1',
+          name: { firstName: 'John', lastName: 'Smith' },
+          companyId: 'company-related',
+        },
+      ]);
+
+      const match = await service.resolvePerson({
+        workspaceId: 'workspace-1',
+        email: 'jane.doe@personal-email.com',
+        displayName: 'Jane Doe',
+        relatedCompanyIds: ['company-related'],
+      });
+
+      expect(match).toEqual({ kind: 'NONE' });
+    });
+
+    it('should prefer the domain lane over the relationship lane when both would match', async () => {
+      companyRepository.find.mockResolvedValue([
+        { id: 'company-1', domainName: { primaryLinkUrl: 'https://acme.com' } },
+      ]);
+      personRepository.find.mockResolvedValue([
+        {
+          id: 'person-domain',
+          name: { firstName: 'Jane', lastName: 'Doe' },
+          companyId: 'company-1',
+        },
+      ]);
+
+      const match = await service.resolvePerson({
+        workspaceId: 'workspace-1',
+        email: 'jane.doe@acme.com',
+        displayName: 'Jane Doe',
+        relatedCompanyIds: ['company-unrelated'],
+      });
+
+      expect(match).toEqual({
+        kind: 'CANDIDATE',
+        recordId: 'person-domain',
+        explanation: expect.stringContaining('acme.com'),
+      });
+    });
+
+    it('should not consult relatedCompanyIds when there is no displayName to match on', async () => {
+      const match = await service.resolvePerson({
+        workspaceId: 'workspace-1',
+        email: 'jane.doe@personal-email.com',
+        relatedCompanyIds: ['company-related'],
+      });
+
+      expect(match).toEqual({ kind: 'NONE' });
+      expect(personRepository.find).not.toHaveBeenCalled();
+    });
   });
 
   describe('resolveCompany', () => {

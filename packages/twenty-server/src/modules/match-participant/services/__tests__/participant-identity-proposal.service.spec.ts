@@ -3,6 +3,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 
 import { ProposalCreationService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-creation.service';
 import { KeyValuePairService } from 'src/engine/core-modules/key-value-pair/key-value-pair.service';
+import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { IngestionSuppressionService } from 'src/modules/ingestion-noise-filter/services/ingestion-suppression.service';
 import { IdentityResolutionService } from 'src/modules/match-participant/services/identity-resolution.service';
 import { ParticipantIdentityProposalService } from 'src/modules/match-participant/services/participant-identity-proposal.service';
@@ -12,6 +13,12 @@ describe('ParticipantIdentityProposalService', () => {
 
   const identityResolutionService = { resolvePerson: jest.fn() };
   const proposalCreationService = { createFromExtraction: jest.fn() };
+  // No test here exercises the relationship lane's co-participant lookup
+  // (that behavior is covered by identity-resolution.service.spec.ts, which
+  // owns the relatedCompanyIds contract); every participant in these tests
+  // omits messageId/calendarEventId, so buildRelatedCompanyIds short-circuits
+  // before ever calling getRepository.
+  const globalWorkspaceOrmManager = { getRepository: jest.fn() };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -30,6 +37,10 @@ describe('ParticipantIdentityProposalService', () => {
         {
           provide: KeyValuePairService,
           useValue: { get: jest.fn().mockResolvedValue(undefined) },
+        },
+        {
+          provide: GlobalWorkspaceOrmManager,
+          useValue: globalWorkspaceOrmManager,
         },
         {
           provide: ModuleRef,
@@ -180,6 +191,45 @@ describe('ParticipantIdentityProposalService', () => {
       expect.objectContaining({
         sourceKey: 'ingestion:calendarEventParticipant:participant-2',
       }),
+    );
+  });
+
+  it('should pass the company of an already-linked co-participant on the same message as relatedCompanyIds', async () => {
+    const participantRepository = {
+      find: jest.fn().mockResolvedValue([
+        { messageId: 'message-1', personId: 'person-known' },
+      ]),
+    };
+    const personRepository = {
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: 'person-known', companyId: 'company-1' }]),
+    };
+
+    globalWorkspaceOrmManager.getRepository.mockImplementation(
+      (_workspaceId: string, entity: string) =>
+        entity === 'person' ? personRepository : participantRepository,
+    );
+
+    identityResolutionService.resolvePerson.mockResolvedValue({
+      kind: 'NONE',
+    });
+
+    await service.reviewUnmatchedParticipants({
+      participants: [
+        {
+          id: 'participant-unmatched',
+          handle: 'jane.doe@personal-email.com',
+          displayName: 'Jane Doe',
+          messageId: 'message-1',
+        },
+      ],
+      objectMetadataName: 'messageParticipant',
+      workspaceId: 'workspace-1',
+    });
+
+    expect(identityResolutionService.resolvePerson).toHaveBeenCalledWith(
+      expect.objectContaining({ relatedCompanyIds: ['company-1'] }),
     );
   });
 });

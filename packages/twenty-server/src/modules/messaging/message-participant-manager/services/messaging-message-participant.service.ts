@@ -104,6 +104,7 @@ export class MessagingMessageParticipantService {
                 id: participant.id,
                 handle: participant.handle,
                 displayName: participant.displayName,
+                messageId: participant.messageId,
               })),
               objectMetadataName: 'messageParticipant',
               workspaceId,

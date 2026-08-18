@@ -4,6 +4,7 @@ import { isDefined } from 'twenty-shared/utils';
 import { ILike } from 'typeorm';
 
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace.repository';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { type CompanyWorkspaceEntity } from 'src/modules/company/standard-objects/company.workspace-entity';
 import { extractDomainFromLink } from 'src/modules/contact-creation-manager/utils/extract-domain-from-link.util';
@@ -33,15 +34,29 @@ export class IdentityResolutionService {
     workspaceId: string;
     email: string;
     displayName?: string | null;
+    // Companies already known to be connected to this participant through a
+    // relationship other than their own email domain — e.g. a co-participant
+    // on the same message/calendar-event thread who is already linked to a
+    // person at that company. Deliberately caller-supplied rather than
+    // derived here: this service stays domain-agnostic about what a
+    // "relationship" is (thread, opportunity, ...), it only ever asks
+    // "does a person with this name already exist at company X".
+    relatedCompanyIds?: string[];
   }): Promise<IdentityMatch> {
-    const { workspaceId, email, displayName } = params;
+    const { workspaceId, email, displayName, relatedCompanyIds } = params;
 
     // Callers reach this from a GraphQL resolver, a BullMQ job, and a sync
     // listener; only the last already holds a workspace context. Establishing
     // it here means every caller works instead of the ORM throwing
     // "Workspace context not set" on two of the three paths.
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      () => this.resolvePersonInContext(workspaceId, email, displayName),
+      () =>
+        this.resolvePersonInContext(
+          workspaceId,
+          email,
+          displayName,
+          relatedCompanyIds,
+        ),
       buildSystemAuthContext(workspaceId),
       { lite: true },
     );
@@ -51,6 +66,7 @@ export class IdentityResolutionService {
     workspaceId: string,
     email: string,
     displayName?: string | null,
+    relatedCompanyIds?: string[],
   ): Promise<IdentityMatch> {
     // Read-only lookup across the whole workspace: identity resolution has to
     // see records the calling actor may not, otherwise it would silently
@@ -93,40 +109,83 @@ export class IdentityResolutionService {
 
     const domain = getDomainNameFromHandle(email);
 
-    if (!domain) {
-      return { kind: 'NONE' };
-    }
+    if (domain) {
+      const companyRepository =
+        await this.globalWorkspaceOrmManager.getRepository<CompanyWorkspaceEntity>(
+          workspaceId,
+          'company',
+          { shouldBypassPermissionChecks: true },
+        );
 
-    const companyRepository =
-      await this.globalWorkspaceOrmManager.getRepository<CompanyWorkspaceEntity>(
-        workspaceId,
-        'company',
-        { shouldBypassPermissionChecks: true },
+      const companiesAtDomain = await companyRepository.find({
+        where: { domainName: { primaryLinkUrl: ILike(`%${domain}%`) } },
+      });
+
+      // ILike is only a cheap prefilter: "notacme.com" contains "acme.com".
+      // Equality on the extracted domain is the actual rule.
+      const company = companiesAtDomain.find(
+        (candidate) =>
+          isDefined(candidate.domainName?.primaryLinkUrl) &&
+          extractDomainFromLink(candidate.domainName.primaryLinkUrl) ===
+            domain,
       );
 
-    const companiesAtDomain = await companyRepository.find({
-      where: { domainName: { primaryLinkUrl: ILike(`%${domain}%`) } },
-    });
+      if (isDefined(company)) {
+        const nameMatch = await this.findPersonByNameAtCompany({
+          personRepository,
+          companyId: company.id,
+          displayName,
+        });
 
-    // ILike is only a cheap prefilter: "notacme.com" contains "acme.com".
-    // Equality on the extracted domain is the actual rule.
-    const company = companiesAtDomain.find(
-      (candidate) =>
-        isDefined(candidate.domainName?.primaryLinkUrl) &&
-        extractDomainFromLink(candidate.domainName.primaryLinkUrl) === domain,
-    );
-
-    if (!isDefined(company)) {
-      return { kind: 'NONE' };
+        if (isDefined(nameMatch)) {
+          return {
+            kind: 'CANDIDATE',
+            recordId: nameMatch.id,
+            explanation: `"${displayName}" matches an existing person's name at company domain ${domain}, but arrived from a different email address (${email}). Confirm before merging.`,
+          };
+        }
+      }
     }
 
+    // Relationship lane: email and domain both failed, but the caller
+    // already knows this participant is tied to a company through some
+    // other relationship (e.g. a co-participant on the same thread who is
+    // already linked to a person there). Same deterministic rule as the
+    // domain lane — name must match exactly — just sourced from a
+    // relationship instead of the incoming email's own domain.
+    for (const companyId of relatedCompanyIds ?? []) {
+      const nameMatch = await this.findPersonByNameAtCompany({
+        personRepository,
+        companyId,
+        displayName,
+      });
+
+      if (isDefined(nameMatch)) {
+        return {
+          kind: 'CANDIDATE',
+          recordId: nameMatch.id,
+          explanation: `"${displayName}" matches an existing person's name at a company this participant is already linked to through another participant on the same thread, but arrived from a different, non-matching email address (${email}). Confirm before merging.`,
+        };
+      }
+    }
+
+    return { kind: 'NONE' };
+  }
+
+  private async findPersonByNameAtCompany(params: {
+    personRepository: WorkspaceRepository<PersonWorkspaceEntity>;
+    companyId: string;
+    displayName: string;
+  }): Promise<PersonWorkspaceEntity | undefined> {
+    const { personRepository, companyId, displayName } = params;
+
     const peopleAtCompany = await personRepository.find({
-      where: { companyId: company.id },
+      where: { companyId },
     });
 
     const normalizedIncomingName = normalizePersonDisplayName(displayName);
 
-    const nameMatch = peopleAtCompany.find((person) => {
+    return peopleAtCompany.find((person) => {
       const personDisplayName = [person.name?.firstName, person.name?.lastName]
         .filter(isDefined)
         .join(' ');
@@ -135,16 +194,6 @@ export class IdentityResolutionService {
         normalizePersonDisplayName(personDisplayName) === normalizedIncomingName
       );
     });
-
-    if (!isDefined(nameMatch)) {
-      return { kind: 'NONE' };
-    }
-
-    return {
-      kind: 'CANDIDATE',
-      recordId: nameMatch.id,
-      explanation: `"${displayName}" matches an existing person's name at company domain ${domain}, but arrived from a different email address (${email}). Confirm before merging.`,
-    };
   }
 
   // Company identity has one real signal (domain) — no name-based CANDIDATE
