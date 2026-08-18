@@ -122,8 +122,8 @@ describe('AgentTaskRunJob', () => {
     );
   });
 
-  // An exhausted budget must not read like a thorough run that found nothing.
-  it('should name the budget in the outcome when the step cap was reached', async () => {
+  // Budget exhaustion must halt the task and mark it as failed.
+  it('should halt the task as FAILED when the step budget is exhausted', async () => {
     agentTaskRepository.findOne.mockResolvedValue({
       id: 'task-1',
       workspaceId: 'workspace-1',
@@ -150,12 +150,21 @@ describe('AgentTaskRunJob', () => {
 
     await job.handle({ taskId: 'task-1', workspaceId: 'workspace-1' });
 
-    // Still SUCCEEDED: the run did real work, it just ran out of room.
-    expect(agentTaskService.completeTask).toHaveBeenCalledWith(
+    // Must be FAILED when budget is exhausted, not SUCCEEDED.
+    expect(agentRunRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
-        outcome: expect.stringContaining('step budget of 3'),
+        status: AgentRunStatus.FAILED,
+        errorMessage: expect.stringContaining('exceeded step budget of 3'),
       }),
     );
+    // Must call failTask, not completeTask.
+    expect(agentTaskService.failTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'task-1',
+        errorMessage: expect.stringContaining('exceeded step budget'),
+      }),
+    );
+    expect(agentTaskService.completeTask).not.toHaveBeenCalled();
   });
 
   // I1: AgentExecutionResult declares steps/modelId/creditsUsedMicro optional.
@@ -293,8 +302,8 @@ describe('AgentTaskRunJob', () => {
 
   // Important 8. The executor clamps maxSteps to AGENT_CONFIG.MAX_STEPS, so a
   // budget above the cap could never be "exhausted" by the old comparison and
-  // a truncated run read as a thorough one.
-  it('should note the truncation when an over-cap budget stops at the real cap', async () => {
+  // a truncated run read as a thorough one. Now budget exhaustion halts the task.
+  it('should fail the task when an over-cap budget stops at the real cap', async () => {
     agentTaskRepository.findOne.mockResolvedValue({
       id: 'task-1',
       workspaceId: 'workspace-1',
@@ -317,10 +326,14 @@ describe('AgentTaskRunJob', () => {
 
     await buildJob().handle({ taskId: 'task-1', workspaceId: 'workspace-1' });
 
-    expect(agentTaskService.completeTask).toHaveBeenCalledWith(
+    // Budget exhaustion (effective budget is MAX_STEPS) must mark task as FAILED.
+    expect(agentRunRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
-        outcome: expect.stringContaining('findings may be incomplete'),
+        status: AgentRunStatus.FAILED,
+        errorMessage: expect.stringContaining('exceeded step budget'),
       }),
     );
+    expect(agentTaskService.failTask).toHaveBeenCalled();
+    expect(agentTaskService.completeTask).not.toHaveBeenCalled();
   });
 });

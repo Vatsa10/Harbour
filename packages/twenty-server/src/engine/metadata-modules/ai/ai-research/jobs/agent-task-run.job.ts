@@ -193,31 +193,50 @@ export class AgentTaskRunJob {
           const effectiveBudget = Math.min(task.budget, AGENT_CONFIG.MAX_STEPS);
           const exhaustedBudget = stepCount >= effectiveBudget;
 
-          await this.agentRunRepository.save({
-            ...run,
-            status: AgentRunStatus.SUCCEEDED,
-            modelId: result.modelId ?? null,
-            finishedAt: new Date(),
-            elapsedMs: Date.now() - run.startedAt.getTime(),
-            inputTokens: result.usage.inputTokens ?? 0,
-            outputTokens: result.usage.outputTokens ?? 0,
-            creditsUsedMicro: result.creditsUsedMicro ?? 0,
-            resultSummary: resultText.slice(0, 2000),
-          });
+          // Enforce the cost ceiling: if the task exceeded its budget, halt it
+          // and record why. Budget exhaustion is a failure, not a success.
+          if (exhaustedBudget) {
+            const budgetExceededMessage = `Task halted: exceeded step budget of ${effectiveBudget}. Findings may be incomplete.`;
 
-          // A truncated run and a thorough run that found nothing look
-          // identical in run history unless the outcome says which one
-          // happened.
-          const budgetNote = exhaustedBudget
-            ? ` (stopped at the step budget of ${effectiveBudget} — findings may be incomplete)`
-            : '';
+            await this.agentRunRepository.save({
+              ...run,
+              status: AgentRunStatus.FAILED,
+              modelId: result.modelId ?? null,
+              finishedAt: new Date(),
+              elapsedMs: Date.now() - run.startedAt.getTime(),
+              inputTokens: result.usage.inputTokens ?? 0,
+              outputTokens: result.usage.outputTokens ?? 0,
+              creditsUsedMicro: result.creditsUsedMicro ?? 0,
+              resultSummary: resultText.slice(0, 2000),
+              errorMessage: budgetExceededMessage,
+            });
 
-          await this.agentTaskService.completeTask({
-            taskId: task.id,
-            workspaceId,
-            runId: run.id,
-            outcome: `${resultText.slice(0, 400) || 'Research run completed.'}${budgetNote}`,
-          });
+            await this.agentTaskService.failTask({
+              taskId: task.id,
+              workspaceId,
+              runId: run.id,
+              errorMessage: budgetExceededMessage,
+            });
+          } else {
+            await this.agentRunRepository.save({
+              ...run,
+              status: AgentRunStatus.SUCCEEDED,
+              modelId: result.modelId ?? null,
+              finishedAt: new Date(),
+              elapsedMs: Date.now() - run.startedAt.getTime(),
+              inputTokens: result.usage.inputTokens ?? 0,
+              outputTokens: result.usage.outputTokens ?? 0,
+              creditsUsedMicro: result.creditsUsedMicro ?? 0,
+              resultSummary: resultText.slice(0, 2000),
+            });
+
+            await this.agentTaskService.completeTask({
+              taskId: task.id,
+              workspaceId,
+              runId: run.id,
+              outcome: resultText.slice(0, 400) || 'Research run completed.',
+            });
+          }
         } catch (error) {
           const errorMessage =
             error instanceof Error ? error.message : 'Agent execution failed';
