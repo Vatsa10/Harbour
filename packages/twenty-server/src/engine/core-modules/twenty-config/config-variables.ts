@@ -1964,15 +1964,6 @@ export class ConfigVariables {
   CAPTCHA_SECRET_KEY?: string;
 
   @ConfigVariablesMetadata({
-    group: ConfigVariablesGroup.SERVER_CONFIG,
-    isSensitive: true,
-    description: 'License key for the Enterprise version',
-    type: ConfigVariableType.STRING,
-  })
-  @IsOptional()
-  ENTERPRISE_KEY: string;
-
-  @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.ADVANCED_SETTINGS,
     isSensitive: true,
     description:
