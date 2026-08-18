@@ -70,7 +70,9 @@ export const validateWorkflowTemplateDefinition = (
     // install outright rather than storing a workflow that silently no-ops.
     if (step.type === WorkflowActionType.AI_AGENT) {
       const input = isPlainObject(step.settings) ? step.settings.input : null;
-      const agentId = isPlainObject(input) ? input.agentId : undefined;
+      const agentId = isPlainObject(input)
+        ? (input as Record<string, unknown>).agentId
+        : undefined;
 
       if (typeof agentId !== 'string' || agentId.trim().length === 0) {
         throw new InvalidWorkflowDefinitionError(
