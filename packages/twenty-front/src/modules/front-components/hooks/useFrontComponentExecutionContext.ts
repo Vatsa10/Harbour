@@ -14,6 +14,7 @@ import {
   OpenRecordIn,
   SidePanelPages,
   type EnqueueSnackbarParams,
+  type NavigateOptions,
 } from 'twenty-shared/types';
 import { type AppLocale } from 'twenty-shared/translations';
 
@@ -42,6 +43,14 @@ import { useIcons } from 'twenty-ui/icon';
 import { useIsMobile } from 'twenty-ui/utilities';
 import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 import { useNavigateApp } from '~/hooks/useNavigateApp';
+
+type OpenSidePanelPageParams = Parameters<
+  FrontComponentHostCommunicationApi['openSidePanelPage']
+>[0];
+
+type OpenCommandConfirmationModalParams = Parameters<
+  FrontComponentHostCommunicationApi['openCommandConfirmationModal']
+>[0];
 
 const FRONT_COMPONENT_CLIPBOARD_MAX_LENGTH = 64 * 1024;
 const FRONT_COMPONENT_CLIPBOARD_RATE_LIMIT_MS = 1000;
@@ -97,10 +106,10 @@ export const useFrontComponentExecutionContext = ({
   );
 
   const navigate: FrontComponentHostCommunicationApi['navigate'] = async (
-    to,
-    params,
-    queryParams,
-    options,
+    to: AppPath,
+    params: Record<string, unknown> | undefined,
+    queryParams: Record<string, unknown> | undefined,
+    options: NavigateOptions | undefined,
   ) => {
     if (to === AppPath.RecordShowPage) {
       const targetObjectNameSingular = (
@@ -132,7 +141,7 @@ export const useFrontComponentExecutionContext = ({
   };
 
   const openSidePanelPage: FrontComponentHostCommunicationApi['openSidePanelPage'] =
-    async (params) => {
+    async (params: OpenSidePanelPageParams) => {
       if (params.page === SidePanelPages.ViewRecord) {
         const { recordId, objectNameSingular, tab, resetNavigationStack } =
           params;
@@ -257,7 +266,7 @@ export const useFrontComponentExecutionContext = ({
       subtitle,
       confirmButtonText,
       confirmButtonAccent = 'danger',
-    }) => {
+    }: OpenCommandConfirmationModalParams) => {
       openConfirmationModal({
         caller: { type: 'frontComponent', frontComponentId },
         title,
@@ -323,7 +332,7 @@ export const useFrontComponentExecutionContext = ({
     };
 
   const updateProgress: FrontComponentHostCommunicationApi['updateProgress'] =
-    async (progress) => {
+    async (progress: number) => {
       if (!isDefined(commandMenuItemId)) {
         return;
       }
@@ -332,7 +341,7 @@ export const useFrontComponentExecutionContext = ({
     };
 
   const copyToClipboard: FrontComponentHostCommunicationApi['copyToClipboard'] =
-    async (text) => {
+    async (text: string) => {
       if (!isNonEmptyString(text)) {
         return;
       }
