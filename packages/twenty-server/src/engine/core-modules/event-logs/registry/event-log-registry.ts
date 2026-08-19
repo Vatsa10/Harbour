@@ -2,7 +2,6 @@
 
 import { EventLogTable } from 'twenty-shared/types';
 
-import { BillingEntitlementKey } from 'src/engine/core-modules/billing/enums/billing-entitlement-key.enum';
 import { type EventLogRecord } from 'src/engine/core-modules/event-logs/dtos/event-log-result.dto';
 import {
   type ApplicationLogRow,
@@ -19,8 +18,6 @@ type StoredEventRow = StoredRow<ObjectEventRow & Pick<PageviewRow, 'name'>>;
 
 export type EventLogTypeDefinition = {
   clickHouseTable: string;
-  // null = free on every plan; otherwise the required billing entitlement
-  requiresEntitlement: BillingEntitlementKey | null;
   eventFieldName: string;
   // The shared dispatcher stamps `timestamp`; each type maps only its own fields.
   normalize: (
@@ -46,25 +43,21 @@ const normalizeGenericEvent =
 export const EVENT_LOG_TYPES: Record<EventLogTable, EventLogTypeDefinition> = {
   [EventLogTable.WORKSPACE_EVENT]: {
     clickHouseTable: 'workspaceEvent',
-    requiresEntitlement: BillingEntitlementKey.AUDIT_LOGS,
     eventFieldName: 'event',
     normalize: normalizeGenericEvent('event'),
   },
   [EventLogTable.PAGEVIEW]: {
     clickHouseTable: 'pageview',
-    requiresEntitlement: BillingEntitlementKey.AUDIT_LOGS,
     eventFieldName: 'name',
     normalize: normalizeGenericEvent('name'),
   },
   [EventLogTable.OBJECT_EVENT]: {
     clickHouseTable: 'objectEvent',
-    requiresEntitlement: BillingEntitlementKey.AUDIT_LOGS,
     eventFieldName: 'event',
     normalize: normalizeGenericEvent('event'),
   },
   [EventLogTable.USAGE_EVENT]: {
     clickHouseTable: 'usageEvent',
-    requiresEntitlement: BillingEntitlementKey.AUDIT_LOGS,
     eventFieldName: 'resourceType',
     normalize: (row) => {
       const record = row as StoredRow<UsageEventRow>;
@@ -86,7 +79,6 @@ export const EVENT_LOG_TYPES: Record<EventLogTable, EventLogTypeDefinition> = {
   },
   [EventLogTable.APPLICATION_LOG]: {
     clickHouseTable: 'applicationLog',
-    requiresEntitlement: null,
     eventFieldName: 'logicFunctionName',
     normalize: (row) => {
       const record = row as StoredRow<ApplicationLogRow>;

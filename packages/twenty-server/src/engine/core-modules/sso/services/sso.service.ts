@@ -11,8 +11,6 @@ import {
   IdentityProviderType,
   OIDCResponseType,
 } from 'src/engine/core-modules/sso/workspace-sso-identity-provider.entity';
-import { BillingEntitlementKey } from 'src/engine/core-modules/billing/enums/billing-entitlement-key.enum';
-import { BillingService } from 'src/engine/core-modules/billing/services/billing.service';
 import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
 import {
   SSOException,
@@ -27,28 +25,12 @@ import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twent
 
 @Injectable()
 export class SSOService {
-  private readonly featureLookUpKey = BillingEntitlementKey.SSO;
   constructor(
     @InjectRepository(WorkspaceSSOIdentityProviderEntity)
     private readonly workspaceSSOIdentityProviderRepository: Repository<WorkspaceSSOIdentityProviderEntity>,
     private readonly twentyConfigService: TwentyConfigService,
-    private readonly billingService: BillingService,
     private readonly exceptionHandlerService: ExceptionHandlerService,
   ) {}
-
-  private async isSSOEnabled(workspaceId: string) {
-    const isSSOBillingEnabled = await this.billingService.hasEntitlement(
-      workspaceId,
-      this.featureLookUpKey,
-    );
-
-    if (!isSSOBillingEnabled) {
-      throw new SSOException(
-        `No entitlement found for this workspace`,
-        SSOExceptionCode.SSO_DISABLE,
-      );
-    }
-  }
 
   private async getIssuerForOIDC(issuerUrl: string) {
     try {
@@ -69,8 +51,6 @@ export class SSOService {
     workspaceId: string,
   ) {
     try {
-      await this.isSSOEnabled(workspaceId);
-
       const issuer = await this.getIssuerForOIDC(data.issuer);
 
       const identityProvider =
@@ -111,8 +91,6 @@ export class SSOService {
     >,
     workspaceId: string,
   ) {
-    await this.isSSOEnabled(workspaceId);
-
     const identityProvider =
       await this.workspaceSSOIdentityProviderRepository.save({
         ...data,
