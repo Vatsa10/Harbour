@@ -1,4 +1,6 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the row-level-permission
+// predicate delete action handler (no Twenty Enterprise source consulted;
+// derived from the sibling delete-view-filter-action-handler.service.ts).
 
 import { Injectable } from '@nestjs/common';
 
@@ -19,6 +21,10 @@ export class DeleteRowLevelPermissionPredicateActionHandlerService extends Works
   'delete',
   'rowLevelPermissionPredicate',
 ) {
+  constructor() {
+    super();
+  }
+
   override async transpileUniversalActionToFlatAction(
     context: WorkspaceMigrationActionRunnerArgs<UniversalDeleteRowLevelPermissionPredicateAction>,
   ): Promise<FlatDeleteRowLevelPermissionPredicateAction> {
@@ -30,12 +36,12 @@ export class DeleteRowLevelPermissionPredicateActionHandlerService extends Works
   ): Promise<void> {
     const { flatAction, queryRunner, workspaceId } = context;
 
-    const repository =
+    const rowLevelPermissionPredicateRepository =
       queryRunner.manager.getRepository<RowLevelPermissionPredicateEntity>(
         RowLevelPermissionPredicateEntity,
       );
 
-    await repository.delete({
+    await rowLevelPermissionPredicateRepository.delete({
       id: flatAction.entityId,
       workspaceId,
     });

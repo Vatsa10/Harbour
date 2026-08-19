@@ -1,4 +1,6 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the row-level-permission
+// predicate create action handler (no Twenty Enterprise source consulted;
+// derived from the sibling create-view-filter-action-handler.service.ts).
 
 import { Injectable } from '@nestjs/common';
 
@@ -29,10 +31,10 @@ export class CreateRowLevelPermissionPredicateActionHandlerService extends Works
     workspaceId,
   }: WorkspaceMigrationActionRunnerArgs<UniversalCreateRowLevelPermissionPredicateAction>): Promise<FlatCreateRowLevelPermissionPredicateAction> {
     const {
-      roleId,
       fieldMetadataId,
-      workspaceMemberFieldMetadataId,
+      roleId,
       objectMetadataId,
+      workspaceMemberFieldMetadataId,
       rowLevelPermissionPredicateGroupId,
     } = resolveUniversalRelationIdentifiersToIds({
       flatEntityMaps: allFlatEntityMaps,
@@ -49,13 +51,13 @@ export class CreateRowLevelPermissionPredicateActionHandlerService extends Works
       ...action,
       flatEntity: {
         ...action.flatEntity,
-        roleId,
         fieldMetadataId,
-        workspaceMemberFieldMetadataId,
+        roleId,
         objectMetadataId,
+        workspaceMemberFieldMetadataId,
         rowLevelPermissionPredicateGroupId,
-        applicationId: flatApplication.id,
         id: action.id ?? v4(),
+        applicationId: flatApplication.id,
         workspaceId,
         ...emptyUniversalForeignKeyAggregators,
       },
@@ -68,6 +70,12 @@ export class CreateRowLevelPermissionPredicateActionHandlerService extends Works
     const { flatAction, queryRunner } = context;
     const { flatEntity } = flatAction;
 
+    // Row-level-permission predicates are metadata rows (like view filters),
+    // not workspace-schema columns: creation is a plain insert. There is no
+    // schema DDL step, so a create that reaches here and fails must throw
+    // rather than degrade to a partially-applied predicate set — see
+    // executeForWorkspaceSchema below and the RLP recon's deny-by-default
+    // contract.
     await this.insertFlatEntitiesInRepository({
       queryRunner,
       flatEntities: [flatEntity],

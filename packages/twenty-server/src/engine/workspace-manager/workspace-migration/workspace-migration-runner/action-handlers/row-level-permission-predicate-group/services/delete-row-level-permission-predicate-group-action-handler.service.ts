@@ -1,4 +1,7 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the row-level-permission
+// predicate group delete action handler (no Twenty Enterprise source
+// consulted; derived from the sibling
+// delete-view-filter-group-action-handler.service.ts).
 
 import { Injectable } from '@nestjs/common';
 
@@ -6,12 +9,12 @@ import { WorkspaceMigrationRunnerActionHandler } from 'src/engine/workspace-mana
 
 import { RowLevelPermissionPredicateGroupEntity } from 'src/engine/metadata-modules/row-level-permission-predicate/entities/row-level-permission-predicate-group.entity';
 import {
-  FlatDeleteRowLevelPermissionPredicateGroupAction,
-  UniversalDeleteRowLevelPermissionPredicateGroupAction,
+  type FlatDeleteRowLevelPermissionPredicateGroupAction,
+  type UniversalDeleteRowLevelPermissionPredicateGroupAction,
 } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/row-level-permission-predicate-group/types/workspace-migration-row-level-permission-predicate-group-action.type';
 import {
-  WorkspaceMigrationActionRunnerArgs,
-  WorkspaceMigrationActionRunnerContext,
+  type WorkspaceMigrationActionRunnerArgs,
+  type WorkspaceMigrationActionRunnerContext,
 } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/types/workspace-migration-action-runner-args.type';
 
 @Injectable()
@@ -19,6 +22,10 @@ export class DeleteRowLevelPermissionPredicateGroupActionHandlerService extends 
   'delete',
   'rowLevelPermissionPredicateGroup',
 ) {
+  constructor() {
+    super();
+  }
+
   override async transpileUniversalActionToFlatAction(
     context: WorkspaceMigrationActionRunnerArgs<UniversalDeleteRowLevelPermissionPredicateGroupAction>,
   ): Promise<FlatDeleteRowLevelPermissionPredicateGroupAction> {
@@ -30,12 +37,12 @@ export class DeleteRowLevelPermissionPredicateGroupActionHandlerService extends 
   ): Promise<void> {
     const { flatAction, queryRunner, workspaceId } = context;
 
-    const repository =
+    const rowLevelPermissionPredicateGroupRepository =
       queryRunner.manager.getRepository<RowLevelPermissionPredicateGroupEntity>(
         RowLevelPermissionPredicateGroupEntity,
       );
 
-    await repository.delete({
+    await rowLevelPermissionPredicateGroupRepository.delete({
       id: flatAction.entityId,
       workspaceId,
     });

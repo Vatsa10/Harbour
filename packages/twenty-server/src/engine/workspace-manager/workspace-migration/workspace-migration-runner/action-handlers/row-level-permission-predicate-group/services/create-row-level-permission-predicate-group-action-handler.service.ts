@@ -1,4 +1,7 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the row-level-permission
+// predicate group create action handler (no Twenty Enterprise source
+// consulted; derived from the sibling
+// create-view-filter-group-action-handler.service.ts).
 
 import { Injectable } from '@nestjs/common';
 
@@ -9,12 +12,12 @@ import { WorkspaceMigrationRunnerActionHandler } from 'src/engine/workspace-mana
 import { getUniversalFlatEntityEmptyForeignKeyAggregators } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/utils/reset-universal-flat-entity-foreign-key-aggregators.util';
 import { resolveUniversalRelationIdentifiersToIds } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/utils/resolve-universal-relation-identifiers-to-ids.util';
 import {
-  FlatCreateRowLevelPermissionPredicateGroupAction,
-  UniversalCreateRowLevelPermissionPredicateGroupAction,
+  type FlatCreateRowLevelPermissionPredicateGroupAction,
+  type UniversalCreateRowLevelPermissionPredicateGroupAction,
 } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/row-level-permission-predicate-group/types/workspace-migration-row-level-permission-predicate-group-action.type';
 import {
-  WorkspaceMigrationActionRunnerArgs,
-  WorkspaceMigrationActionRunnerContext,
+  type WorkspaceMigrationActionRunnerArgs,
+  type WorkspaceMigrationActionRunnerContext,
 } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/types/workspace-migration-action-runner-args.type';
 
 @Injectable()
@@ -28,15 +31,12 @@ export class CreateRowLevelPermissionPredicateGroupActionHandlerService extends 
     flatApplication,
     workspaceId,
   }: WorkspaceMigrationActionRunnerArgs<UniversalCreateRowLevelPermissionPredicateGroupAction>): Promise<FlatCreateRowLevelPermissionPredicateGroupAction> {
-    const {
-      objectMetadataId,
-      roleId,
-      parentRowLevelPermissionPredicateGroupId,
-    } = resolveUniversalRelationIdentifiersToIds({
-      flatEntityMaps: allFlatEntityMaps,
-      metadataName: action.metadataName,
-      universalForeignKeyValues: action.flatEntity,
-    });
+    const { roleId, objectMetadataId, parentRowLevelPermissionPredicateGroupId } =
+      resolveUniversalRelationIdentifiersToIds({
+        flatEntityMaps: allFlatEntityMaps,
+        metadataName: action.metadataName,
+        universalForeignKeyValues: action.flatEntity,
+      });
 
     const emptyUniversalForeignKeyAggregators =
       getUniversalFlatEntityEmptyForeignKeyAggregators({
@@ -47,14 +47,14 @@ export class CreateRowLevelPermissionPredicateGroupActionHandlerService extends 
       ...action,
       flatEntity: {
         ...action.flatEntity,
-        objectMetadataId,
         roleId,
+        objectMetadataId,
         parentRowLevelPermissionPredicateGroupId,
-        applicationId: flatApplication.id,
         id: action.id ?? v4(),
+        applicationId: flatApplication.id,
         workspaceId,
-        rowLevelPermissionPredicateIds: [],
         childRowLevelPermissionPredicateGroupIds: [],
+        rowLevelPermissionPredicateIds: [],
         ...emptyUniversalForeignKeyAggregators,
       },
     };

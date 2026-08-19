@@ -1,4 +1,7 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the row-level-permission
+// predicate group update action handler (no Twenty Enterprise source
+// consulted; derived from the sibling
+// update-view-filter-group-action-handler.service.ts).
 
 import { Injectable } from '@nestjs/common';
 
@@ -8,12 +11,12 @@ import { findFlatEntityByUniversalIdentifierOrThrow } from 'src/engine/metadata-
 import { RowLevelPermissionPredicateGroupEntity } from 'src/engine/metadata-modules/row-level-permission-predicate/entities/row-level-permission-predicate-group.entity';
 import { resolveUniversalUpdateRelationIdentifiersToIds } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/utils/resolve-universal-update-relation-identifiers-to-ids.util';
 import {
-  FlatUpdateRowLevelPermissionPredicateGroupAction,
-  UniversalUpdateRowLevelPermissionPredicateGroupAction,
+  type FlatUpdateRowLevelPermissionPredicateGroupAction,
+  type UniversalUpdateRowLevelPermissionPredicateGroupAction,
 } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/row-level-permission-predicate-group/types/workspace-migration-row-level-permission-predicate-group-action.type';
 import {
-  WorkspaceMigrationActionRunnerArgs,
-  WorkspaceMigrationActionRunnerContext,
+  type WorkspaceMigrationActionRunnerArgs,
+  type WorkspaceMigrationActionRunnerContext,
 } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/types/workspace-migration-action-runner-args.type';
 
 @Injectable()
@@ -21,6 +24,10 @@ export class UpdateRowLevelPermissionPredicateGroupActionHandlerService extends 
   'update',
   'rowLevelPermissionPredicateGroup',
 ) {
+  constructor() {
+    super();
+  }
+
   override async transpileUniversalActionToFlatAction(
     context: WorkspaceMigrationActionRunnerArgs<UniversalUpdateRowLevelPermissionPredicateGroupAction>,
   ): Promise<FlatUpdateRowLevelPermissionPredicateGroupAction> {
@@ -53,12 +60,15 @@ export class UpdateRowLevelPermissionPredicateGroupActionHandlerService extends 
     const { flatAction, queryRunner, workspaceId } = context;
     const { entityId, update } = flatAction;
 
-    const repository =
+    const rowLevelPermissionPredicateGroupRepository =
       queryRunner.manager.getRepository<RowLevelPermissionPredicateGroupEntity>(
         RowLevelPermissionPredicateGroupEntity,
       );
 
-    await repository.update({ id: entityId, workspaceId }, update);
+    await rowLevelPermissionPredicateGroupRepository.update(
+      { id: entityId, workspaceId },
+      update,
+    );
   }
 
   async executeForWorkspaceSchema(

@@ -1,4 +1,6 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the row-level-permission
+// predicate update action handler (no Twenty Enterprise source consulted;
+// derived from the sibling update-view-filter-action-handler.service.ts).
 
 import { Injectable } from '@nestjs/common';
 
@@ -21,6 +23,10 @@ export class UpdateRowLevelPermissionPredicateActionHandlerService extends Works
   'update',
   'rowLevelPermissionPredicate',
 ) {
+  constructor() {
+    super();
+  }
+
   override async transpileUniversalActionToFlatAction(
     context: WorkspaceMigrationActionRunnerArgs<UniversalUpdateRowLevelPermissionPredicateAction>,
   ): Promise<FlatUpdateRowLevelPermissionPredicateAction> {
@@ -52,12 +58,15 @@ export class UpdateRowLevelPermissionPredicateActionHandlerService extends Works
     const { flatAction, queryRunner, workspaceId } = context;
     const { entityId, update } = flatAction;
 
-    const repository =
+    const rowLevelPermissionPredicateRepository =
       queryRunner.manager.getRepository<RowLevelPermissionPredicateEntity>(
         RowLevelPermissionPredicateEntity,
       );
 
-    await repository.update({ id: entityId, workspaceId }, update);
+    await rowLevelPermissionPredicateRepository.update(
+      { id: entityId, workspaceId },
+      update,
+    );
   }
 
   async executeForWorkspaceSchema(
