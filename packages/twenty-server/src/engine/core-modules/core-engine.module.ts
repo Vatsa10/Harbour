@@ -17,17 +17,11 @@ import { ApplicationModule } from 'src/engine/core-modules/application/applicati
 import { PreInstalledAppsModule } from 'src/engine/core-modules/application/pre-installed-apps/pre-installed-apps.module';
 import { ApprovedAccessDomainModule } from 'src/engine/core-modules/approved-access-domain/approved-access-domain.module';
 import { AuthModule } from 'src/engine/core-modules/auth/auth.module';
-import { BillingWebhookModule } from 'src/engine/core-modules/billing-webhook/billing-webhook.module';
-import { AppBillingModule } from 'src/engine/core-modules/billing/app-billing/app-billing.module';
-import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
-import { BillingGraphqlApiExceptionFilter } from 'src/engine/core-modules/billing/filters/billing-graphql-api-exception.filter';
 import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-graphql-api-exception.filter';
 import { CacheStorageModule } from 'src/engine/core-modules/cache-storage/cache-storage.module';
 import { TimelineCalendarEventModule } from 'src/engine/core-modules/calendar/timeline-calendar-event.module';
 import { CaptchaModule } from 'src/engine/core-modules/captcha/captcha.module';
-import { CloudflareModule } from 'src/engine/core-modules/cloudflare/cloudflare.module';
 import { CodeInterpreterModule } from 'src/engine/core-modules/code-interpreter/code-interpreter.module';
-import { DnsManagerModule } from 'src/engine/core-modules/dns-manager/dns-manager.module';
 import { DpaModule } from 'src/engine/core-modules/dpa/dpa.module';
 import { EmailModule } from 'src/engine/core-modules/email/email.module';
 import { EmailingDomainModule } from 'src/engine/core-modules/emailing-domain/emailing-domain.module';
@@ -68,7 +62,6 @@ import { UserModule } from 'src/engine/core-modules/user/user.module';
 import { WorkflowApiModule } from 'src/engine/core-modules/workflow/workflow-api.module';
 import { WorkspaceInvitationModule } from 'src/engine/core-modules/workspace-invitation/workspace-invitation.module';
 import { WorkspaceModule } from 'src/engine/core-modules/workspace/workspace.module';
-import { AiBillingModule } from 'src/engine/metadata-modules/ai/ai-billing/ai-billing.module';
 import { AiModelsModule } from 'src/engine/metadata-modules/ai/ai-models/ai-models.module';
 import { PageLayoutModule } from 'src/engine/metadata-modules/page-layout/page-layout.module';
 import { RoleModule } from 'src/engine/metadata-modules/role/role.module';
@@ -93,8 +86,6 @@ import { FileModule } from './file/file.module';
     TwentyConfigModule.forRoot(),
     HealthModule,
     AuthModule,
-    BillingModule,
-    BillingWebhookModule,
     MessagingWebhooksModule,
     ConnectedAccountSyncWebhooksModule,
     UsageModule,
@@ -122,8 +113,6 @@ import { FileModule } from './file/file.module';
     EmailingDomainModule,
     EmailingModule,
     PublicDomainModule,
-    CloudflareModule,
-    DnsManagerModule,
     WorkflowApiModule,
     WorkspaceEventEmitterModule,
     ActorModule,
@@ -161,7 +150,6 @@ import { FileModule } from './file/file.module';
     }),
     CacheStorageModule,
     AiModelsModule,
-    AiBillingModule,
     LogicFunctionModule.forRoot(),
     CodeInterpreterModule.forRoot(),
     SearchModule,
@@ -174,15 +162,10 @@ import { FileModule } from './file/file.module';
     DashboardModule,
     EventLogsViewerModule,
     PreInstalledAppsModule,
-    AppBillingModule,
     GuidedImportModule,
     WorkflowTemplatesModule,
   ],
   providers: [
-    {
-      provide: APP_FILTER,
-      useClass: BillingGraphqlApiExceptionFilter,
-    },
     {
       provide: APP_FILTER,
       useClass: PermissionsGraphqlApiExceptionFilter,

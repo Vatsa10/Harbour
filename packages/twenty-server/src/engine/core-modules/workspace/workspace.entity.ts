@@ -1,6 +1,5 @@
 import { Field, ObjectType, registerEnumType } from '@nestjs/graphql';
 
-import { type Application } from 'cloudflare/resources/zero-trust/access/applications/applications';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 import {
   Check,
@@ -371,5 +370,5 @@ export class WorkspaceEntity {
   @OneToMany(() => ApplicationEntity, (application) => application.workspace, {
     onDelete: 'CASCADE',
   })
-  applications: Relation<Application[]>;
+  applications: Relation<ApplicationEntity[]>;
 }
