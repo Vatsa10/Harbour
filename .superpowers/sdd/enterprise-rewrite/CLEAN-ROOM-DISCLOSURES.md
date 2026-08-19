@@ -185,3 +185,30 @@ replacement - that one required retiring the agent.
 
 **Rule of thumb for future dispatches:** exposure matters in proportion to what
 you write afterwards. Read-then-delete is safe. Read-then-rewrite is not.
+
+## 7 ruling — JWT agent `cat` on two event-logs cron files
+Agent ran `cat` without a `grep -l` pre-check on
+`event-logs/cleanup/commands/event-log-cleanup.cron.command.ts` and
+`.../crons/event-log-cleanup.cron.job.ts` while looking for a cron
+command/job pair to model structural convention on.
+
+**RULING (coordinator): de minimis, cleared.** Three independent reasons:
+1. Content seen was NestJS decorator and control-flow scaffolding. The shape
+   of a Nest cron command/job pair is dictated by the framework, not authored
+   - there is no protectable expression in `@Command()` + a `handle()` method.
+2. The agent modeled its actual implementation on CONFIRMED-AGPL files
+   (`trash-cleanup.cron.{command,job}.ts`, `user-session-cleanup.cron.command.ts`),
+   not on what it glanced at.
+3. Both files have since been deleted outright - `core-modules/event-logs` is
+   now fully clear of Enterprise headers. No replacement derived from them
+   exists or can exist.
+
+Also cleared, same reasoning: the earlier JWT leak of one line via unfiltered
+recursive grep (`ROTATE_SIGNING_KEYS_CRON_PATTERN = '15 3 * * *'`). A cron
+value is a fact, not expression; the rewrite independently chose '0 0 * * *'.
+
+**Pattern worth noting for the record:** this is the second open-before-check
+slip. Both were caught and self-reported by the agent. The failure mode is
+always the same - reaching for `cat`/`head` on a file the agent assumed was
+safe because of where it lived. The standing rule remains: `grep -l` first,
+every file, every time, regardless of directory.
