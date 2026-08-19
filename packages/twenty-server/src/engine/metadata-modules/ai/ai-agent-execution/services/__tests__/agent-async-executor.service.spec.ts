@@ -5,7 +5,6 @@ import { generateText } from 'ai';
 import { createExecuteToolTool } from 'src/engine/core-modules/tool-provider/tools';
 import { ToolCategory } from 'twenty-shared/ai';
 
-import { BillingUsageService } from 'src/engine/core-modules/billing/services/billing-usage.service';
 import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
 import { ToolRegistryService } from 'src/engine/core-modules/tool-provider/services/tool-registry.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
@@ -149,12 +148,6 @@ describe('AgentAsyncExecutorService — workflow agent role-scoped tool resoluti
           },
         },
         { provide: AiBillingService, useValue: aiBillingService },
-        {
-          provide: BillingUsageService,
-          useValue: {
-            hasAvailableCreditsOrThrow: jest.fn().mockResolvedValue(undefined),
-          },
-        },
         {
           provide: MetricsService,
           useValue: {

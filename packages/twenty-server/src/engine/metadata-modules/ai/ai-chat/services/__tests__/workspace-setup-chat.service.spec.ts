@@ -52,9 +52,6 @@ describe('WorkspaceSetupChatService', () => {
     const twentyConfigService = {
       get: jest.fn().mockReturnValue(true),
     };
-    const billingUsageService = {
-      hasAvailableCredits: jest.fn().mockResolvedValue(true),
-    };
     const aiModelRegistryService = {
       getAvailableModels: jest
         .fn()
@@ -113,7 +110,6 @@ describe('WorkspaceSetupChatService', () => {
 
     const service = new WorkspaceSetupChatService(
       twentyConfigService as never,
-      billingUsageService as never,
       aiModelRegistryService as never,
       userWorkspaceService as never,
       i18nService as never,
@@ -126,7 +122,6 @@ describe('WorkspaceSetupChatService', () => {
       service,
       workspaceMemberState,
       twentyConfigService,
-      billingUsageService,
       aiModelRegistryService,
       userWorkspaceService,
       i18nService,
@@ -178,20 +173,6 @@ describe('WorkspaceSetupChatService', () => {
       buildService();
 
     aiModelRegistryService.getAvailableModels.mockReturnValue([]);
-
-    const result = await service.startWorkspaceSetupChat(startArguments);
-
-    expect(result).toEqual({
-      outcome: WorkspaceSetupChatOutcome.UNAVAILABLE,
-      thread: null,
-    });
-    expect(agentChatService.createThread).not.toHaveBeenCalled();
-  });
-
-  it('should return unavailable without creating a thread when the workspace has no available credits', async () => {
-    const { service, billingUsageService, agentChatService } = buildService();
-
-    billingUsageService.hasAvailableCredits.mockResolvedValue(false);
 
     const result = await service.startWorkspaceSetupChat(startArguments);
 
@@ -377,63 +358,6 @@ describe('WorkspaceSetupChatService', () => {
       'The user locale is French, please continue the discussion in that language.',
     );
     expect(kickoffText).not.toContain('No information about the company');
-  });
-
-  it('should return alreadyStarted without a credit check when the thread already has conversation messages', async () => {
-    const {
-      service,
-      billingUsageService,
-      agentChatService,
-      agentChatStreamingService,
-    } = buildService();
-
-    const existingThread = {
-      id: EXPECTED_THREAD_ID,
-      deletedAt: null,
-      activeStreamId: null,
-    };
-
-    agentChatService.findThreadById.mockResolvedValue(existingThread);
-    agentChatService.hasConversationMessages.mockResolvedValue(true);
-    billingUsageService.hasAvailableCredits.mockResolvedValue(false);
-
-    const result = await service.startWorkspaceSetupChat(startArguments);
-
-    expect(result).toEqual({
-      outcome: WorkspaceSetupChatOutcome.ALREADY_STARTED,
-      thread: existingThread,
-    });
-    expect(billingUsageService.hasAvailableCredits).not.toHaveBeenCalled();
-    expect(
-      agentChatStreamingService.startHiddenKickoffStream,
-    ).not.toHaveBeenCalled();
-  });
-
-  it('should not start a stream on an empty existing thread when credits ran out', async () => {
-    const {
-      service,
-      billingUsageService,
-      agentChatService,
-      agentChatStreamingService,
-    } = buildService();
-
-    agentChatService.findThreadById.mockResolvedValue({
-      id: EXPECTED_THREAD_ID,
-      deletedAt: null,
-      activeStreamId: null,
-    });
-    billingUsageService.hasAvailableCredits.mockResolvedValue(false);
-
-    const result = await service.startWorkspaceSetupChat(startArguments);
-
-    expect(result).toEqual({
-      outcome: WorkspaceSetupChatOutcome.UNAVAILABLE,
-      thread: null,
-    });
-    expect(agentChatService.createThread).not.toHaveBeenCalled();
-    expect(
-      agentChatStreamingService.startHiddenKickoffStream,
-    ).not.toHaveBeenCalled();
   });
 
   it('should return alreadyStarted without kicking off when the active stream is still alive', async () => {

@@ -3,7 +3,6 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 
 import { Repository } from 'typeorm';
 
-import { BillingService } from 'src/engine/core-modules/billing/services/billing.service';
 import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
 import { SSOService } from 'src/engine/core-modules/sso/services/sso.service';
 import { SSOException } from 'src/engine/core-modules/sso/sso.exception';
@@ -13,7 +12,6 @@ import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twent
 describe('SSOService', () => {
   let service: SSOService;
   let repository: Repository<WorkspaceSSOIdentityProviderEntity>;
-  let billingService: BillingService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -22,12 +20,6 @@ describe('SSOService', () => {
         {
           provide: getRepositoryToken(WorkspaceSSOIdentityProviderEntity),
           useClass: Repository,
-        },
-        {
-          provide: BillingService,
-          useValue: {
-            hasEntitlement: jest.fn(),
-          },
         },
         {
           provide: TwentyConfigService,
@@ -48,7 +40,6 @@ describe('SSOService', () => {
     repository = module.get<Repository<WorkspaceSSOIdentityProviderEntity>>(
       getRepositoryToken(WorkspaceSSOIdentityProviderEntity),
     );
-    billingService = module.get<BillingService>(BillingService);
   });
 
   it('should be defined', () => {
@@ -73,7 +64,6 @@ describe('SSOService', () => {
         issuer: 'https://example.com',
       };
 
-      jest.spyOn(billingService, 'hasEntitlement').mockResolvedValue(true);
       jest
         .spyOn(service as any, 'getIssuerForOIDC')
         .mockResolvedValue(mockIssuer);
@@ -94,10 +84,6 @@ describe('SSOService', () => {
         issuer: 'https://example.com',
       });
 
-      expect(billingService.hasEntitlement).toHaveBeenCalledWith(
-        workspaceId,
-        'SSO',
-      );
       expect(repository.save).toHaveBeenCalledWith({
         type: 'OIDC',
         clientID: 'client-id',
@@ -106,25 +92,6 @@ describe('SSOService', () => {
         name: 'Test Provider',
         workspaceId,
       });
-    });
-
-    it('should throw an exception when SSO is disabled', async () => {
-      const workspaceId = 'workspace-123';
-      const data = {
-        issuer: 'https://example.com',
-        clientID: 'client-id',
-        clientSecret: 'client-secret',
-        name: 'Test Provider',
-      };
-
-      jest.spyOn(billingService, 'hasEntitlement').mockResolvedValue(false);
-
-      const result = await service.createOIDCIdentityProvider(
-        data,
-        workspaceId,
-      );
-
-      expect(result).toBeInstanceOf(SSOException);
     });
   });
 

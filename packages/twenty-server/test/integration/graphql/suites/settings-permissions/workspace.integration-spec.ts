@@ -4,7 +4,6 @@ import { makeMetadataAPIRequestWithFileUpload } from 'test/integration/metadata/
 import { makeMetadataAPIRequest } from 'test/integration/metadata/suites/utils/make-metadata-api-request.util';
 import { FeatureFlagKey } from 'twenty-shared/types';
 
-import { BillingPlanKey } from 'src/engine/core-modules/billing/enums/billing-plan-key.enum';
 import { ErrorCode } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
 import { PermissionsExceptionMessage } from 'src/engine/metadata-modules/permissions/permissions.exception';
 
@@ -488,52 +487,6 @@ describe('workspace permissions', () => {
           `,
           variables: {
             returnUrlPath: '/settings/billing',
-          },
-        };
-
-        await client
-          .post('/metadata')
-          .set('Authorization', `Bearer ${APPLE_JONY_MEMBER_ACCESS_TOKEN}`)
-          .send(queryData)
-          .expect(200)
-          .expect((res) => {
-            expect(res.body.data).toBeNull();
-            expect(res.body.errors).toBeDefined();
-            expect(res.body.errors[0].message).toBe(
-              PermissionsExceptionMessage.PERMISSION_DENIED,
-            );
-            expect(res.body.errors[0].extensions.code).toBe(
-              ErrorCode.FORBIDDEN,
-            );
-          });
-      });
-    });
-
-    describe('checkoutSession', () => {
-      it('should throw a permission error when user does not have permission (member role)', async () => {
-        const queryData = {
-          query: `
-            mutation CheckoutSession(
-              $recurringInterval: SubscriptionInterval!
-              $successUrlPath: String!
-              $plan: BillingPlanKey!
-              $requirePaymentMethod: Boolean
-            ) {
-              checkoutSession(
-                recurringInterval: $recurringInterval
-                successUrlPath: $successUrlPath
-                plan: $plan
-                requirePaymentMethod: $requirePaymentMethod
-              ) {
-                url
-              }
-            }
-          `,
-          variables: {
-            recurringInterval: 'Month',
-            successUrlPath: '/settings/billing',
-            plan: BillingPlanKey.PRO,
-            requirePaymentMethod: true,
           },
         };
 

@@ -3,10 +3,6 @@ import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 import { IsNull, Not, type QueryRunner, type Repository } from 'typeorm';
-
-import { BillingSubscriptionService } from 'src/engine/core-modules/billing/services/billing-subscription.service';
-import { BillingService } from 'src/engine/core-modules/billing/services/billing.service';
-import { DnsManagerService } from 'src/engine/core-modules/dns-manager/services/dns-manager.service';
 import { CustomDomainManagerService } from 'src/engine/core-modules/domain/custom-domain-manager/services/custom-domain-manager.service';
 import { SubdomainManagerService } from 'src/engine/core-modules/domain/subdomain-manager/services/subdomain-manager.service';
 import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
@@ -44,8 +40,6 @@ describe('WorkspaceService', () => {
   let workspaceRepository: Repository<WorkspaceEntity>;
   let workspaceCacheStorageService: WorkspaceCacheStorageService;
   let messageQueueService: MessageQueueService;
-  let dnsManagerService: DnsManagerService;
-  let billingSubscriptionService: BillingSubscriptionService;
   let userWorkspaceService: UserWorkspaceService;
   let flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService;
   let queryRunner: QueryRunner;
@@ -92,22 +86,8 @@ describe('WorkspaceService', () => {
             softDelete: jest.fn(),
           },
         },
-        {
-          provide: BillingService,
-          useValue: {
-            isBillingEnabled: jest.fn().mockReturnValue(true),
-          },
-        },
-        {
-          provide: BillingSubscriptionService,
-          useValue: {
-            cancelSubscription: jest.fn(),
-            assertSubscriptionCanceledOrNone: jest.fn(),
-          },
-        },
         ...[
           WorkspaceManagerService,
-          DnsManagerService,
           CustomDomainManagerService,
           SubdomainManagerService,
           TwentyConfigService,
@@ -193,11 +173,6 @@ describe('WorkspaceService', () => {
     );
     messageQueueService = module.get<MessageQueueService>(
       getQueueToken(MessageQueue.deleteCascadeQueue),
-    );
-    dnsManagerService = module.get<DnsManagerService>(DnsManagerService);
-    dnsManagerService.deleteHostnameSilently = jest.fn();
-    billingSubscriptionService = module.get<BillingSubscriptionService>(
-      BillingSubscriptionService,
     );
     userWorkspaceService =
       module.get<UserWorkspaceService>(UserWorkspaceService);
@@ -309,9 +284,6 @@ describe('WorkspaceService', () => {
 
       await service.deleteWorkspace(mockWorkspace.id, false);
 
-      expect(
-        billingSubscriptionService.assertSubscriptionCanceledOrNone,
-      ).toHaveBeenCalledWith(mockWorkspace.id);
       expect(workspaceCacheStorageService.flush).toHaveBeenCalledWith(
         mockWorkspace.id,
       );
@@ -356,9 +328,6 @@ describe('WorkspaceService', () => {
 
       await service.deleteWorkspace(mockWorkspace.id, true);
 
-      expect(
-        billingSubscriptionService.cancelSubscription,
-      ).toHaveBeenCalledWith(mockWorkspace.id);
       expect(workspaceRepository.softDelete).toHaveBeenCalledWith({
         id: mockWorkspace.id,
       });
@@ -379,10 +348,6 @@ describe('WorkspaceService', () => {
       jest.spyOn(userWorkspaceRepository, 'find').mockResolvedValue([]);
 
       await service.deleteWorkspace(mockWorkspace.id, false);
-
-      expect(dnsManagerService.deleteHostnameSilently).toHaveBeenCalledWith(
-        customDomain,
-      );
     });
 
     it('should not delete the custom domain when soft deleting a workspace with a custom domain', async () => {
@@ -400,7 +365,6 @@ describe('WorkspaceService', () => {
 
       await service.deleteWorkspace(mockWorkspace.id, true);
 
-      expect(dnsManagerService.deleteHostnameSilently).not.toHaveBeenCalled();
       expect(workspaceRepository.softDelete).toHaveBeenCalledWith({
         id: mockWorkspace.id,
       });
