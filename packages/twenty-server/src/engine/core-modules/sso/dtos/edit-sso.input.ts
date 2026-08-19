@@ -1,20 +1,51 @@
-/* @license Enterprise */
+import { ArgsType, Field } from '@nestjs/graphql';
 
-import { Field, InputType } from '@nestjs/graphql';
+import { IsOptional, IsString, IsUUID, IsUrl } from 'class-validator';
 
-import { IsString, IsUUID } from 'class-validator';
-
-import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
-import { type SSOConfiguration } from 'src/engine/core-modules/sso/types/SSOConfigurations.type';
+import { IsX509Certificate } from 'src/engine/core-modules/sso/dtos/validators/x509.validator';
 import { SSOIdentityProviderStatus } from 'src/engine/core-modules/sso/workspace-sso-identity-provider.entity';
 
-@InputType()
+@ArgsType()
 export class EditSsoInput {
-  @Field(() => UUIDScalarType)
+  @Field(() => String)
   @IsUUID()
-  id: string;
+  identityProviderId: string;
 
-  @Field(() => SSOIdentityProviderStatus)
+  @Field(() => String)
+  @IsUUID()
+  workspaceId: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
   @IsString()
-  status: SSOConfiguration['status'];
+  name?: string;
+
+  @Field(() => SSOIdentityProviderStatus, { nullable: true })
+  @IsOptional()
+  status?: SSOIdentityProviderStatus;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  issuer?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsUrl({ require_tld: false })
+  ssoUrl?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsX509Certificate()
+  certificate?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  clientID?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  clientSecret?: string;
 }

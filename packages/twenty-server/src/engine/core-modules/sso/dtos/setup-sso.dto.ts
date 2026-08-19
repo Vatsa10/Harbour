@@ -1,28 +1,35 @@
-/* @license Enterprise */
-
 import { Field, ObjectType } from '@nestjs/graphql';
 
-import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { type SSOConfiguration } from 'src/engine/core-modules/sso/types/SSOConfigurations.type';
 import {
   IdentityProviderType,
   SSOIdentityProviderStatus,
 } from 'src/engine/core-modules/sso/workspace-sso-identity-provider.entity';
 
-@ObjectType('SetupSso')
+@ObjectType('SetupSSO')
 export class SetupSsoDTO {
-  @Field(() => UUIDScalarType)
-  id: string;
-
-  @Field(() => IdentityProviderType)
-  type: string;
-
   @Field(() => String)
-  issuer: string;
+  id: string;
 
   @Field(() => String)
   name: string;
 
+  @Field(() => IdentityProviderType)
+  type: IdentityProviderType;
+
   @Field(() => SSOIdentityProviderStatus)
-  status: SSOConfiguration['status'];
+  status: SSOIdentityProviderStatus;
+
+  @Field(() => String)
+  issuer: string;
+
+  static fromConfiguration(configuration: SSOConfiguration): SetupSsoDTO {
+    return {
+      id: configuration.id,
+      name: configuration.name,
+      type: configuration.type,
+      status: configuration.status,
+      issuer: configuration.issuer,
+    };
+  }
 }

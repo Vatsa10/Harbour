@@ -1,48 +1,29 @@
-/* @license Enterprise */
-
-import { type MessageDescriptor } from '@lingui/core';
-import { msg } from '@lingui/core/macro';
-import { assertUnreachable } from 'twenty-shared/utils';
-
-import { CustomException } from 'src/utils/custom-exception';
-
 export enum SSOExceptionCode {
-  USER_NOT_FOUND = 'USER_NOT_FOUND',
   IDENTITY_PROVIDER_NOT_FOUND = 'IDENTITY_PROVIDER_NOT_FOUND',
-  INVALID_ISSUER_URL = 'INVALID_ISSUER_URL',
-  INVALID_IDP_TYPE = 'INVALID_IDP_TYPE',
-  UNKNOWN_SSO_CONFIGURATION_ERROR = 'UNKNOWN_SSO_CONFIGURATION_ERROR',
-  SSO_DISABLE = 'SSO_DISABLE',
+  INVALID_SAML_RESPONSE = 'INVALID_SAML_RESPONSE',
+  INVALID_OIDC_RESPONSE = 'INVALID_OIDC_RESPONSE',
+  ASSERTION_REPLAYED = 'ASSERTION_REPLAYED',
+  INVALID_STATE = 'INVALID_STATE',
+  INVALID_CERTIFICATE = 'INVALID_CERTIFICATE',
+  FORBIDDEN = 'FORBIDDEN',
 }
 
-const getSSOExceptionUserFriendlyMessage = (code: SSOExceptionCode) => {
-  switch (code) {
-    case SSOExceptionCode.USER_NOT_FOUND:
-      return msg`User not found.`;
-    case SSOExceptionCode.IDENTITY_PROVIDER_NOT_FOUND:
-      return msg`Identity provider not found.`;
-    case SSOExceptionCode.INVALID_ISSUER_URL:
-      return msg`Invalid issuer URL.`;
-    case SSOExceptionCode.INVALID_IDP_TYPE:
-      return msg`Invalid identity provider type.`;
-    case SSOExceptionCode.UNKNOWN_SSO_CONFIGURATION_ERROR:
-      return msg`SSO configuration error.`;
-    case SSOExceptionCode.SSO_DISABLE:
-      return msg`SSO is disabled.`;
-    default:
-      assertUnreachable(code);
-  }
-};
+// Deliberately generic public-facing messages: getAuthorizationUrlForSSO and
+// the assertion-consumer callbacks are reachable without authentication, so
+// exception messages must never reveal whether a given identity-provider id
+// exists, is active, or why a specific assertion was rejected.
+export class SSOException extends Error {
+  code: SSOExceptionCode;
+  userFriendlyMessage?: string;
 
-export class SSOException extends CustomException<SSOExceptionCode> {
   constructor(
     message: string,
     code: SSOExceptionCode,
-    { userFriendlyMessage }: { userFriendlyMessage?: MessageDescriptor } = {},
+    options?: { userFriendlyMessage?: string },
   ) {
-    super(message, code, {
-      userFriendlyMessage:
-        userFriendlyMessage ?? getSSOExceptionUserFriendlyMessage(code),
-    });
+    super(message);
+    this.name = 'SSOException';
+    this.code = code;
+    this.userFriendlyMessage = options?.userFriendlyMessage;
   }
 }

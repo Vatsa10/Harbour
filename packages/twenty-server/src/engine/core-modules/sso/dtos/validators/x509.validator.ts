@@ -1,6 +1,4 @@
-/* @license Enterprise */
-
-import * as crypto from 'crypto';
+import { X509Certificate } from 'node:crypto';
 
 import {
   registerDecorator,
@@ -9,32 +7,28 @@ import {
   type ValidatorConstraintInterface,
 } from 'class-validator';
 
-@ValidatorConstraint({ async: false })
-export class IsX509CertificateConstraint implements ValidatorConstraintInterface {
-  // oxlint-disable-next-line typescript/no-explicit-any
-  validate(value: any) {
-    if (typeof value !== 'string') {
+// A malformed/non-PEM certificate here means SAML signature verification can
+// never succeed later, or worse, a permissive XML library silently skips
+// validation. Reject anything that Node's own X.509 parser cannot parse.
+@ValidatorConstraint({ name: 'isX509Certificate', async: false })
+class IsX509CertificateConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    if (typeof value !== 'string' || value.trim().length === 0) {
       return false;
     }
 
     try {
-      const cleanCert = value.replace(
-        /-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----|\n|\r/g,
-        '',
-      );
+      // eslint-disable-next-line no-new
+      new X509Certificate(value);
 
-      const der = Buffer.from(cleanCert, 'base64');
-
-      const cert = new crypto.X509Certificate(der);
-
-      return cert instanceof crypto.X509Certificate;
+      return true;
     } catch {
       return false;
     }
   }
 
-  defaultMessage() {
-    return 'The string is not a valid X509 certificate';
+  defaultMessage(): string {
+    return 'certificate must be a valid PEM-encoded X.509 certificate';
   }
 }
 
@@ -42,7 +36,7 @@ export function IsX509Certificate(validationOptions?: ValidationOptions) {
   return function (object: object, propertyName: string) {
     registerDecorator({
       target: object.constructor,
-      propertyName: propertyName,
+      propertyName,
       options: validationOptions,
       constraints: [],
       validator: IsX509CertificateConstraint,

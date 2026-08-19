@@ -1,92 +1,102 @@
-/* @license Enterprise */
+import { Field, ID, ObjectType, registerEnumType } from '@nestjs/graphql';
 
-import { Field, ObjectType, registerEnumType } from '@nestjs/graphql';
 import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
-import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/workspace-related-entity';
+import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 
 export enum IdentityProviderType {
-  OIDC = 'OIDC',
   SAML = 'SAML',
+  OIDC = 'OIDC',
 }
 
-export enum OIDCResponseType {
-  // Only Authorization Code is used for now
-  CODE = 'code',
-  ID_TOKEN = 'id_token',
-  TOKEN = 'token',
-  NONE = 'none',
-}
-
-registerEnumType(IdentityProviderType, {
-  name: 'IdentityProviderType',
-});
+registerEnumType(IdentityProviderType, { name: 'IdentityProviderType' });
 
 export enum SSOIdentityProviderStatus {
   Active = 'Active',
   Inactive = 'Inactive',
-  Error = 'Error',
 }
 
 registerEnumType(SSOIdentityProviderStatus, {
   name: 'SSOIdentityProviderStatus',
 });
 
+// Clean-room AGPL implementation. Schema is intentionally compatible with the
+// existing `core.workspaceSSOIdentityProvider` table so existing identity
+// provider rows keep working: same table/column names as introspected via
+// consumer call sites (id, name, type, status, issuer, workspaceId), extended
+// with the columns strictly required to perform SAML/OIDC verification
+// server-side (never trust client-supplied provider config at auth time).
 @Entity({ name: 'workspaceSSOIdentityProvider', schema: 'core' })
-@ObjectType('WorkspaceSSOIdentityProvider')
-export class WorkspaceSSOIdentityProviderEntity extends WorkspaceRelatedEntity {
-  // COMMON
+@ObjectType('SSOIdentityProvider')
+export class WorkspaceSSOIdentityProviderEntity {
   @Field(() => UUIDScalarType)
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Field(() => String)
+  @Column({ type: 'varchar' })
   name: string;
 
-  @Column({
-    type: 'enum',
-    enum: SSOIdentityProviderStatus,
-    default: SSOIdentityProviderStatus.Active,
-  })
-  status: SSOIdentityProviderStatus;
-
-  @CreateDateColumn({ type: 'timestamptz' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ type: 'timestamptz' })
-  updatedAt: Date;
-
-  @Column({
-    type: 'enum',
-    enum: IdentityProviderType,
-    default: IdentityProviderType.OIDC,
-  })
+  @Field(() => IdentityProviderType)
+  @Column({ type: 'varchar' })
   type: IdentityProviderType;
 
-  @Column()
+  @Field(() => SSOIdentityProviderStatus)
+  @Column({ type: 'varchar', default: SSOIdentityProviderStatus.Inactive })
+  status: SSOIdentityProviderStatus;
+
+  // SAML: IdP entity id. OIDC: issuer URL (matched against the `iss` claim).
+  @Field(() => String)
+  @Column({ type: 'varchar' })
   issuer: string;
 
-  // OIDC
-  @Column({ nullable: true })
-  clientID?: string;
+  // SAML: IdP SSO redirect/POST endpoint. OIDC: authorization endpoint base
+  // (discovered from the issuer, this is a fallback / pinned override).
+  @Column({ type: 'varchar', nullable: true })
+  ssoUrl: string | null;
 
-  @Column({ nullable: true })
-  clientSecret?: string;
+  // SAML: IdP signing certificate (PEM, x509). Required to validate the
+  // assertion signature — this is the trust anchor, never accepted unverified.
+  @Column({ type: 'text', nullable: true })
+  certificate: string | null;
 
-  // SAML
-  @Column({ nullable: true })
-  ssoURL?: string;
+  // OIDC client credentials, issued by the IdP for this workspace's app registration.
+  @Column({ type: 'varchar', nullable: true })
+  clientID: string | null;
 
-  @Column({ nullable: true })
-  certificate?: string;
+  @Column({ type: 'varchar', nullable: true })
+  clientSecret: string | null;
 
-  @Column({ nullable: true })
-  fingerprint?: string;
+  @Column({ type: 'uuid' })
+  @Index()
+  workspaceId: string;
+
+  // String-based relation target (not a value import of WorkspaceEntity):
+  // workspace.entity.ts already imports this entity by value for its own
+  // inverse relation, so a value import back here would form a
+  // require()-cycle that breaks under Jest's module resolution even though
+  // it typechecks. TypeORM resolves the class by its registered entity name
+  // at metadata-build time instead.
+  @ManyToOne('WorkspaceEntity', (workspace: WorkspaceEntity) => workspace.workspaceSSOIdentityProviders, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'workspaceId' })
+  workspace: WorkspaceEntity;
+
+  @Field(() => ID, { nullable: true })
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

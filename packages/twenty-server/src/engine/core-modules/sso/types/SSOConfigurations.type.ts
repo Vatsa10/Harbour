@@ -1,28 +1,28 @@
-/* @license Enterprise */
-
 import {
-  type IdentityProviderType,
-  type SSOIdentityProviderStatus,
+  IdentityProviderType,
+  SSOIdentityProviderStatus,
 } from 'src/engine/core-modules/sso/workspace-sso-identity-provider.entity';
 
-type CommonSSOConfiguration = {
+export type SAMLSSOConfiguration = {
   id: string;
-  issuer: string;
-  name?: string;
+  workspaceId: string;
+  type: IdentityProviderType.SAML;
+  name: string;
   status: SSOIdentityProviderStatus;
+  issuer: string;
+  ssoUrl: string;
+  certificate: string;
 };
 
-export type OIDCConfiguration = {
+export type OIDCSSOConfiguration = {
+  id: string;
+  workspaceId: string;
   type: IdentityProviderType.OIDC;
+  name: string;
+  status: SSOIdentityProviderStatus;
+  issuer: string;
   clientID: string;
   clientSecret: string;
-} & CommonSSOConfiguration;
+};
 
-export type SAMLConfiguration = {
-  type: IdentityProviderType.SAML;
-  ssoURL: string;
-  certificate: string;
-  fingerprint?: string;
-} & CommonSSOConfiguration;
-
-export type SSOConfiguration = OIDCConfiguration | SAMLConfiguration;
+export type SSOConfiguration = SAMLSSOConfiguration | OIDCSSOConfiguration;

@@ -1,11 +1,14 @@
-/* @license Enterprise */
+import { ArgsType, Field } from '@nestjs/graphql';
 
-import { Field, InputType } from '@nestjs/graphql';
+import { IsUUID } from 'class-validator';
 
-import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
-
-@InputType()
+@ArgsType()
 export class DeleteSsoInput {
-  @Field(() => UUIDScalarType)
+  @Field(() => String)
+  @IsUUID()
   identityProviderId: string;
+
+  @Field(() => String)
+  @IsUUID()
+  workspaceId: string;
 }

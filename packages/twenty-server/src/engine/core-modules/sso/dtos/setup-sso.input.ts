@@ -1,51 +1,48 @@
-/* @license Enterprise */
+import { ArgsType, Field } from '@nestjs/graphql';
 
-import { Field, InputType } from '@nestjs/graphql';
+import { IsEnum, IsOptional, IsString, IsUUID, IsUrl } from 'class-validator';
 
-import { IsOptional, IsString, IsUrl, IsUUID } from 'class-validator';
-
-import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { IsX509Certificate } from 'src/engine/core-modules/sso/dtos/validators/x509.validator';
+import { IdentityProviderType } from 'src/engine/core-modules/sso/workspace-sso-identity-provider.entity';
 
-@InputType()
-class SetupSsoInputCommon {
+@ArgsType()
+export class SetupSsoInput {
+  @Field(() => String)
+  @IsUUID()
+  workspaceId: string;
+
   @Field(() => String)
   @IsString()
   name: string;
 
+  @Field(() => IdentityProviderType)
+  @IsEnum(IdentityProviderType)
+  type: IdentityProviderType;
+
   @Field(() => String)
   @IsString()
-  @IsUrl({ protocols: ['http', 'https'] })
   issuer: string;
-}
 
-@InputType()
-export class SetupOIDCSsoInput extends SetupSsoInputCommon {
-  @Field(() => String)
-  @IsString()
-  clientID: string;
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsUrl({ require_tld: false })
+  ssoUrl?: string;
 
-  @Field(() => String)
-  @IsString()
-  clientSecret: string;
-}
-
-@InputType()
-export class SetupSAMLSsoInput extends SetupSsoInputCommon {
-  @Field(() => UUIDScalarType)
-  @IsUUID()
-  id: string;
-
-  @Field(() => String)
-  @IsUrl({ protocols: ['http', 'https'] })
-  ssoURL: string;
-
-  @Field(() => String)
+  @Field(() => String, { nullable: true })
+  @IsOptional()
   @IsX509Certificate()
-  certificate: string;
+  certificate?: string;
 
   @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()
-  fingerprint?: string;
+  clientID?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  clientSecret?: string;
 }
+
+export class SetupOIDCSsoInput extends SetupSsoInput {}
+export class SetupSAMLSsoInput extends SetupSsoInput {}
