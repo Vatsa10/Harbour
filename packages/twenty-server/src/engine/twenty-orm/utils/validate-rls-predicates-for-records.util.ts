@@ -7,7 +7,6 @@
 // A record that fails the predicate is deny-by-default: it is reported as a
 // violation, never silently dropped or silently allowed through.
 import { isDefined } from 'twenty-shared/utils';
-import { type ObjectRecord } from 'twenty-shared/types';
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
@@ -18,17 +17,25 @@ import { resolveRoleIdsFromAuthContext } from 'src/engine/twenty-orm/utils/resol
 
 export class RowLevelPermissionValidationError extends Error {}
 
-export const validateRlsPredicatesForRecords = ({
+export const validateRLSPredicatesForRecords = <T extends object>({
   records,
   objectMetadata,
   internalContext,
   authContext,
+  shouldBypassPermissionChecks,
+  errorMessage,
 }: {
-  records: ObjectRecord[];
+  records: T[];
   objectMetadata: FlatObjectMetadata;
   internalContext: WorkspaceInternalContext;
   authContext: WorkspaceAuthContext;
+  shouldBypassPermissionChecks?: boolean;
+  errorMessage?: string;
 }): void => {
+  if (shouldBypassPermissionChecks === true) {
+    return;
+  }
+
   const roleIds = resolveRoleIdsFromAuthContext({
     authContext,
     userWorkspaceRoleMap: internalContext.userWorkspaceRoleMap,
@@ -60,8 +67,11 @@ export const validateRlsPredicatesForRecords = ({
   );
 
   if (isDefined(violatingRecord)) {
+    const violatingRecordId = (violatingRecord as { id?: string }).id;
+
     throw new RowLevelPermissionValidationError(
-      `Record "${violatingRecord.id}" no longer satisfies the row level permission predicate for object "${objectMetadata.nameSingular}"`,
+      errorMessage ??
+        `Record "${violatingRecordId}" no longer satisfies the row level permission predicate for object "${objectMetadata.nameSingular}"`,
     );
   }
 };

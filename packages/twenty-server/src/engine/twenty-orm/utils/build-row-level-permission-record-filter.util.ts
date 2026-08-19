@@ -56,17 +56,37 @@ const resolveFieldKeyAndFieldMetadata = ({
   };
 };
 
+const UNSATISFIABLE_UUID = '00000000-0000-0000-0000-000000000000';
+
 const renderPredicateToFilter = ({
   predicate,
   flatFieldMetadataMaps,
+  workspaceMember,
 }: {
   predicate: FlatRowLevelPermissionPredicate;
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
+  workspaceMember: { id: string } | undefined;
 }): RecordGqlOperationFilter => {
   const { key } = resolveFieldKeyAndFieldMetadata({
     predicate,
     flatFieldMetadataMaps,
   });
+
+  // A predicate anchored to "the current workspace member" (e.g. "assigned
+  // to me") cannot be evaluated without a workspace member in context (API
+  // key / application auth). Deny by default rather than silently dropping
+  // the restriction: render an always-false condition instead of skipping.
+  if (isDefined(predicate.workspaceMemberFieldMetadataId)) {
+    if (!isDefined(workspaceMember)) {
+      return {
+        [key]: { eq: UNSATISFIABLE_UUID },
+      } as unknown as RecordGqlOperationFilter;
+    }
+
+    return {
+      [key]: { eq: workspaceMember.id },
+    } as unknown as RecordGqlOperationFilter;
+  }
 
   const buildOperatorCondition = (): Record<string, unknown> => {
     switch (predicate.operand) {
@@ -138,12 +158,14 @@ const renderGroupToFilter = ({
   flatFieldMetadataMaps,
   flatRowLevelPermissionPredicateMaps,
   flatRowLevelPermissionPredicateGroupMaps,
+  workspaceMember,
 }: {
   group: FlatRowLevelPermissionPredicateGroup;
   roleId: string;
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
   flatRowLevelPermissionPredicateMaps: FlatRowLevelPermissionPredicateMaps;
   flatRowLevelPermissionPredicateGroupMaps: FlatRowLevelPermissionPredicateGroupMaps;
+  workspaceMember: { id: string } | undefined;
 }): RecordGqlOperationFilter | null => {
   const predicateFilters = group.rowLevelPermissionPredicateIds
     .map((predicateId) =>
@@ -155,7 +177,7 @@ const renderGroupToFilter = ({
     .filter(isDefined)
     .filter((predicate) => predicate.roleId === roleId)
     .map((predicate) =>
-      renderPredicateToFilter({ predicate, flatFieldMetadataMaps }),
+      renderPredicateToFilter({ predicate, flatFieldMetadataMaps, workspaceMember }),
     );
 
   const childGroupFilters = group.childRowLevelPermissionPredicateGroupIds
@@ -173,6 +195,7 @@ const renderGroupToFilter = ({
         flatFieldMetadataMaps,
         flatRowLevelPermissionPredicateMaps,
         flatRowLevelPermissionPredicateGroupMaps,
+        workspaceMember,
       }),
     )
     .filter(isDefined);
@@ -194,12 +217,14 @@ const buildFilterForRole = ({
   flatFieldMetadataMaps,
   flatRowLevelPermissionPredicateMaps,
   flatRowLevelPermissionPredicateGroupMaps,
+  workspaceMember,
 }: {
   roleId: string;
   objectMetadata: FlatObjectMetadata;
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
   flatRowLevelPermissionPredicateMaps: FlatRowLevelPermissionPredicateMaps;
   flatRowLevelPermissionPredicateGroupMaps: FlatRowLevelPermissionPredicateGroupMaps;
+  workspaceMember: { id: string } | undefined;
 }): RecordGqlOperationFilter | null => {
   const ungroupedPredicateFilters = Object.values(
     flatRowLevelPermissionPredicateMaps.byUniversalIdentifier,
@@ -212,7 +237,7 @@ const buildFilterForRole = ({
         !isDefined(predicate.rowLevelPermissionPredicateGroupId),
     )
     .map((predicate) =>
-      renderPredicateToFilter({ predicate, flatFieldMetadataMaps }),
+      renderPredicateToFilter({ predicate, flatFieldMetadataMaps, workspaceMember }),
     );
 
   const topLevelGroupFilters = Object.values(
@@ -232,6 +257,7 @@ const buildFilterForRole = ({
         flatFieldMetadataMaps,
         flatRowLevelPermissionPredicateMaps,
         flatRowLevelPermissionPredicateGroupMaps,
+        workspaceMember,
       }),
     )
     .filter(isDefined);
@@ -248,12 +274,14 @@ export const buildRowLevelPermissionRecordFilter = ({
   flatFieldMetadataMaps,
   objectMetadata,
   roleIds,
+  workspaceMember,
 }: {
   flatRowLevelPermissionPredicateMaps: FlatRowLevelPermissionPredicateMaps;
   flatRowLevelPermissionPredicateGroupMaps: FlatRowLevelPermissionPredicateGroupMaps;
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
   objectMetadata: FlatObjectMetadata;
   roleIds: string[];
+  workspaceMember?: { id: string } | undefined;
 }): RecordGqlOperationFilter | null => {
   const perRoleFilters = roleIds
     .map((roleId) =>
@@ -263,6 +291,7 @@ export const buildRowLevelPermissionRecordFilter = ({
         flatFieldMetadataMaps,
         flatRowLevelPermissionPredicateMaps,
         flatRowLevelPermissionPredicateGroupMaps,
+        workspaceMember,
       }),
     )
     .filter(isDefined);

@@ -49,6 +49,19 @@ const combine = (chunks: string[], operator: 'AND' | 'OR'): string => {
   return `(${chunks.join(` ${operator} `)})`;
 };
 
+// Explicit "and"/"or" keys always wrap their rendered list in its own group
+// parens, even for a single-item list — this is what marks it as a group
+// distinct from its (possibly single) member, matching TypeORM's own
+// Brackets behaviour. An empty list is the one exception: it renders as the
+// bare always-true literal, same as TypeORM's empty Brackets.
+const combineLogicalGroup = (chunks: string[], operator: 'AND' | 'OR'): string => {
+  if (chunks.length === 0) {
+    return '1=1';
+  }
+
+  return `(${chunks.join(` ${operator} `)})`;
+};
+
 const renderOperatorLeaf = ({
   tableAlias,
   columnName,
@@ -192,9 +205,7 @@ const renderFieldCondition = ({
   const fieldMetadata = fieldLookup.byName.get(key);
 
   if (!isDefined(fieldMetadata)) {
-    throw new Error(
-      `Row level permission predicate references field "${key}" which does not exist on the object`,
-    );
+    throw new Error(`Row level permission predicate: field "${key}" does not exist on the object`);
   }
 
   if (fieldMetadata.type === FieldMetadataType.RELATION) {
@@ -278,7 +289,7 @@ const renderFilterObject = ({
     if (key === 'and' || key === 'or') {
       const list = Array.isArray(value) ? value : [value];
 
-      return combine(
+      return combineLogicalGroup(
         list.map((subFilter) =>
           renderFilterObject({
             tableAlias,

@@ -1,7 +1,29 @@
-/* @license Enterprise */
+// SeaRM: clean-room AGPL-3.0 rewrite. See
+// .superpowers/sdd/enterprise-rewrite/rlp-recon.md for design notes.
+// Shape reverse-derived from the (AGPL, already clean-room) mapper utils in
+// flat-row-level-permission-predicate/utils/from-{create,update}-*-group-*,
+// which construct and consume this exact field set.
+import { type RowLevelPermissionPredicateGroupLogicalOperator } from 'twenty-shared/types';
 
-import { type FlatEntityFrom } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-from.type';
-import { type RowLevelPermissionPredicateGroupEntity } from 'src/engine/metadata-modules/row-level-permission-predicate/entities/row-level-permission-predicate-group.entity';
-
-export type FlatRowLevelPermissionPredicateGroup =
-  FlatEntityFrom<RowLevelPermissionPredicateGroupEntity>;
+export type FlatRowLevelPermissionPredicateGroup = {
+  id: string;
+  universalIdentifier: string;
+  workspaceId: string;
+  applicationId: string;
+  applicationUniversalIdentifier: string;
+  roleId: string;
+  roleUniversalIdentifier: string;
+  objectMetadataId: string;
+  objectMetadataUniversalIdentifier: string;
+  logicalOperator: RowLevelPermissionPredicateGroupLogicalOperator;
+  parentRowLevelPermissionPredicateGroupId: string | null;
+  parentRowLevelPermissionPredicateGroupUniversalIdentifier: string | null;
+  positionInRowLevelPermissionPredicateGroup: number | null;
+  childRowLevelPermissionPredicateGroupIds: string[];
+  childRowLevelPermissionPredicateGroupUniversalIdentifiers: string[];
+  rowLevelPermissionPredicateIds: string[];
+  rowLevelPermissionPredicateUniversalIdentifiers: string[];
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+};

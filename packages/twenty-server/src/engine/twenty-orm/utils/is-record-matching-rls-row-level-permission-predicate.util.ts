@@ -6,7 +6,9 @@
 // explicitly targets deletedAt — otherwise it's treated as invisible, same
 // as the SQL path's implicit "not deleted" behaviour.
 import { isDefined } from 'twenty-shared/utils';
-import { FieldMetadataType, type ObjectRecord } from 'twenty-shared/types';
+import { FieldMetadataType } from 'twenty-shared/types';
+
+type MatchableRecord = object;
 
 import { isCompositeFieldMetadataType } from 'src/engine/metadata-modules/field-metadata/utils/is-composite-field-metadata-type.util';
 import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
@@ -101,7 +103,7 @@ const matchesFieldCondition = ({
   value,
   fieldLookup,
 }: {
-  record: ObjectRecord;
+  record: MatchableRecord;
   key: string;
   value: unknown;
   fieldLookup: FieldLookup;
@@ -162,7 +164,7 @@ const matchesFilterObject = ({
   filter,
   fieldLookup,
 }: {
-  record: ObjectRecord;
+  record: MatchableRecord;
   filter: Record<string, unknown>;
   fieldLookup: FieldLookup;
 }): boolean =>
@@ -211,17 +213,23 @@ export const isRecordMatchingRLSRowLevelPermissionPredicate = ({
   filter,
   flatObjectMetadata,
   flatFieldMetadataMaps,
+  shouldIgnoreSoftDeleteDefaultFilter = false,
 }: {
-  record: ObjectRecord;
+  record: MatchableRecord;
   filter: Record<string, unknown>;
   flatObjectMetadata: FlatObjectMetadata;
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
+  shouldIgnoreSoftDeleteDefaultFilter?: boolean;
 }): boolean => {
   const isSoftDeleted = isDefined(
     (record as unknown as { deletedAt: unknown }).deletedAt,
   );
 
-  if (isSoftDeleted && !Object.prototype.hasOwnProperty.call(filter, 'deletedAt')) {
+  if (
+    !shouldIgnoreSoftDeleteDefaultFilter &&
+    isSoftDeleted &&
+    !Object.prototype.hasOwnProperty.call(filter, 'deletedAt')
+  ) {
     return false;
   }
 
