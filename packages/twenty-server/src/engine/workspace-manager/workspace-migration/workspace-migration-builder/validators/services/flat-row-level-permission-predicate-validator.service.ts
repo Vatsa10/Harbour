@@ -96,13 +96,26 @@ export class FlatRowLevelPermissionPredicateValidatorService {
       });
     }
 
-    const referencedFieldMetadata = findFlatEntityByUniversalIdentifier({
-      universalIdentifier:
-        flatRowLevelPermissionPredicateToValidate.fieldMetadataUniversalIdentifier,
-      flatEntityMaps: flatFieldMetadataMaps,
-    });
+    // fieldMetadataUniversalIdentifier is optional: a predicate may instead
+    // resolve purely through group membership. Only validate the reference
+    // when one was actually provided — see the deny-by-default check below
+    // for what happens when neither a field nor a group is provided.
+    const referencedFieldMetadata = isDefined(
+      flatRowLevelPermissionPredicateToValidate.fieldMetadataUniversalIdentifier,
+    )
+      ? findFlatEntityByUniversalIdentifier({
+          universalIdentifier:
+            flatRowLevelPermissionPredicateToValidate.fieldMetadataUniversalIdentifier,
+          flatEntityMaps: flatFieldMetadataMaps,
+        })
+      : undefined;
 
-    if (!isDefined(referencedFieldMetadata)) {
+    if (
+      isDefined(
+        flatRowLevelPermissionPredicateToValidate.fieldMetadataUniversalIdentifier,
+      ) &&
+      !isDefined(referencedFieldMetadata)
+    ) {
       validationResult.errors.push({
         code: WorkspaceMigrationRowLevelPermissionPredicateExceptionCode.INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA,
         message: t`Field metadata not found`,
