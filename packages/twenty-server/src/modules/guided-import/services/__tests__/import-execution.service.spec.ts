@@ -44,6 +44,12 @@ const buildRowTable = (rows: StoredRow[]) => {
     // Models the atomic claim: takes only rows that are PENDING or whose
     // lease has expired, flips them to IN_PROGRESS and stamps leasedAt, in
     // one step. A fixed-array mock here would double the very seam under test.
+    // Returns the real TypeORM PostgresQueryRunner shape for an
+    // UPDATE ... RETURNING: a [rows, rowCount] tuple, not a bare rows array.
+    // Mocking a bare array here is exactly the bug this suite exists to
+    // catch — the production code must destructure the tuple, and a mock
+    // that skips the tuple would let a regression back to the bare-array
+    // assumption pass silently.
     query: jest.fn(
       async (_sql: string, parameters: unknown[]) => {
         const [inProgressStatus, importBatchId, pendingStatus, leaseMinutes, limit] =
@@ -64,7 +70,7 @@ const buildRowTable = (rows: StoredRow[]) => {
           .sort((a, b) => Number(a.rowNumber ?? 0) - Number(b.rowNumber ?? 0))
           .slice(0, limit);
 
-        return claimable.map((row) => {
+        const claimedRows = claimable.map((row) => {
           const claimed = {
             ...row,
             status: inProgressStatus,
@@ -75,6 +81,8 @@ const buildRowTable = (rows: StoredRow[]) => {
 
           return claimed;
         });
+
+        return [claimedRows, claimedRows.length];
       },
     ),
     count: jest.fn(
@@ -434,7 +442,7 @@ describe('ImportExecutionService', () => {
 
       importRowRepository.store.set('row-1', claimed);
 
-      return [claimed] as never;
+      return [[claimed], 1] as never;
     });
     importRowRepository.query.mockImplementationOnce(async () => {
       throw new Error('worker killed');
@@ -492,9 +500,11 @@ describe('ImportExecutionService', () => {
 
       importRowRepository.store.set('row-1', claimed);
 
-      return [claimed] as never;
+      return [[claimed], 1] as never;
     });
-    importRowRepository.query.mockImplementationOnce(async () => [] as never);
+    importRowRepository.query.mockImplementationOnce(
+      async () => [[], 0] as never,
+    );
 
     await execute();
 
@@ -502,4 +512,56 @@ describe('ImportExecutionService', () => {
       expect.objectContaining({ id: 'batch-1', status: 'RUNNING' }),
     );
   });
+
+  // B3: TypeORM's PostgresQueryRunner.query() returns [rows, rowCount] for
+  // an UPDATE ... RETURNING, not a bare rows array. Treating the tuple
+  // itself as the rows array makes rows.length always 2 — never 0 — so the
+  // "no more rows" exit can never fire and the claim loop runs forever.
+  // These tests drive the *real* tuple-returning mock (buildRowTable.query)
+  // rather than a bare-array stub, so they only pass if executeBatch
+  // correctly destructures the tuple.
+  it('should terminate the claim loop once a batch completes, making no more query calls than chunks claimed', async () => {
+    service = buildService([
+      buildRow({ id: 'row-1', rowNumber: 1 }),
+      buildRow({
+        id: 'row-2',
+        rowNumber: 2,
+        mappedData: { emails: { primaryEmail: 'bob@acme.com' } },
+      }),
+    ]);
+
+    await execute();
+
+    // One call claims both rows (chunk size 100 > 2 rows), a second call
+    // finds nothing left and the loop exits. Under the B3 bug rows.length
+    // is always 2 regardless of content, so this call count would keep
+    // growing without bound instead of settling at 2.
+    expect(importRowRepository.query).toHaveBeenCalledTimes(2);
+    expect(importBatchRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'COMPLETED' }),
+    );
+  }, 8000);
+
+  it('should terminate the claim loop when a batch stalls with rows it cannot claim, instead of looping forever', async () => {
+    // Row is IN_PROGRESS with a live (non-expired) lease: no chunk can ever
+    // claim it, so claimRowChunk legitimately returns an empty rows array
+    // (tuple [[], 0]) on every call. The loop must stop on the very first
+    // call rather than treating the tuple's length-2 shape as "rows found".
+    service = buildService([
+      buildRow({
+        id: 'row-1',
+        rowNumber: 1,
+        status: 'IN_PROGRESS',
+        leasedAt: new Date(),
+      }),
+    ]);
+
+    await execute();
+
+    expect(importRowRepository.query).toHaveBeenCalledTimes(1);
+    expect(createRecordService.execute).not.toHaveBeenCalled();
+    expect(importBatchRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'RUNNING' }),
+    );
+  }, 10000);
 });

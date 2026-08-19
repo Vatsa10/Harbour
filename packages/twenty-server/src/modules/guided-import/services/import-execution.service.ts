@@ -207,32 +207,39 @@ export class ImportExecutionService {
   private async claimRowChunk(
     importBatchId: string,
   ): Promise<ImportRowEntity[]> {
-    const rows: ImportRowEntity[] = await this.importRowRepository.query(
-      `UPDATE "core"."importRow" AS r
-         SET "status" = $1, "leasedAt" = now()
-       WHERE r."id" IN (
-         SELECT c."id" FROM "core"."importRow" AS c
-         WHERE c."importBatchId" = $2
-           AND (
-             c."status" = $3
-             OR (
-               c."status" = $1
-               AND c."leasedAt" < now() - ($4 || ' minutes')::interval
+    // TypeORM's PostgresQueryRunner.query() for UPDATE/DELETE ... RETURNING
+    // returns a tuple [rows, rowCount], not a plain rows array — unlike a
+    // plain SELECT. Destructuring the tuple here is load-bearing: treating
+    // the tuple itself as the rows array makes rows.length always 2
+    // regardless of how many rows were actually claimed, which breaks both
+    // loop-termination checks in executeBatch.
+    const [rows]: [ImportRowEntity[], number] =
+      await this.importRowRepository.query(
+        `UPDATE "core"."importRow" AS r
+           SET "status" = $1, "leasedAt" = now()
+         WHERE r."id" IN (
+           SELECT c."id" FROM "core"."importRow" AS c
+           WHERE c."importBatchId" = $2
+             AND (
+               c."status" = $3
+               OR (
+                 c."status" = $1
+                 AND c."leasedAt" < now() - ($4 || ' minutes')::interval
+               )
              )
-           )
-         ORDER BY c."rowNumber" ASC
-         LIMIT $5
-         FOR UPDATE SKIP LOCKED
-       )
-       RETURNING r.*`,
-      [
-        ImportRowStatus.IN_PROGRESS,
-        importBatchId,
-        ImportRowStatus.PENDING,
-        String(IMPORT_ROW_LEASE_MINUTES),
-        IMPORT_ROW_CHUNK_SIZE,
-      ],
-    );
+           ORDER BY c."rowNumber" ASC
+           LIMIT $5
+           FOR UPDATE SKIP LOCKED
+         )
+         RETURNING r.*`,
+        [
+          ImportRowStatus.IN_PROGRESS,
+          importBatchId,
+          ImportRowStatus.PENDING,
+          String(IMPORT_ROW_LEASE_MINUTES),
+          IMPORT_ROW_CHUNK_SIZE,
+        ],
+      );
 
     return rows;
   }
