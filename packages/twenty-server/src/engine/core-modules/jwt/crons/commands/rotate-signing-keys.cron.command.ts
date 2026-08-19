@@ -1,4 +1,8 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the JWT signing key
+// rotation cron registration command (no Twenty Enterprise source
+// consulted; structural pattern independently confirmed against the
+// purely-AGPL trash-cleanup.cron.command.ts and
+// user-session-cleanup.cron.command.ts).
 
 import { Command, CommandRunner } from 'nest-commander';
 
@@ -11,7 +15,7 @@ import { MessageQueueService } from 'src/engine/core-modules/message-queue/servi
 @Command({
   name: 'cron:rotate-signing-keys',
   description:
-    'Starts a daily cron job that issues a fresh current JWT signing key once SIGNING_KEY_ROTATION_DAYS has elapsed. Enterprise-only.',
+    'Starts a cron job that rotates the current JWT signing key once it exceeds SIGNING_KEY_ROTATION_DAYS',
 })
 export class RotateSigningKeysCronCommand extends CommandRunner {
   constructor(

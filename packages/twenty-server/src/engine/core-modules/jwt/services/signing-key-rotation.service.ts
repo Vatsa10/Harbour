@@ -1,4 +1,7 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the JWT signing key
+// rotation service (no Twenty Enterprise source consulted; derived from
+// JwtKeyManagerService's public API and the SIGNING_KEY_ROTATION_DAYS
+// config description in twenty-config/config-variables.ts).
 
 import { Injectable, Logger } from '@nestjs/common';
 
@@ -7,12 +10,11 @@ import { isDefined } from 'twenty-shared/utils';
 import { JwtKeyManagerService } from 'src/engine/core-modules/jwt/services/jwt-key-manager.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export type SigningKeyRotationResult = {
   rotated: boolean;
-  previousId: string | null;
-  newId: string | null;
+  signingKeyId?: string;
 };
 
 @Injectable()
@@ -24,42 +26,54 @@ export class SigningKeyRotationService {
     private readonly twentyConfigService: TwentyConfigService,
   ) {}
 
+  // Rotates the current JWT signing key when it has exceeded the configured
+  // retention period, or when there is no current signing key yet. Never
+  // logs key material (private key or secret content) — only key ids,
+  // ages, and timestamps.
   async rotateIfDue(): Promise<SigningKeyRotationResult> {
     const rotationDays = this.twentyConfigService.get(
       'SIGNING_KEY_ROTATION_DAYS',
     );
 
-    if (!isDefined(rotationDays)) {
+    if (!isDefined(rotationDays) || rotationDays <= 0) {
       this.logger.log(
-        'SIGNING_KEY_ROTATION_DAYS is not configured, skipping signing key rotation',
+        'JWT signing key auto-rotation is disabled (SIGNING_KEY_ROTATION_DAYS is unset)',
       );
 
-      return { rotated: false, previousId: null, newId: null };
+      return { rotated: false };
     }
 
-    const signingKeys = await this.jwtKeyManagerService.listSigningKeys();
-    const current = signingKeys.find(
-      (signingKey) => signingKey.isCurrent && !isDefined(signingKey.revokedAt),
+    const currentSigningKey = await this.findCurrentSigningKey();
+
+    if (isDefined(currentSigningKey)) {
+      const ageMs = Date.now() - currentSigningKey.createdAt.getTime();
+      const thresholdMs = rotationDays * MS_PER_DAY;
+
+      if (ageMs < thresholdMs) {
+        this.logger.log(
+          `Current signing key (kid=${currentSigningKey.id}) is ${Math.floor(
+            ageMs / MS_PER_DAY,
+          )}d old; rotation not due yet (threshold=${rotationDays}d)`,
+        );
+
+        return { rotated: false };
+      }
+    }
+
+    const rotated = await this.jwtKeyManagerService.rotateCurrent();
+
+    this.logger.log(
+      `Rotated JWT signing key. New current signing key kid=${rotated.id}`,
     );
 
-    if (!isDefined(current)) {
-      return { rotated: false, previousId: null, newId: null };
-    }
+    return { rotated: true, signingKeyId: rotated.id };
+  }
 
-    const ageDays = (Date.now() - current.createdAt.getTime()) / ONE_DAY_MS;
+  private async findCurrentSigningKey() {
+    const signingKeys = await this.jwtKeyManagerService.listSigningKeys();
 
-    if (ageDays < rotationDays) {
-      this.logger.log(
-        `Current signing key ${current.id} is ${ageDays.toFixed(
-          2,
-        )} days old, rotation threshold is ${rotationDays} days, skipping`,
-      );
-
-      return { rotated: false, previousId: current.id, newId: null };
-    }
-
-    const next = await this.jwtKeyManagerService.rotateCurrent();
-
-    return { rotated: true, previousId: current.id, newId: next.id };
+    return signingKeys.find(
+      (signingKey) => signingKey.isCurrent && !isDefined(signingKey.revokedAt),
+    );
   }
 }
