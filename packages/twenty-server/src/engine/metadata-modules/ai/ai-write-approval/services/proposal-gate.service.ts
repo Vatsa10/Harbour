@@ -381,44 +381,96 @@ export class ProposalGateService {
   ): GateInput | null {
     const { executionRef } = descriptor;
 
-    if (executionRef.kind === 'database_crud') {
-      const isUngatedRead = UNGATED_CRUD_OPERATIONS.some(
-        (operation) => operation === executionRef.operation,
-      );
+    // Exhaustive by construction: every branch either returns an explicit
+    // "this is safe, skip the gate" `null`, or a GateInput. The `default`
+    // arm is reached only by a `kind` this switch was never updated for —
+    // that is exactly the case that must fail closed, not the case that
+    // silently falls through to ALLOW (see evaluate()'s `unclassified`
+    // handling and the B1 audit finding this replaced). The `never` check
+    // below also makes it a compile error to add a fourth ToolExecutionRef
+    // variant without adding a case here.
+    switch (executionRef.kind) {
+      case 'database_crud': {
+        const isUngatedRead = UNGATED_CRUD_OPERATIONS.some(
+          (operation) => operation === executionRef.operation,
+        );
 
-      if (isUngatedRead) {
-        return null;
+        if (isUngatedRead) {
+          return null;
+        }
+
+        return this.buildCrudGateInput(
+          executionRef.operation,
+          executionRef.objectNameSingular,
+          args,
+        );
       }
 
-      return this.buildCrudGateInput(
-        executionRef.operation,
-        executionRef.objectNameSingular,
-        args,
-      );
-    }
+      case 'static': {
+        const { toolId } = executionRef;
 
-    if (executionRef.kind === 'static') {
-      const { toolId } = executionRef;
+        if (!this.isGatedStaticTool(toolId, args)) {
+          return null;
+        }
 
-      if (!this.isGatedStaticTool(toolId, args)) {
-        return null;
+        return {
+          target: { kind: 'tool', toolId },
+          actionType:
+            STATIC_TOOL_ID_TO_ACTION_TYPE[toolId] ??
+            ProposalActionType.STATIC_TOOL,
+          objectNameSingular: null,
+          recordId: null,
+          toolId,
+          toolCategory: descriptor.category,
+          payload: args,
+          baselineFieldNames: [],
+        };
       }
 
-      return {
-        target: { kind: 'tool', toolId },
-        actionType:
-          STATIC_TOOL_ID_TO_ACTION_TYPE[toolId] ??
-          ProposalActionType.STATIC_TOOL,
-        objectNameSingular: null,
-        recordId: null,
-        toolId,
-        toolCategory: descriptor.category,
-        payload: args,
-        baselineFieldNames: [],
-      };
-    }
+      case 'logic_function': {
+        // Logic functions are third-party/app-defined code that can call
+        // back into the CRM API (people-data-labs/enrich-person overwrites
+        // Person fields; slack/discord post-message send outbound). There is
+        // no safe subset to exempt, so every logic_function tool is gated —
+        // no UNGATED_* list, unlike database_crud and static. Replayed on
+        // approval through the same static-tool path (toolId carries the
+        // logicFunctionId; see LogicFunctionToolProvider.executeStaticTool).
+        const { logicFunctionId } = executionRef;
 
-    return null;
+        return {
+          target: { kind: 'tool', toolId: logicFunctionId },
+          actionType: ProposalActionType.STATIC_TOOL,
+          objectNameSingular: null,
+          recordId: null,
+          toolId: logicFunctionId,
+          toolCategory: descriptor.category,
+          payload: args,
+          baselineFieldNames: [],
+        };
+      }
+
+      default: {
+        // Fail closed, structurally: a `kind` this switch does not
+        // recognize is marked unclassified rather than returned as `null`,
+        // so evaluate() refuses it (UNSUPPORTED_OPERATION) instead of
+        // reading the absence of a GateInput as ALLOW.
+        const _exhaustiveCheck: never = executionRef;
+
+        void _exhaustiveCheck;
+
+        return {
+          target: { kind: 'tool', toolId: 'unknown' },
+          actionType: ProposalActionType.STATIC_TOOL,
+          objectNameSingular: null,
+          recordId: null,
+          toolId: null,
+          toolCategory: descriptor.category,
+          payload: args,
+          baselineFieldNames: [],
+          unclassified: true,
+        };
+      }
+    }
   }
 
   private isGatedStaticTool(

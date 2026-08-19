@@ -787,4 +787,91 @@ describe('ProposalGateService', () => {
       expect(decision.kind).toBe('PROPOSED');
     });
   });
+
+  // B1 (contract-audit.md): `buildGateInput` fell through `return null` for
+  // `executionRef.kind === 'logic_function'`, and `evaluate()` reads a null
+  // GateInput as ALLOW. A logic function (people-data-labs/enrich-person,
+  // slack/discord post-message, ...) could therefore overwrite CRM fields or
+  // send outbound messages with no policy check, no proposal, and no
+  // principal — the exact class of write the Proposal contract requires to
+  // go through this gate.
+  describe('logic_function tools are gated (B1)', () => {
+    const logicFunctionDescriptor = (
+      logicFunctionId = 'fn-1',
+    ): ToolDescriptor =>
+      ({
+        name: 'app_enrich_person',
+        label: 'enrich-person',
+        description: 'Enrich a Person record',
+        category: 'logic_function',
+        executionRef: { kind: 'logic_function', logicFunctionId },
+      }) as unknown as ToolDescriptor;
+
+    it('should FORBID a logic_function tool under a FORBID-everything policy, never reaching ALLOW', async () => {
+      setPolicy({ default: 'FORBID', overrides: {} });
+
+      const decision = await evaluate(logicFunctionDescriptor(), {
+        recordId: 'person-1',
+        updateFields: 'overwrite everything',
+      });
+
+      expect(decision.kind).toBe('FORBID');
+      expect(proposalItemRepository.save).not.toHaveBeenCalled();
+      // The bug was precisely that the policy was never consulted for this
+      // kind. Prove it now is.
+      expect(keyValuePairService.get).toHaveBeenCalled();
+    });
+
+    it('should PROPOSE a logic_function tool under a PROPOSE policy, carrying the logicFunctionId as toolId', async () => {
+      setPolicy({ default: 'PROPOSE', overrides: {} });
+
+      const decision = await evaluate(logicFunctionDescriptor('fn-enrich'), {
+        recordId: 'person-1',
+      });
+
+      expect(decision.kind).toBe('PROPOSED');
+      expect(savedItem()).toMatchObject({
+        toolId: 'fn-enrich',
+        toolCategory: 'logic_function',
+      });
+    });
+
+    it('should ALLOW a logic_function tool only under an explicit AUTO override for that tool', async () => {
+      setPolicy({
+        default: 'FORBID',
+        overrides: { 'fn-enrich': 'AUTO' },
+      });
+
+      const decision = await evaluate(logicFunctionDescriptor('fn-enrich'), {
+        recordId: 'person-1',
+      });
+
+      expect(decision.kind).toBe('ALLOW');
+    });
+  });
+
+  // The gate's fall-through default was `return null` read as ALLOW — the
+  // exact shape of bug B1 was. This pins the structural fix: an
+  // `executionRef.kind` this gate has never seen must fail closed
+  // (UNSUPPORTED_OPERATION), not silently allow. Simulated because
+  // ToolExecutionRef's real union only has three members today; the point is
+  // that the *next* one is safe by construction rather than by discipline.
+  describe('an unrecognized executionRef.kind fails closed', () => {
+    it('should FORBID rather than ALLOW', async () => {
+      setPolicy({ default: 'FORBID', overrides: {} });
+
+      const unknownDescriptor = {
+        name: 'some_future_tool',
+        label: 'future',
+        description: '',
+        category: 'future',
+        executionRef: { kind: 'future_kind_nobody_wrote_a_case_for' },
+      } as unknown as ToolDescriptor;
+
+      const decision = await evaluate(unknownDescriptor, {});
+
+      expect(decision.kind).toBe('FORBID');
+      expect(proposalItemRepository.save).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -14,6 +14,11 @@ import { ToolCategory } from 'twenty-shared/ai';
 import { type ToolDescriptor } from 'src/engine/core-modules/tool-provider/types/tool-descriptor.type';
 import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types/tool-index-entry.type';
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
+import { LogicFunctionExecutorService } from 'src/engine/core-modules/logic-function/logic-function-executor/logic-function-executor.service';
+import {
+  buildToolFailure,
+  toFailedToolOutput,
+} from 'src/engine/core-modules/tool/utils/build-tool-failure.util';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
 import { type FlatLogicFunction } from 'src/engine/metadata-modules/logic-function/types/flat-logic-function.type';
 
@@ -23,6 +28,7 @@ export class LogicFunctionToolProvider implements ToolProvider {
 
   constructor(
     private readonly flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
+    private readonly logicFunctionExecutorService: LogicFunctionExecutorService,
   ) {}
 
   async isAvailable(_context: ToolProviderContext): Promise<boolean> {
@@ -30,17 +36,41 @@ export class LogicFunctionToolProvider implements ToolProvider {
   }
 
   // Logic function tools emit `executionRef.kind === 'logic_function'`
-  // descriptors and are dispatched inline by ToolExecutorService. The
-  // static-tool path is unreachable for this provider; this method exists
-  // only to satisfy the interface.
+  // descriptors and are dispatched inline by ToolExecutorService
+  // (dispatchLogicFunction). This method is the *replay* path instead:
+  // ProposalGateService now routes every logic_function tool through the
+  // gate as a STATIC_TOOL-shaped proposal item, recording the
+  // logicFunctionId in `toolId` (see proposal-gate.service.ts's
+  // `logic_function` branch). ProposalExecutionService.applyStaticTool
+  // calls back in here on approval with that same id as `toolName`, so this
+  // executes the approved logic function rather than throwing.
   async executeStaticTool(
     toolName: string,
-    _args: Record<string, unknown>,
-    _context: ToolProviderContext,
+    args: Record<string, unknown>,
+    context: ToolProviderContext,
   ): Promise<ToolOutput> {
-    throw new Error(
-      `LogicFunctionToolProvider does not emit static-kind descriptors (tool: ${toolName})`,
-    );
+    const result = await this.logicFunctionExecutorService.execute({
+      logicFunctionId: toolName,
+      workspaceId: context.workspaceId,
+      payload: args,
+    });
+
+    if (result.error) {
+      return toFailedToolOutput(
+        buildToolFailure({
+          code: 'INTERNAL_ERROR',
+          message: `Logic function execution failed: ${result.error.errorMessage}`,
+          hint: 'Check the arguments against the tool schema and try once more; if it fails again, report the error to the user.',
+          retryable: true,
+        }),
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Logic function executed successfully',
+      result: result.data ?? undefined,
+    };
   }
 
   async generateDescriptors(

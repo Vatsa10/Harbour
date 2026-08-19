@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
 import { RecordCrudModule } from 'src/engine/core-modules/record-crud/record-crud.module';
 import { UserWorkspaceModule } from 'src/engine/core-modules/user-workspace/user-workspace.module';
+import { AiWriteApprovalModule } from 'src/engine/metadata-modules/ai/ai-write-approval/ai-write-approval.module';
 import { RoleModule } from 'src/engine/metadata-modules/role/role.module';
 import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.module';
 import { WorkflowCommonModule } from 'src/modules/workflow/common/workflow-common.module';
@@ -24,6 +25,7 @@ import { WorkflowRunModule } from 'src/modules/workflow/workflow-runner/workflow
     UserRoleModule,
     RoleModule,
     WorkflowCommonModule,
+    AiWriteApprovalModule,
   ],
   providers: [
     WorkflowExecutionContextService,
