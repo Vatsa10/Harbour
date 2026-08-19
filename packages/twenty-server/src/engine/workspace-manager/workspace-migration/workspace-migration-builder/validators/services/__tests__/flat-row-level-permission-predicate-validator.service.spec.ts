@@ -4,7 +4,6 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 
 import { createEmptyFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-flat-entity-maps.constant';
-import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import {
   FlatRowLevelPermissionPredicateValidatorService,
   WorkspaceMigrationRowLevelPermissionPredicateExceptionCode,
@@ -13,6 +12,13 @@ import {
 type FlatRowLevelPermissionPredicateLike = Record<string, unknown> & {
   universalIdentifier: string;
 };
+
+// Local test-only stand-in for TestFlatEntityMaps<T>, which constrains T to
+// SyncableFlatEntity — more machinery than a plain unit test on the
+// validator's own logic needs.
+type TestFlatEntityMaps<T> = {
+  byUniversalIdentifier: Record<string, T>;
+} & Record<string, unknown>;
 
 const ROLE_UID = '00000000-0000-0000-0000-000000000010';
 const OBJECT_METADATA_UID = '00000000-0000-0000-0000-000000000020';
@@ -34,14 +40,14 @@ const buildFlatPredicate = (
   ...overrides,
 });
 
-const buildEmptyMaps = <T>(): FlatEntityMaps<T> =>
-  createEmptyFlatEntityMaps() as unknown as FlatEntityMaps<T>;
+const buildEmptyMaps = <T>(): TestFlatEntityMaps<T> =>
+  createEmptyFlatEntityMaps() as unknown as TestFlatEntityMaps<T>;
 
 const buildMapsWithEntity = <
   T extends { universalIdentifier: string },
 >(
   entity: T,
-): FlatEntityMaps<T> => {
+): TestFlatEntityMaps<T> => {
   const maps = buildEmptyMaps<T>();
 
   maps.byUniversalIdentifier[entity.universalIdentifier] = entity;
@@ -52,11 +58,11 @@ const buildMapsWithEntity = <
 const buildCreationArgs = (
   flatEntityToValidate: FlatRowLevelPermissionPredicateLike,
   overrides: {
-    optimisticFlatRowLevelPermissionPredicateMaps?: FlatEntityMaps<FlatRowLevelPermissionPredicateLike>;
-    flatRoleMaps?: FlatEntityMaps<{ universalIdentifier: string }>;
-    flatObjectMetadataMaps?: FlatEntityMaps<{ universalIdentifier: string }>;
-    flatFieldMetadataMaps?: FlatEntityMaps<{ universalIdentifier: string }>;
-    flatRowLevelPermissionPredicateGroupMaps?: FlatEntityMaps<{
+    optimisticFlatRowLevelPermissionPredicateMaps?: TestFlatEntityMaps<FlatRowLevelPermissionPredicateLike>;
+    flatRoleMaps?: TestFlatEntityMaps<{ universalIdentifier: string }>;
+    flatObjectMetadataMaps?: TestFlatEntityMaps<{ universalIdentifier: string }>;
+    flatFieldMetadataMaps?: TestFlatEntityMaps<{ universalIdentifier: string }>;
+    flatRowLevelPermissionPredicateGroupMaps?: TestFlatEntityMaps<{
       universalIdentifier: string;
     }>;
   } = {},
