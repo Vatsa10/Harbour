@@ -1,5 +1,3 @@
-/* @license Enterprise */
-
 import { fromEntityToScalarEntity } from 'src/engine/metadata-modules/flat-entity/utils/from-entity-to-scalar-entity.util';
 import { type FlatRowLevelPermissionPredicateGroup } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate-group.type';
 import { type FromEntityToFlatEntityArgs } from 'src/engine/workspace-cache/types/from-entity-to-flat-entity-args.type';
@@ -26,21 +24,21 @@ export const fromRowLevelPermissionPredicateGroupEntityToFlatRowLevelPermissionP
     return {
       ...rowLevelPermissionPredicateGroupScalarEntity,
       ...relationUniversalIdentifiers,
-      childRowLevelPermissionPredicateGroupIds: (
-        rowLevelPermissionPredicateGroupEntity.childRowLevelPermissionPredicateGroups ??
-        []
-      ).map(({ id }) => id),
-      rowLevelPermissionPredicateIds: (
-        rowLevelPermissionPredicateGroupEntity.rowLevelPermissionPredicates ??
-        []
-      ).map(({ id }) => id),
-      childRowLevelPermissionPredicateGroupUniversalIdentifiers: (
-        rowLevelPermissionPredicateGroupEntity.childRowLevelPermissionPredicateGroups ??
-        []
-      ).map(({ universalIdentifier }) => universalIdentifier),
-      rowLevelPermissionPredicateUniversalIdentifiers: (
-        rowLevelPermissionPredicateGroupEntity.rowLevelPermissionPredicates ??
-        []
-      ).map(({ universalIdentifier }) => universalIdentifier),
+      rowLevelPermissionPredicateIds:
+        rowLevelPermissionPredicateGroupEntity.rowLevelPermissionPredicates?.map(
+          ({ id }) => id,
+        ) ?? [],
+      childRowLevelPermissionPredicateGroupIds:
+        rowLevelPermissionPredicateGroupEntity.childRowLevelPermissionPredicateGroups?.map(
+          ({ id }) => id,
+        ) ?? [],
+      rowLevelPermissionPredicateUniversalIdentifiers:
+        rowLevelPermissionPredicateGroupEntity.rowLevelPermissionPredicates?.map(
+          ({ universalIdentifier }) => universalIdentifier,
+        ) ?? [],
+      childRowLevelPermissionPredicateGroupUniversalIdentifiers:
+        rowLevelPermissionPredicateGroupEntity.childRowLevelPermissionPredicateGroups?.map(
+          ({ universalIdentifier }) => universalIdentifier,
+        ) ?? [],
     };
   };
