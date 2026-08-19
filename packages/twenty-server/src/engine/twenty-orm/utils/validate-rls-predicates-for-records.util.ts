@@ -1,64 +1,67 @@
-/* @license Enterprise */
-
-import { type ObjectRecord } from 'twenty-shared/types';
+// SeaRM: clean-room AGPL-3.0 rewrite. See
+// .superpowers/sdd/enterprise-rewrite/rlp-recon.md for design notes.
+// Post-write guard: after a mutation returns the affected records, confirm
+// each one still satisfies the row level permission predicate for the
+// acting role. This catches writes that a SQL WHERE clause could not have
+// blocked (e.g. an UPDATE that moves a record out of its own visible set).
+// A record that fails the predicate is deny-by-default: it is reported as a
+// violation, never silently dropped or silently allowed through.
 import { isDefined } from 'twenty-shared/utils';
-import { type ObjectLiteral } from 'typeorm';
-
-import { type WorkspaceInternalContext } from 'src/engine/twenty-orm/interfaces/workspace-internal-context.interface';
+import { type ObjectRecord } from 'twenty-shared/types';
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
-import {
-  TwentyORMException,
-  TwentyORMExceptionCode,
-} from 'src/engine/twenty-orm/exceptions/twenty-orm.exception';
+import { type WorkspaceInternalContext } from 'src/engine/twenty-orm/interfaces/workspace-internal-context.interface';
+import { buildRowLevelPermissionRecordFilter } from 'src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util';
 import { isRecordMatchingRLSRowLevelPermissionPredicate } from 'src/engine/twenty-orm/utils/is-record-matching-rls-row-level-permission-predicate.util';
-import { resolveRowLevelPermissionRecordFilter } from 'src/engine/twenty-orm/utils/resolve-row-level-permission-record-filter.util';
+import { resolveRoleIdsFromAuthContext } from 'src/engine/twenty-orm/utils/resolve-role-ids-from-auth-context.util';
 
-type ValidateRLSPredicatesForRecordsArgs<T extends ObjectLiteral> = {
-  records: T[];
-  objectMetadata: FlatObjectMetadata;
-  internalContext: WorkspaceInternalContext;
-  authContext: WorkspaceAuthContext;
-  shouldBypassPermissionChecks: boolean;
-  errorMessage?: string;
-};
+export class RowLevelPermissionValidationError extends Error {}
 
-export const validateRLSPredicatesForRecords = <T extends ObjectLiteral>({
+export const validateRlsPredicatesForRecords = ({
   records,
   objectMetadata,
   internalContext,
   authContext,
-  shouldBypassPermissionChecks,
-  errorMessage = 'Record does not satisfy row-level security constraints of your current role',
-}: ValidateRLSPredicatesForRecordsArgs<T>): void => {
-  if (shouldBypassPermissionChecks) {
-    return;
-  }
-
-  const recordFilter = resolveRowLevelPermissionRecordFilter({
-    internalContext,
+}: {
+  records: ObjectRecord[];
+  objectMetadata: FlatObjectMetadata;
+  internalContext: WorkspaceInternalContext;
+  authContext: WorkspaceAuthContext;
+}): void => {
+  const roleIds = resolveRoleIdsFromAuthContext({
     authContext,
+    userWorkspaceRoleMap: internalContext.userWorkspaceRoleMap,
+    apiKeyRoleMap: internalContext.apiKeyRoleMap,
+  });
+
+  const recordFilter = buildRowLevelPermissionRecordFilter({
+    flatRowLevelPermissionPredicateMaps:
+      internalContext.flatRowLevelPermissionPredicateMaps,
+    flatRowLevelPermissionPredicateGroupMaps:
+      internalContext.flatRowLevelPermissionPredicateGroupMaps,
+    flatFieldMetadataMaps: internalContext.flatFieldMetadataMaps,
     objectMetadata,
+    roleIds,
   });
 
   if (!isDefined(recordFilter)) {
     return;
   }
 
-  for (const record of records) {
-    const matchesRLS = isRecordMatchingRLSRowLevelPermissionPredicate({
-      record: record as unknown as ObjectRecord,
-      filter: recordFilter,
-      flatObjectMetadata: objectMetadata,
-      flatFieldMetadataMaps: internalContext.flatFieldMetadataMaps,
-    });
+  const violatingRecord = records.find(
+    (record) =>
+      !isRecordMatchingRLSRowLevelPermissionPredicate({
+        record,
+        filter: recordFilter as unknown as Record<string, unknown>,
+        flatObjectMetadata: objectMetadata,
+        flatFieldMetadataMaps: internalContext.flatFieldMetadataMaps,
+      }),
+  );
 
-    if (!matchesRLS) {
-      throw new TwentyORMException(
-        errorMessage,
-        TwentyORMExceptionCode.RLS_VALIDATION_FAILED,
-      );
-    }
+  if (isDefined(violatingRecord)) {
+    throw new RowLevelPermissionValidationError(
+      `Record "${violatingRecord.id}" no longer satisfies the row level permission predicate for object "${objectMetadata.nameSingular}"`,
+    );
   }
 };

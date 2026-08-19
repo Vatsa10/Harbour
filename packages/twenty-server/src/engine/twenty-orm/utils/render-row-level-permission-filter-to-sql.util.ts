@@ -1,276 +1,347 @@
-/* @license Enterprise */
-
-import { isNonEmptyString } from '@sniptt/guards';
+// SeaRM: clean-room AGPL-3.0 rewrite. See
+// .superpowers/sdd/enterprise-rewrite/rlp-recon.md for design notes.
+// Renders a resolved row-level-permission record filter (a RecordGqlOperationFilter-
+// shaped object, already restricted to a single object's fields) into a raw
+// SQL fragment plus TypeORM parameters. Never called with attacker-controlled
+// field names: the filter is built server-side from stored predicates.
+import { capitalize, isDefined } from 'twenty-shared/utils';
 import {
   compositeTypeDefinitions,
+  FieldMetadataType,
   type RecordGqlOperationFilter,
 } from 'twenty-shared/types';
-import { capitalize, isDefined } from 'twenty-shared/utils';
 import { type ObjectLiteral } from 'typeorm';
+import { randomBytes } from 'crypto';
 
-import { resolveFilterKeyFieldMetadata } from 'src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/utils/resolve-filter-key-field-metadata.util';
-import { assertArrayOperatorValueIsNonEmptyArray } from 'src/engine/api/graphql/graphql-query-runner/utils/assert-array-operator-value-is-non-empty-array.util';
-import { computeWhereConditionParts } from 'src/engine/api/graphql/graphql-query-runner/utils/compute-where-condition-parts';
 import { type CompositeFieldMetadataType } from 'src/engine/metadata-modules/field-metadata/types/composite-field-metadata-type.type';
 import { isCompositeFieldMetadataType } from 'src/engine/metadata-modules/field-metadata/utils/is-composite-field-metadata-type.util';
+import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
-import { buildFieldMapsFromFlatObjectMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/build-field-maps-from-flat-object-metadata.util';
-import { isMorphOrRelationFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/is-morph-or-relation-flat-field-metadata.util';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
-import {
-  TwentyORMException,
-  TwentyORMExceptionCode,
-} from 'src/engine/twenty-orm/exceptions/twenty-orm.exception';
 
-const ALWAYS_TRUE_CONDITION = '1=1';
-
-type SqlRenderingContext = {
-  tableAlias: string;
-  fieldIdByName: Record<string, string>;
-  fieldIdByJoinColumnName: Record<string, string>;
-  flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
-  collectedParameters: ObjectLiteral;
-};
-
-type RenderedSqlCondition = {
+export type RenderedRowLevelPermissionFilter = {
   sql: string;
   parameters: ObjectLiteral;
 };
 
-export const renderRowLevelPermissionFilterToSql = ({
-  recordFilter,
+type SupportedOperator = 'eq' | 'ilike' | 'gte' | 'lte' | 'in' | 'is';
+
+const LOGICAL_OPERATORS = ['and', 'or', 'not'] as const;
+
+const generateParameterKey = (columnName: string): string =>
+  `${columnName}${randomBytes(5).toString('hex')}`;
+
+const quoteColumn = (tableAlias: string | undefined, columnName: string) =>
+  isDefined(tableAlias)
+    ? `"${tableAlias}"."${columnName}"`
+    : `"${columnName}"`;
+
+const combine = (chunks: string[], operator: 'AND' | 'OR'): string => {
+  if (chunks.length === 0) {
+    return '1=1';
+  }
+
+  if (chunks.length === 1) {
+    return chunks[0];
+  }
+
+  return `(${chunks.join(` ${operator} `)})`;
+};
+
+const renderOperatorLeaf = ({
   tableAlias,
+  columnName,
+  operator,
+  value,
+  parameters,
+}: {
+  tableAlias: string | undefined;
+  columnName: string;
+  operator: SupportedOperator;
+  value: unknown;
+  parameters: ObjectLiteral;
+}): string => {
+  const columnRef = quoteColumn(tableAlias, columnName);
+
+  switch (operator) {
+    case 'is': {
+      return value === 'NULL'
+        ? `(${columnRef} IS NULL)`
+        : `(${columnRef} IS NOT NULL)`;
+    }
+    case 'in': {
+      if (!Array.isArray(value) || value.length === 0) {
+        throw new Error(
+          `Expected non-empty array for operator "in" on column "${columnName}"`,
+        );
+      }
+
+      const parameterKey = generateParameterKey(columnName);
+
+      parameters[parameterKey] = value;
+
+      return `(${columnRef} IN (:...${parameterKey}))`;
+    }
+    case 'ilike': {
+      const parameterKey = generateParameterKey(columnName);
+
+      parameters[parameterKey] = value;
+
+      return `(${columnRef}::text ILIKE :${parameterKey})`;
+    }
+    case 'gte': {
+      const parameterKey = generateParameterKey(columnName);
+
+      parameters[parameterKey] = value;
+
+      return `(${columnRef} >= :${parameterKey})`;
+    }
+    case 'lte': {
+      const parameterKey = generateParameterKey(columnName);
+
+      parameters[parameterKey] = value;
+
+      return `(${columnRef} <= :${parameterKey})`;
+    }
+    case 'eq': {
+      const parameterKey = generateParameterKey(columnName);
+
+      parameters[parameterKey] = value;
+
+      return `(${columnRef} = :${parameterKey})`;
+    }
+    default: {
+      throw new Error(`Unsupported row level permission operator`);
+    }
+  }
+};
+
+type FieldLookup = {
+  byName: Map<string, FlatFieldMetadata>;
+  byJoinColumnName: Map<string, FlatFieldMetadata>;
+};
+
+const buildFieldLookup = ({
   objectMetadata,
   flatFieldMetadataMaps,
 }: {
-  recordFilter: RecordGqlOperationFilter;
-  tableAlias: string;
   objectMetadata: FlatObjectMetadata;
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
-}): RenderedSqlCondition | null => {
-  const { fieldIdByName, fieldIdByJoinColumnName } =
-    buildFieldMapsFromFlatObjectMetadata(flatFieldMetadataMaps, objectMetadata);
+}): FieldLookup => {
+  const byName = new Map<string, FlatFieldMetadata>();
+  const byJoinColumnName = new Map<string, FlatFieldMetadata>();
 
-  const collectedParameters: ObjectLiteral = {};
-
-  const sql = renderFilterAsConjunction(recordFilter, {
-    tableAlias,
-    fieldIdByName,
-    fieldIdByJoinColumnName,
-    flatFieldMetadataMaps,
-    collectedParameters,
-  });
-
-  if (!isNonEmptyString(sql)) {
-    return null;
-  }
-
-  return { sql, parameters: collectedParameters };
-};
-
-const renderFilterAsConjunction = (
-  filter: RecordGqlOperationFilter,
-  context: SqlRenderingContext,
-): string => {
-  const conditions = Object.entries(filter)
-    .map(([filterKey, filterValue]) =>
-      renderFilterEntry(filterKey, filterValue, context),
-    )
-    .filter(isNonEmptyString);
-
-  return joinConditions(conditions, 'AND');
-};
-
-const renderFilterEntry = (
-  filterKey: string,
-  filterValue: unknown,
-  context: SqlRenderingContext,
-): string => {
-  switch (filterKey) {
-    case 'and':
-      return renderLogicalGroup(
-        filterValue as RecordGqlOperationFilter[] | RecordGqlOperationFilter,
-        'AND',
-        context,
-      );
-    case 'or':
-      return renderLogicalGroup(
-        filterValue as RecordGqlOperationFilter[] | RecordGqlOperationFilter,
-        'OR',
-        context,
-      );
-    case 'not': {
-      const negatedCondition = renderFilterAsConjunction(
-        filterValue as RecordGqlOperationFilter,
-        context,
-      );
-
-      const conditionToNegate = isNonEmptyString(negatedCondition)
-        ? negatedCondition
-        : ALWAYS_TRUE_CONDITION;
-
-      return `NOT (${conditionToNegate})`;
-    }
-    default:
-      return renderFieldCondition(filterKey, filterValue, context);
-  }
-};
-
-const renderLogicalGroup = (
-  filters: RecordGqlOperationFilter[] | RecordGqlOperationFilter,
-  logicalOperator: 'AND' | 'OR',
-  context: SqlRenderingContext,
-): string => {
-  const filterList = Array.isArray(filters) ? filters : [filters];
-
-  const conditions = filterList.map((filter) => {
-    const renderedCondition = renderFilterAsConjunction(filter, context);
-
-    return isNonEmptyString(renderedCondition)
-      ? renderedCondition
-      : ALWAYS_TRUE_CONDITION;
-  });
-
-  if (conditions.length === 0) {
-    return ALWAYS_TRUE_CONDITION;
-  }
-
-  return `(${conditions.join(` ${logicalOperator} `)})`;
-};
-
-const joinConditions = (
-  conditions: string[],
-  logicalOperator: 'AND' | 'OR',
-): string => {
-  if (conditions.length === 0) {
-    return '';
-  }
-
-  if (conditions.length === 1) {
-    return conditions[0];
-  }
-
-  return `(${conditions.join(` ${logicalOperator} `)})`;
-};
-
-const renderFieldCondition = (
-  fieldNameOrJoinColumnName: string,
-  filterValue: unknown,
-  context: SqlRenderingContext,
-): string => {
-  const {
-    tableAlias,
-    fieldIdByName,
-    fieldIdByJoinColumnName,
-    flatFieldMetadataMaps,
-  } = context;
-
-  const { fieldMetadata, isReferencedByFieldName } =
-    resolveFilterKeyFieldMetadata({
-      filterKey: fieldNameOrJoinColumnName,
-      fieldIdByName,
-      fieldIdByJoinColumnName,
-      flatFieldMetadataMaps,
+  for (const fieldId of objectMetadata.fieldIds) {
+    const fieldMetadata = findFlatEntityByIdInFlatEntityMaps({
+      flatEntityId: fieldId,
+      flatEntityMaps: flatFieldMetadataMaps,
     });
 
-  if (!isDefined(fieldMetadata)) {
-    throw new TwentyORMException(
-      `Cannot render row level permission predicate: field "${fieldNameOrJoinColumnName}" does not exist on object "${tableAlias}"`,
-      TwentyORMExceptionCode.MALFORMED_METADATA,
+    if (!isDefined(fieldMetadata)) {
+      continue;
+    }
+
+    byName.set(fieldMetadata.name, fieldMetadata);
+
+    if (fieldMetadata.type === FieldMetadataType.RELATION) {
+      const joinColumnName = (
+        fieldMetadata.settings as { joinColumnName?: string } | undefined
+      )?.joinColumnName;
+
+      if (isDefined(joinColumnName)) {
+        byJoinColumnName.set(joinColumnName, fieldMetadata);
+      }
+    }
+  }
+
+  return { byName, byJoinColumnName };
+};
+
+const renderFieldCondition = ({
+  tableAlias,
+  key,
+  value,
+  fieldLookup,
+  parameters,
+}: {
+  tableAlias: string | undefined;
+  key: string;
+  value: unknown;
+  fieldLookup: FieldLookup;
+  parameters: ObjectLiteral;
+}): string => {
+  const joinColumnField = fieldLookup.byJoinColumnName.get(key);
+
+  if (isDefined(joinColumnField)) {
+    return combine(
+      Object.entries(value as Record<string, unknown>).map(
+        ([operator, operatorValue]) =>
+          renderOperatorLeaf({
+            tableAlias,
+            columnName: key,
+            operator: operator as SupportedOperator,
+            value: operatorValue,
+            parameters,
+          }),
+      ),
+      'AND',
     );
   }
 
-  if (
-    isReferencedByFieldName &&
-    isMorphOrRelationFlatFieldMetadata(fieldMetadata)
-  ) {
-    throw new TwentyORMException(
-      `Cannot render row level permission predicate on relation "${fieldNameOrJoinColumnName}": traversing a relation requires an additional join, which a join condition cannot express`,
-      TwentyORMExceptionCode.MALFORMED_METADATA,
+  const fieldMetadata = fieldLookup.byName.get(key);
+
+  if (!isDefined(fieldMetadata)) {
+    throw new Error(
+      `Row level permission predicate references field "${key}" which does not exist on the object`,
+    );
+  }
+
+  if (fieldMetadata.type === FieldMetadataType.RELATION) {
+    throw new Error(
+      `Row level permission predicate on field "${key}": traversing a relation requires an additional join, reference the join column instead`,
     );
   }
 
   if (isCompositeFieldMetadataType(fieldMetadata.type)) {
-    return renderCompositeFieldCondition(fieldMetadata, filterValue, context);
-  }
-
-  const operatorConditions = Object.entries(
-    filterValue as Record<string, unknown>,
-  ).map(([operator, operatorValue]) => {
-    assertArrayOperatorValueIsNonEmptyArray({
-      operator,
-      value: operatorValue,
-      key: fieldNameOrJoinColumnName,
-    });
-
-    const { sql, params } = computeWhereConditionParts({
-      operator,
-      objectNameSingular: tableAlias,
-      key: fieldNameOrJoinColumnName,
-      value: operatorValue,
-      fieldMetadataType: fieldMetadata.type,
-    });
-
-    Object.assign(context.collectedParameters, params);
-
-    return `(${sql})`;
-  });
-
-  return joinConditions(operatorConditions, 'AND');
-};
-
-const renderCompositeFieldCondition = (
-  fieldMetadata: FlatFieldMetadata,
-  filterValue: unknown,
-  context: SqlRenderingContext,
-): string => {
-  const compositeType = compositeTypeDefinitions.get(
-    fieldMetadata.type as CompositeFieldMetadataType,
-  );
-
-  if (!isDefined(compositeType)) {
-    throw new TwentyORMException(
-      `Cannot render row level permission predicate: composite type definition not found for type "${fieldMetadata.type}"`,
-      TwentyORMExceptionCode.MALFORMED_METADATA,
-    );
-  }
-
-  const conditions = Object.entries(
-    filterValue as Record<string, Record<string, unknown>>,
-  ).flatMap(([subFieldName, subFieldFilter]) => {
-    const isKnownSubField = compositeType.properties.some(
-      (property) => property.name === subFieldName,
+    const compositeType = compositeTypeDefinitions.get(
+      fieldMetadata.type as CompositeFieldMetadataType,
     );
 
-    if (!isKnownSubField) {
-      throw new TwentyORMException(
-        `Cannot render row level permission predicate: "${subFieldName}" is not a sub field of composite type "${fieldMetadata.type}"`,
-        TwentyORMExceptionCode.MALFORMED_METADATA,
+    if (!isDefined(compositeType)) {
+      throw new Error(
+        `Composite type definition not found for type: ${fieldMetadata.type}`,
       );
     }
 
-    return Object.entries(subFieldFilter).map(([operator, operatorValue]) => {
-      assertArrayOperatorValueIsNonEmptyArray({
-        operator,
-        value: operatorValue,
-        key: subFieldName,
+    return combine(
+      Object.entries(value as Record<string, unknown>).map(
+        ([subFieldKey, subFieldFilter]) => {
+          const subFieldMetadata = compositeType.properties.find(
+            (property) => property.name === subFieldKey,
+          );
+
+          if (!isDefined(subFieldMetadata)) {
+            throw new Error(
+              `"${subFieldKey}" is not a sub field of composite type "${fieldMetadata.type}"`,
+            );
+          }
+
+          const columnName = `${fieldMetadata.name}${capitalize(subFieldKey)}`;
+
+          return combine(
+            Object.entries(subFieldFilter as Record<string, unknown>).map(
+              ([operator, operatorValue]) =>
+                renderOperatorLeaf({
+                  tableAlias,
+                  columnName,
+                  operator: operator as SupportedOperator,
+                  value: operatorValue,
+                  parameters,
+                }),
+            ),
+            'AND',
+          );
+        },
+      ),
+      'AND',
+    );
+  }
+
+  return combine(
+    Object.entries(value as Record<string, unknown>).map(
+      ([operator, operatorValue]) =>
+        renderOperatorLeaf({
+          tableAlias,
+          columnName: fieldMetadata.name,
+          operator: operator as SupportedOperator,
+          value: operatorValue,
+          parameters,
+        }),
+    ),
+    'AND',
+  );
+};
+
+const renderFilterObject = ({
+  tableAlias,
+  filter,
+  fieldLookup,
+  parameters,
+}: {
+  tableAlias: string | undefined;
+  filter: Record<string, unknown>;
+  fieldLookup: FieldLookup;
+  parameters: ObjectLiteral;
+}): string => {
+  const chunks = Object.entries(filter).map(([key, value]) => {
+    if (key === 'and' || key === 'or') {
+      const list = Array.isArray(value) ? value : [value];
+
+      return combine(
+        list.map((subFilter) =>
+          renderFilterObject({
+            tableAlias,
+            filter: subFilter as Record<string, unknown>,
+            fieldLookup,
+            parameters,
+          }),
+        ),
+        key === 'and' ? 'AND' : 'OR',
+      );
+    }
+
+    if (key === 'not') {
+      const inner = renderFilterObject({
+        tableAlias,
+        filter: value as Record<string, unknown>,
+        fieldLookup,
+        parameters,
       });
 
-      const { sql, params } = computeWhereConditionParts({
-        operator,
-        objectNameSingular: context.tableAlias,
-        key: `${fieldMetadata.name}${capitalize(subFieldName)}`,
-        subFieldKey: subFieldName,
-        value: operatorValue,
-        fieldMetadataType: fieldMetadata.type,
-      });
+      return `NOT (${inner})`;
+    }
 
-      Object.assign(context.collectedParameters, params);
+    if ((LOGICAL_OPERATORS as readonly string[]).includes(key)) {
+      throw new Error(`Unsupported logical operator "${key}"`);
+    }
 
-      return `(${sql})`;
+    return renderFieldCondition({
+      tableAlias,
+      key,
+      value,
+      fieldLookup,
+      parameters,
     });
   });
 
-  return joinConditions(conditions, 'AND');
+  return combine(chunks, 'AND');
+};
+
+export const renderRowLevelPermissionFilterToSql = ({
+  tableAlias,
+  objectMetadata,
+  flatFieldMetadataMaps,
+  recordFilter,
+}: {
+  tableAlias?: string;
+  objectMetadata: FlatObjectMetadata;
+  flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
+  recordFilter: RecordGqlOperationFilter;
+}): RenderedRowLevelPermissionFilter | null => {
+  if (Object.keys(recordFilter).length === 0) {
+    return null;
+  }
+
+  const fieldLookup = buildFieldLookup({ objectMetadata, flatFieldMetadataMaps });
+  const parameters: ObjectLiteral = {};
+
+  const sql = renderFilterObject({
+    tableAlias,
+    filter: recordFilter as unknown as Record<string, unknown>,
+    fieldLookup,
+    parameters,
+  });
+
+  return { sql, parameters };
 };
