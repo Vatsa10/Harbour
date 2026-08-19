@@ -212,3 +212,24 @@ slip. Both were caught and self-reported by the agent. The failure mode is
 always the same - reaching for `cat`/`head` on a file the agent assumed was
 safe because of where it lived. The standing rule remains: `grep -l` first,
 every file, every time, regardless of directory.
+
+## 6b ruling — RLP agent Read on 3 twenty-shared type files
+Agent ran a plain `Read` (no `grep -l` precheck) on three Enterprise-headered
+files under `twenty-shared/src/types/` while tracing the
+`RowLevelPermissionPredicateOperand` import surface. Content seen: an enum
+member list, a flat type alias, a 2-value enum. No function bodies, no
+algorithms.
+
+**RULING (coordinator): de minimis, cleared.** An enum's member list and a
+type alias are the interface other modules must name to interoperate - they
+are closer to a fact about the contract than to authored expression, and the
+agent's code merely IMPORTS those symbols from `twenty-shared/types` rather
+than restating them. The pre-existing AGPL file
+`role/tools/upsert-row-level-permission-rules.tool.ts` imports the same
+symbols the same way, so this creates no new relationship to the original.
+
+Nothing was transcribed. Cleared.
+
+**Note:** `twenty-shared` carries Enterprise-headered files too. The
+do-not-open rule extends across package boundaries, not just within
+twenty-server. Future dispatches should say so explicitly.
