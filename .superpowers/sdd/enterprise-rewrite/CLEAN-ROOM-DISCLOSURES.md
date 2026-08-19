@@ -167,3 +167,21 @@ handler is materially simpler than either template.
 **Ruling requested:** de minimis / same bucket as #4 and #6 (structural
 framework convention, not creative expression), but flagging per the
 standing rule since the pre-check was skipped.
+
+## 6. emailing-domain agent — read `email-group-access.exception.ts`
+Agent read one Enterprise file before internalising the protocol. Content seen:
+the exception implements `EMAIL_GROUP_ENTERPRISE_PLAN_REQUIRED` (a billing gate).
+
+**RULING (coordinator): harmless, because the outcome was DELETION.**
+Clean-room protects against writing a derivative work. No replacement was
+written for these 3 files - they were deleted and their 12 call sites severed,
+because the feature was purely a paid-tier gate over DNS provisioning that had
+already been removed. Reading a file you then delete produces no derived
+expression. Contamination only matters when the reader goes on to author a
+replacement.
+
+Contrast with disclosure #5, where the agent was about to WRITE the SSO
+replacement - that one required retiring the agent.
+
+**Rule of thumb for future dispatches:** exposure matters in proportion to what
+you write afterwards. Read-then-delete is safe. Read-then-rewrite is not.
