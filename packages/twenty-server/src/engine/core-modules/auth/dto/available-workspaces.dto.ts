@@ -1,65 +1,54 @@
-/* @license Enterprise */
-
 import { Field, ObjectType } from '@nestjs/graphql';
 
-import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
-import { type SSOConfiguration } from 'src/engine/core-modules/sso/types/SSOConfigurations.type';
-import {
-  IdentityProviderType,
-  SSOIdentityProviderStatus,
-} from 'src/engine/core-modules/sso/workspace-sso-identity-provider.entity';
 import { WorkspaceUrlsDTO } from 'src/engine/core-modules/workspace/dtos/workspace-urls.dto';
 
-@ObjectType('SSOConnection')
-class SSOConnectionDTO {
-  @Field(() => IdentityProviderType)
-  type: SSOConfiguration['type'];
-
-  @Field(() => UUIDScalarType)
+@ObjectType('AvailableSSOIdentityProvider')
+export class AvailableSSOIdentityProviderDTO {
+  @Field(() => String)
   id: string;
+
+  @Field(() => String)
+  name: string;
 
   @Field(() => String)
   issuer: string;
 
   @Field(() => String)
-  name: string;
+  type: string;
 
-  @Field(() => SSOIdentityProviderStatus)
-  status: SSOConfiguration['status'];
+  @Field(() => String)
+  status: string;
 }
 
 @ObjectType('AvailableWorkspace')
 export class AvailableWorkspace {
-  @Field(() => UUIDScalarType)
+  @Field(() => String)
   id: string;
 
   @Field(() => String, { nullable: true })
   displayName?: string;
 
-  @Field(() => String, { nullable: true })
-  loginToken?: string;
+  @Field(() => WorkspaceUrlsDTO)
+  workspaceUrls: WorkspaceUrlsDTO;
+
+  @Field(() => String)
+  logo: string;
+
+  @Field(() => [AvailableSSOIdentityProviderDTO])
+  sso: AvailableSSOIdentityProviderDTO[];
 
   @Field(() => String, { nullable: true })
   personalInviteToken?: string;
 
   @Field(() => String, { nullable: true })
-  inviteHash?: string;
-
-  @Field(() => WorkspaceUrlsDTO)
-  workspaceUrls: WorkspaceUrlsDTO;
-
-  @Field(() => String, { nullable: true })
-  logo?: string;
-
-  @Field(() => [SSOConnectionDTO])
-  sso: SSOConnectionDTO[];
+  loginToken?: string;
 }
 
 @ObjectType('AvailableWorkspaces')
 export class AvailableWorkspaces {
   @Field(() => [AvailableWorkspace])
-  availableWorkspacesForSignIn: Array<AvailableWorkspace>;
+  availableWorkspacesForSignUp: AvailableWorkspace[];
 
   @Field(() => [AvailableWorkspace])
-  availableWorkspacesForSignUp: Array<AvailableWorkspace>;
+  availableWorkspacesForSignIn: AvailableWorkspace[];
 }
