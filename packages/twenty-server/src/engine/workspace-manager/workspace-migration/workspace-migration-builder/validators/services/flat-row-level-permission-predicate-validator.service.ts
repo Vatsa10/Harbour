@@ -1,4 +1,9 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the row-level-permission
+// predicate flat-entity validator (no Twenty Enterprise source consulted;
+// derived from the sibling flat-view-filter validator service, the AGPL
+// flat-row-level-permission-predicate mappers which fix the field shape of
+// FlatRowLevelPermissionPredicate, and the committed RLP recon which fixes
+// the deny-by-default security contract).
 
 import { Injectable } from '@nestjs/common';
 
@@ -7,114 +12,159 @@ import { ALL_METADATA_NAME } from 'twenty-shared/metadata';
 import { isDefined } from 'twenty-shared/utils';
 
 import { findFlatEntityByUniversalIdentifier } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-universal-identifier.util';
-import { RowLevelPermissionPredicateExceptionCode } from 'src/engine/metadata-modules/row-level-permission-predicate/exceptions/row-level-permission-predicate.exception';
-import { FailedFlatEntityValidation } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/types/failed-flat-entity-validation.type';
+import { type FailedFlatEntityValidation } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/types/failed-flat-entity-validation.type';
 import { getEmptyFlatEntityValidationError } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/utils/get-flat-entity-validation-error.util';
-import { FlatEntityUpdateValidationArgs } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/universal-flat-entity-update-validation-args.type';
-import { UniversalFlatEntityValidationArgs } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/universal-flat-entity-validation-args.type';
+import { type FlatEntityUpdateValidationArgs } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/universal-flat-entity-update-validation-args.type';
+import { type UniversalFlatEntityValidationArgs } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/universal-flat-entity-validation-args.type';
+
+// Local exception codes: the upstream RowLevelPermissionPredicateExceptionCode
+// enum lives in an Enterprise-headered file we cannot open or depend on, so
+// this validator defines and owns its own codes. FlatEntityValidationError
+// "code" field is generic over string, so this is a compatible substitute.
+export enum WorkspaceMigrationRowLevelPermissionPredicateExceptionCode {
+  ROW_LEVEL_PERMISSION_PREDICATE_ALREADY_EXISTS = 'ROW_LEVEL_PERMISSION_PREDICATE_ALREADY_EXISTS',
+  ROW_LEVEL_PERMISSION_PREDICATE_NOT_FOUND = 'ROW_LEVEL_PERMISSION_PREDICATE_NOT_FOUND',
+  INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA = 'INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA',
+}
 
 @Injectable()
 export class FlatRowLevelPermissionPredicateValidatorService {
+  constructor() {}
+
   validateFlatRowLevelPermissionPredicateCreation({
-    flatEntityToValidate: flatPredicateToValidate,
-    optimisticFlatEntityMapsAndRelatedFlatEntityMaps,
+    flatEntityToValidate: flatRowLevelPermissionPredicateToValidate,
+    optimisticFlatEntityMapsAndRelatedFlatEntityMaps: {
+      flatRowLevelPermissionPredicateMaps:
+        optimisticFlatRowLevelPermissionPredicateMaps,
+      flatFieldMetadataMaps,
+      flatRoleMaps,
+      flatObjectMetadataMaps,
+      flatRowLevelPermissionPredicateGroupMaps,
+    },
   }: UniversalFlatEntityValidationArgs<
     typeof ALL_METADATA_NAME.rowLevelPermissionPredicate
   >): FailedFlatEntityValidation<'rowLevelPermissionPredicate', 'create'> {
-    const {
-      flatRowLevelPermissionPredicateMaps: optimisticFlatPredicateMaps,
-      flatFieldMetadataMaps,
-      flatObjectMetadataMaps,
-      flatRowLevelPermissionPredicateGroupMaps,
-      flatRoleMaps,
-    } = optimisticFlatEntityMapsAndRelatedFlatEntityMaps;
-
     const validationResult = getEmptyFlatEntityValidationError({
       flatEntityMinimalInformation: {
-        universalIdentifier: flatPredicateToValidate.universalIdentifier,
+        universalIdentifier:
+          flatRowLevelPermissionPredicateToValidate.universalIdentifier,
       },
       metadataName: 'rowLevelPermissionPredicate',
       type: 'create',
     });
 
-    const existingPredicate = findFlatEntityByUniversalIdentifier({
-      universalIdentifier: flatPredicateToValidate.universalIdentifier,
-      flatEntityMaps: optimisticFlatPredicateMaps,
-    });
+    const existingRowLevelPermissionPredicate =
+      findFlatEntityByUniversalIdentifier({
+        universalIdentifier:
+          flatRowLevelPermissionPredicateToValidate.universalIdentifier,
+        flatEntityMaps: optimisticFlatRowLevelPermissionPredicateMaps,
+      });
 
-    if (isDefined(existingPredicate)) {
+    if (isDefined(existingRowLevelPermissionPredicate)) {
       validationResult.errors.push({
-        code: RowLevelPermissionPredicateExceptionCode.INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA,
+        code: WorkspaceMigrationRowLevelPermissionPredicateExceptionCode.ROW_LEVEL_PERMISSION_PREDICATE_ALREADY_EXISTS,
         message: t`Row level permission predicate with this universal identifier already exists`,
         userFriendlyMessage: msg`Row level permission predicate already exists`,
       });
     }
 
-    const fieldMetadata = flatFieldMetadataMaps
-      ? findFlatEntityByUniversalIdentifier({
-          universalIdentifier:
-            flatPredicateToValidate.fieldMetadataUniversalIdentifier,
-          flatEntityMaps: flatFieldMetadataMaps,
-        })
-      : undefined;
+    const referencedRole = findFlatEntityByUniversalIdentifier({
+      universalIdentifier:
+        flatRowLevelPermissionPredicateToValidate.roleUniversalIdentifier,
+      flatEntityMaps: flatRoleMaps,
+    });
 
-    if (!isDefined(fieldMetadata)) {
+    if (!isDefined(referencedRole)) {
       validationResult.errors.push({
-        code: RowLevelPermissionPredicateExceptionCode.FIELD_METADATA_NOT_FOUND,
-        message: t`Field metadata not found`,
-        userFriendlyMessage: msg`Field metadata not found`,
+        code: WorkspaceMigrationRowLevelPermissionPredicateExceptionCode.INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA,
+        message: t`Role not found`,
+        userFriendlyMessage: msg`Role not found`,
       });
     }
 
-    const objectMetadata = flatObjectMetadataMaps
-      ? findFlatEntityByUniversalIdentifier({
-          universalIdentifier:
-            flatPredicateToValidate.objectMetadataUniversalIdentifier,
-          flatEntityMaps: flatObjectMetadataMaps,
-        })
-      : undefined;
+    const referencedObjectMetadata = findFlatEntityByUniversalIdentifier({
+      universalIdentifier:
+        flatRowLevelPermissionPredicateToValidate.objectMetadataUniversalIdentifier,
+      flatEntityMaps: flatObjectMetadataMaps,
+    });
 
-    if (!isDefined(objectMetadata)) {
+    if (!isDefined(referencedObjectMetadata)) {
       validationResult.errors.push({
-        code: RowLevelPermissionPredicateExceptionCode.OBJECT_METADATA_NOT_FOUND,
+        code: WorkspaceMigrationRowLevelPermissionPredicateExceptionCode.INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA,
         message: t`Object metadata not found`,
         userFriendlyMessage: msg`Object metadata not found`,
       });
     }
 
+    const referencedFieldMetadata = findFlatEntityByUniversalIdentifier({
+      universalIdentifier:
+        flatRowLevelPermissionPredicateToValidate.fieldMetadataUniversalIdentifier,
+      flatEntityMaps: flatFieldMetadataMaps,
+    });
+
+    if (!isDefined(referencedFieldMetadata)) {
+      validationResult.errors.push({
+        code: WorkspaceMigrationRowLevelPermissionPredicateExceptionCode.INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA,
+        message: t`Field metadata not found`,
+        userFriendlyMessage: msg`Field metadata not found`,
+      });
+    }
+
     if (
       isDefined(
-        flatPredicateToValidate.rowLevelPermissionPredicateGroupUniversalIdentifier,
-      ) &&
-      flatRowLevelPermissionPredicateGroupMaps
+        flatRowLevelPermissionPredicateToValidate.workspaceMemberFieldMetadataUniversalIdentifier,
+      )
     ) {
-      const predicateGroup = findFlatEntityByUniversalIdentifier({
+      const referencedWorkspaceMemberFieldMetadata =
+        findFlatEntityByUniversalIdentifier({
+          universalIdentifier:
+            flatRowLevelPermissionPredicateToValidate.workspaceMemberFieldMetadataUniversalIdentifier,
+          flatEntityMaps: flatFieldMetadataMaps,
+        });
+
+      if (!isDefined(referencedWorkspaceMemberFieldMetadata)) {
+        validationResult.errors.push({
+          code: WorkspaceMigrationRowLevelPermissionPredicateExceptionCode.INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA,
+          message: t`Workspace member field metadata not found`,
+          userFriendlyMessage: msg`Workspace member field metadata not found`,
+        });
+      }
+    }
+
+    if (
+      isDefined(
+        flatRowLevelPermissionPredicateToValidate.rowLevelPermissionPredicateGroupUniversalIdentifier,
+      )
+    ) {
+      const referencedGroup = findFlatEntityByUniversalIdentifier({
         universalIdentifier:
-          flatPredicateToValidate.rowLevelPermissionPredicateGroupUniversalIdentifier,
+          flatRowLevelPermissionPredicateToValidate.rowLevelPermissionPredicateGroupUniversalIdentifier,
         flatEntityMaps: flatRowLevelPermissionPredicateGroupMaps,
       });
 
-      if (!isDefined(predicateGroup)) {
+      if (!isDefined(referencedGroup)) {
         validationResult.errors.push({
-          code: RowLevelPermissionPredicateExceptionCode.INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA,
+          code: WorkspaceMigrationRowLevelPermissionPredicateExceptionCode.INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA,
           message: t`Row level permission predicate group not found`,
           userFriendlyMessage: msg`Row level permission predicate group not found`,
         });
       }
     }
 
-    const role = flatRoleMaps
-      ? findFlatEntityByUniversalIdentifier({
-          universalIdentifier: flatPredicateToValidate.roleUniversalIdentifier,
-          flatEntityMaps: flatRoleMaps,
-        })
-      : undefined;
-
-    if (!isDefined(role)) {
+    // Deny-by-default contract (see rlp-recon.md): a predicate that resolves
+    // to neither a standalone field comparison nor a group membership is
+    // structurally meaningless and MUST fail validation rather than being
+    // silently accepted as a no-op predicate that grants unrestricted access.
+    if (
+      !isDefined(referencedFieldMetadata) &&
+      !isDefined(
+        flatRowLevelPermissionPredicateToValidate.rowLevelPermissionPredicateGroupUniversalIdentifier,
+      )
+    ) {
       validationResult.errors.push({
-        code: RowLevelPermissionPredicateExceptionCode.ROLE_NOT_FOUND,
-        message: t`Role not found`,
-        userFriendlyMessage: msg`Role not found`,
+        code: WorkspaceMigrationRowLevelPermissionPredicateExceptionCode.INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA,
+        message: t`Row level permission predicate must reference either a field or a predicate group`,
+        userFriendlyMessage: msg`Row level permission predicate is missing a field or group reference`,
       });
     }
 
@@ -122,32 +172,38 @@ export class FlatRowLevelPermissionPredicateValidatorService {
   }
 
   validateFlatRowLevelPermissionPredicateDeletion({
-    flatEntityToValidate: flatPredicateToDelete,
-    optimisticFlatEntityMapsAndRelatedFlatEntityMaps,
+    flatEntityToValidate: flatRowLevelPermissionPredicateToValidate,
+    optimisticFlatEntityMapsAndRelatedFlatEntityMaps: {
+      flatRowLevelPermissionPredicateMaps:
+        optimisticFlatRowLevelPermissionPredicateMaps,
+    },
   }: UniversalFlatEntityValidationArgs<
     typeof ALL_METADATA_NAME.rowLevelPermissionPredicate
   >): FailedFlatEntityValidation<'rowLevelPermissionPredicate', 'delete'> {
-    const { flatRowLevelPermissionPredicateMaps: optimisticFlatPredicateMaps } =
-      optimisticFlatEntityMapsAndRelatedFlatEntityMaps;
     const validationResult = getEmptyFlatEntityValidationError({
       flatEntityMinimalInformation: {
-        universalIdentifier: flatPredicateToDelete.universalIdentifier,
+        universalIdentifier:
+          flatRowLevelPermissionPredicateToValidate.universalIdentifier,
       },
       metadataName: 'rowLevelPermissionPredicate',
       type: 'delete',
     });
 
-    const existingPredicate = findFlatEntityByUniversalIdentifier({
-      universalIdentifier: flatPredicateToDelete.universalIdentifier,
-      flatEntityMaps: optimisticFlatPredicateMaps,
-    });
-
-    if (!isDefined(existingPredicate)) {
-      validationResult.errors.push({
-        code: RowLevelPermissionPredicateExceptionCode.ROW_LEVEL_PERMISSION_PREDICATE_NOT_FOUND,
-        message: t`Row level permission predicate to delete not found`,
-        userFriendlyMessage: msg`Row level permission predicate to delete not found`,
+    const existingRowLevelPermissionPredicate =
+      findFlatEntityByUniversalIdentifier({
+        universalIdentifier:
+          flatRowLevelPermissionPredicateToValidate.universalIdentifier,
+        flatEntityMaps: optimisticFlatRowLevelPermissionPredicateMaps,
       });
+
+    if (!isDefined(existingRowLevelPermissionPredicate)) {
+      validationResult.errors.push({
+        code: WorkspaceMigrationRowLevelPermissionPredicateExceptionCode.ROW_LEVEL_PERMISSION_PREDICATE_NOT_FOUND,
+        message: t`Row level permission predicate not found`,
+        userFriendlyMessage: msg`Row level permission predicate not found`,
+      });
+
+      return validationResult;
     }
 
     return validationResult;
@@ -156,22 +212,20 @@ export class FlatRowLevelPermissionPredicateValidatorService {
   validateFlatRowLevelPermissionPredicateUpdate({
     universalIdentifier,
     flatEntityUpdate,
-    optimisticFlatEntityMapsAndRelatedFlatEntityMaps,
+    optimisticFlatEntityMapsAndRelatedFlatEntityMaps: {
+      flatRowLevelPermissionPredicateMaps:
+        optimisticFlatRowLevelPermissionPredicateMaps,
+      flatFieldMetadataMaps,
+      flatRowLevelPermissionPredicateGroupMaps,
+    },
   }: FlatEntityUpdateValidationArgs<
     typeof ALL_METADATA_NAME.rowLevelPermissionPredicate
   >): FailedFlatEntityValidation<'rowLevelPermissionPredicate', 'update'> {
-    const {
-      flatRowLevelPermissionPredicateMaps: optimisticFlatPredicateMaps,
-      flatFieldMetadataMaps,
-      flatObjectMetadataMaps,
-      flatRowLevelPermissionPredicateGroupMaps,
-      flatRoleMaps,
-    } = optimisticFlatEntityMapsAndRelatedFlatEntityMaps;
-
-    const existingPredicate = findFlatEntityByUniversalIdentifier({
-      universalIdentifier,
-      flatEntityMaps: optimisticFlatPredicateMaps,
-    });
+    const existingRowLevelPermissionPredicate =
+      findFlatEntityByUniversalIdentifier({
+        universalIdentifier,
+        flatEntityMaps: optimisticFlatRowLevelPermissionPredicateMaps,
+      });
 
     const validationResult = getEmptyFlatEntityValidationError({
       flatEntityMinimalInformation: {
@@ -181,116 +235,73 @@ export class FlatRowLevelPermissionPredicateValidatorService {
       type: 'update',
     });
 
-    if (!isDefined(existingPredicate)) {
+    if (!isDefined(existingRowLevelPermissionPredicate)) {
       validationResult.errors.push({
-        code: RowLevelPermissionPredicateExceptionCode.ROW_LEVEL_PERMISSION_PREDICATE_NOT_FOUND,
-        message: t`Row level permission predicate to update not found`,
-        userFriendlyMessage: msg`Row level permission predicate to update not found`,
+        code: WorkspaceMigrationRowLevelPermissionPredicateExceptionCode.ROW_LEVEL_PERMISSION_PREDICATE_NOT_FOUND,
+        message: t`Row level permission predicate not found`,
+        userFriendlyMessage: msg`Row level permission predicate not found`,
       });
 
       return validationResult;
     }
 
-    const updatedPredicate = {
-      ...existingPredicate,
+    const updatedFlatRowLevelPermissionPredicate = {
+      ...existingRowLevelPermissionPredicate,
       ...flatEntityUpdate,
     };
 
     if (
-      updatedPredicate.roleUniversalIdentifier !==
-      existingPredicate.roleUniversalIdentifier
+      isDefined(
+        updatedFlatRowLevelPermissionPredicate.fieldMetadataUniversalIdentifier,
+      )
     ) {
-      const existingRoleIdentifier = existingPredicate.roleUniversalIdentifier;
-      const updatedRoleIdentifier = updatedPredicate.roleUniversalIdentifier;
-
-      validationResult.errors.push({
-        code: RowLevelPermissionPredicateExceptionCode.UNAUTHORIZED_ROLE_MODIFICATION,
-        message: t`Cannot modify predicate to change its role from ${existingRoleIdentifier} to ${updatedRoleIdentifier}`,
-        userFriendlyMessage: msg`Cannot modify predicate to change its role`,
+      const referencedFieldMetadata = findFlatEntityByUniversalIdentifier({
+        universalIdentifier:
+          updatedFlatRowLevelPermissionPredicate.fieldMetadataUniversalIdentifier,
+        flatEntityMaps: flatFieldMetadataMaps,
       });
-    }
 
-    if (
-      updatedPredicate.objectMetadataUniversalIdentifier !==
-      existingPredicate.objectMetadataUniversalIdentifier
-    ) {
-      const existingObjectMetadataIdentifier =
-        existingPredicate.objectMetadataUniversalIdentifier;
-      const updatedObjectMetadataIdentifier =
-        updatedPredicate.objectMetadataUniversalIdentifier;
-
-      validationResult.errors.push({
-        code: RowLevelPermissionPredicateExceptionCode.UNAUTHORIZED_OBJECT_MODIFICATION,
-        message: t`Cannot modify predicate to change its object from ${existingObjectMetadataIdentifier} to ${updatedObjectMetadataIdentifier}`,
-        userFriendlyMessage: msg`Cannot modify predicate to change its object`,
-      });
-    }
-
-    const fieldMetadata = flatFieldMetadataMaps
-      ? findFlatEntityByUniversalIdentifier({
-          universalIdentifier:
-            updatedPredicate.fieldMetadataUniversalIdentifier,
-          flatEntityMaps: flatFieldMetadataMaps,
-        })
-      : undefined;
-
-    if (!isDefined(fieldMetadata)) {
-      validationResult.errors.push({
-        code: RowLevelPermissionPredicateExceptionCode.FIELD_METADATA_NOT_FOUND,
-        message: t`Field metadata not found`,
-        userFriendlyMessage: msg`Field metadata not found`,
-      });
-    }
-
-    const objectMetadata = flatObjectMetadataMaps
-      ? findFlatEntityByUniversalIdentifier({
-          universalIdentifier:
-            updatedPredicate.objectMetadataUniversalIdentifier,
-          flatEntityMaps: flatObjectMetadataMaps,
-        })
-      : undefined;
-
-    if (!isDefined(objectMetadata)) {
-      validationResult.errors.push({
-        code: RowLevelPermissionPredicateExceptionCode.OBJECT_METADATA_NOT_FOUND,
-        message: t`Object metadata not found`,
-        userFriendlyMessage: msg`Object metadata not found`,
-      });
+      if (!isDefined(referencedFieldMetadata)) {
+        validationResult.errors.push({
+          code: WorkspaceMigrationRowLevelPermissionPredicateExceptionCode.INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA,
+          message: t`Field metadata not found`,
+          userFriendlyMessage: msg`Field metadata not found`,
+        });
+      }
     }
 
     if (
       isDefined(
-        updatedPredicate.rowLevelPermissionPredicateGroupUniversalIdentifier,
-      ) &&
-      flatRowLevelPermissionPredicateGroupMaps
+        updatedFlatRowLevelPermissionPredicate.rowLevelPermissionPredicateGroupUniversalIdentifier,
+      )
     ) {
-      const predicateGroup = findFlatEntityByUniversalIdentifier({
+      const referencedGroup = findFlatEntityByUniversalIdentifier({
         universalIdentifier:
-          updatedPredicate.rowLevelPermissionPredicateGroupUniversalIdentifier,
+          updatedFlatRowLevelPermissionPredicate.rowLevelPermissionPredicateGroupUniversalIdentifier,
         flatEntityMaps: flatRowLevelPermissionPredicateGroupMaps,
       });
 
-      if (!isDefined(predicateGroup)) {
+      if (!isDefined(referencedGroup)) {
         validationResult.errors.push({
-          code: RowLevelPermissionPredicateExceptionCode.INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA,
+          code: WorkspaceMigrationRowLevelPermissionPredicateExceptionCode.INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA,
           message: t`Row level permission predicate group not found`,
           userFriendlyMessage: msg`Row level permission predicate group not found`,
         });
       }
     }
 
-    const role = flatRoleMaps
-      ? findFlatEntityByUniversalIdentifier({
-          universalIdentifier: updatedPredicate.roleUniversalIdentifier,
-          flatEntityMaps: flatRoleMaps,
-        })
-      : undefined;
-
-    if (!isDefined(role)) {
+    if (
+      !isDefined(
+        updatedFlatRowLevelPermissionPredicate.fieldMetadataUniversalIdentifier,
+      ) &&
+      !isDefined(
+        updatedFlatRowLevelPermissionPredicate.rowLevelPermissionPredicateGroupUniversalIdentifier,
+      )
+    ) {
       validationResult.errors.push({
-        code: RowLevelPermissionPredicateExceptionCode.ROLE_NOT_FOUND,
-        message: t`Role not found`,
-        userFriendlyMessage: msg`Role not found`,
+        code: WorkspaceMigrationRowLevelPermissionPredicateExceptionCode.INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA,
+        message: t`Row level permission predicate must reference either a field or a predicate group`,
+        userFriendlyMessage: msg`Row level permission predicate is missing a field or group reference`,
       });
     }
 
