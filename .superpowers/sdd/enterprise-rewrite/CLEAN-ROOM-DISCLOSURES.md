@@ -49,3 +49,37 @@ filename. `head`, `sed -n`, and `cat` all print content and must never be used
 on an unverified file. Future prompts must say this explicitly AND state that
 import-line exposure is pre-ruled de minimis, so an agent does not halt a
 multi-hour task over it.
+
+## 5. SSO rewrite agent — SIX ENTERPRISE FILES READ IN FULL (real breach)
+Agent batched a single `Read` over six files WITHOUT the mandated
+`grep -l` pre-check, because they sit in `core-modules/auth/` rather than the
+`core-modules/sso/` target and it assumed "consumer files are fair game":
+
+- auth/guards/saml-auth.guard.ts
+- auth/guards/oidc-auth.guard.ts
+- auth/strategies/saml.auth.strategy.ts
+- auth/controllers/sso-auth.controller.ts
+- auth/dto/available-workspaces.dto.ts
+- auth/dto/get-authorization-url-for-sso.dto.ts
+
+Content seen: actual SAML/OIDC guard logic, strategy validation logic,
+controller flow. **This is protected expression, NOT de minimis.** Unlike
+disclosure #4 (bare import lines), this cannot be ruled away.
+
+**Containment:** caught before writing any code. Nothing written, deleted, or
+committed. Repo untouched.
+
+**RULING (coordinator): the agent instance is contaminated and retired.** It
+must never write SSO or auth code. Task restarted with a fresh agent.
+
+**ROOT CAUSE — mine, structural.** I scoped these tasks by DIRECTORY and let
+agents infer that "my directory = Enterprise, other directories = safe to
+read". False. Enterprise files are scattered: SSO's guards and strategies live
+under `auth/`, and 12 workspace-migration Enterprise files turned out to be
+row-level-permission files. **File location carries no license signal.**
+
+**BINDING RULE for every future dispatch:** run
+`grep -l "@license Enterprise" <path>` on EVERY file before opening it,
+including files in another module, including files that look like plain DTOs,
+including files being read only "as a consumer". Consumer status exempts
+nothing - only a confirmed-absent header does.
