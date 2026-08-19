@@ -7,9 +7,7 @@ import { FeatureFlagKey } from 'twenty-shared/types';
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { CreateEmailingDomainInput } from 'src/engine/core-modules/emailing-domain/dtos/create-emailing-domain.input';
 import { EmailingDomainDTO } from 'src/engine/core-modules/emailing-domain/dtos/emailing-domain.dto';
-import { EmailGroupAccessGraphqlApiExceptionFilter } from 'src/engine/core-modules/emailing-domain/filters/email-group-access-graphql-api-exception.filter';
 import { EmailingDomainGraphqlApiExceptionFilter } from 'src/engine/core-modules/emailing-domain/filters/emailing-domain-graphql-api-exception.filter';
-import { EmailGroupAccessService } from 'src/engine/core-modules/emailing-domain/services/email-group-access.service';
 import { EmailingDomainService } from 'src/engine/core-modules/emailing-domain/services/emailing-domain.service';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
@@ -27,7 +25,6 @@ import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
   SettingsPermissionGuard(PermissionFlagType.WORKSPACE),
 )
 @UseFilters(
-  EmailGroupAccessGraphqlApiExceptionFilter,
   EmailingDomainGraphqlApiExceptionFilter,
 )
 @UsePipes(ResolverValidationPipe)
@@ -35,7 +32,6 @@ import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 export class EmailingDomainResolver {
   constructor(
     private readonly emailingDomainService: EmailingDomainService,
-    private readonly emailGroupAccessService: EmailGroupAccessService,
   ) {}
 
   @Mutation(() => EmailingDomainDTO)
@@ -44,8 +40,6 @@ export class EmailingDomainResolver {
     @Args('input') input: CreateEmailingDomainInput,
     @AuthWorkspace() currentWorkspace: WorkspaceEntity,
   ): Promise<EmailingDomainDTO> {
-    this.emailGroupAccessService.validateEmailGroupAccessOrThrow();
-
     const emailingDomain =
       await this.emailingDomainService.createEmailingDomain(
         input.domain.trim().toLowerCase(),
@@ -61,8 +55,6 @@ export class EmailingDomainResolver {
     @Args('id') id: string,
     @AuthWorkspace() currentWorkspace: WorkspaceEntity,
   ): Promise<boolean> {
-    this.emailGroupAccessService.validateEmailGroupAccessOrThrow();
-
     await this.emailingDomainService.deleteEmailingDomain(currentWorkspace, id);
 
     return true;
@@ -74,8 +66,6 @@ export class EmailingDomainResolver {
     @Args('id') id: string,
     @AuthWorkspace() currentWorkspace: WorkspaceEntity,
   ): Promise<EmailingDomainDTO> {
-    this.emailGroupAccessService.validateEmailGroupAccessOrThrow();
-
     const emailingDomain =
       await this.emailingDomainService.verifyEmailingDomain(
         currentWorkspace,
@@ -90,8 +80,6 @@ export class EmailingDomainResolver {
   async getEmailingDomains(
     @AuthWorkspace() currentWorkspace: WorkspaceEntity,
   ): Promise<EmailingDomainDTO[]> {
-    this.emailGroupAccessService.validateEmailGroupAccessOrThrow();
-
     const emailingDomains =
       await this.emailingDomainService.getEmailingDomains(currentWorkspace);
 
