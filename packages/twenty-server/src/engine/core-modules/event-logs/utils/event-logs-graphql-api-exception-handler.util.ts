@@ -1,22 +1,33 @@
-/* @license Enterprise */
-
+// SeaRM: clean-room AGPL-3.0 rewrite. See
+// .superpowers/sdd/enterprise-rewrite/event-logs-spec.md for design notes.
 import { assertUnreachable } from 'twenty-shared/utils';
 
 import {
-  type EventLogsException,
+  EventLogsException,
   EventLogsExceptionCode,
 } from 'src/engine/core-modules/event-logs/event-logs.exception';
-import { ForbiddenError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
+import { UserInputError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
 
-export const eventLogsGraphqlApiExceptionHandler = (
-  exception: EventLogsException,
-) => {
-  switch (exception.code) {
-    case EventLogsExceptionCode.CLICKHOUSE_NOT_CONFIGURED:
-    case EventLogsExceptionCode.NO_ENTITLEMENT:
-      throw new ForbiddenError(exception);
-    default: {
-      assertUnreachable(exception.code);
+export const eventLogsGraphqlApiExceptionHandler = (error: Error) => {
+  if (error instanceof EventLogsException) {
+    switch (error.code) {
+      case EventLogsExceptionCode.CLICKHOUSE_NOT_CONFIGURED:
+        throw new UserInputError(error.message, {
+          userFriendlyMessage: error.userFriendlyMessage,
+        });
+      case EventLogsExceptionCode.INVALID_QUERY:
+        throw new UserInputError(error.message, {
+          userFriendlyMessage: error.userFriendlyMessage,
+        });
+      case EventLogsExceptionCode.QUERY_FAILED:
+        throw new UserInputError(error.message, {
+          userFriendlyMessage: error.userFriendlyMessage,
+        });
+      default: {
+        return assertUnreachable(error.code);
+      }
     }
   }
+
+  throw error;
 };

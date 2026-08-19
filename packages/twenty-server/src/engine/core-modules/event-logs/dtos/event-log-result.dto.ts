@@ -24,6 +24,19 @@ export class EventLogRecord {
 
   @Field(() => Boolean, { nullable: true })
   isCustom?: boolean;
+
+  // SeaRM Principal-contract addition: derived, non-breaking. Distinguishes
+  // human/API-key/AI-agent/system-originated events. Backfilled from
+  // `properties.actorKind` when the emitter recorded one, else inferred from
+  // `userId` presence. See event-logs-spec.md "Principal contract" section.
+  @Field(() => String, { nullable: true })
+  actorKind?: string;
+
+  // SeaRM Principal-contract addition: derived, non-breaking. Set only when
+  // the emitter recorded `properties.proposalId` (e.g. an AI-agent change
+  // that went through proposal/approval). No ClickHouse schema change.
+  @Field(() => String, { nullable: true })
+  proposalReference?: string;
 }
 
 @ObjectType()

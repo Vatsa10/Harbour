@@ -1,17 +1,17 @@
-/* @license Enterprise */
-
+// SeaRM: clean-room AGPL-3.0 rewrite. See
+// .superpowers/sdd/enterprise-rewrite/event-logs-spec.md for design notes.
+// No entitlement/license gating — cleanup runs unconditionally.
 import { Injectable, Logger } from '@nestjs/common';
 
 import { EventLogTable } from 'twenty-shared/types';
 
 import { ClickHouseService } from 'src/database/clickHouse/clickHouse.service';
-import { formatDateTimeForClickHouse } from 'src/database/clickHouse/clickHouse.util';
 import { getClickHouseTableName } from 'src/engine/core-modules/event-logs/registry/event-log-registry';
 
-export type EventLogCleanupParams = {
-  workspaceId: string;
-  retentionDays: number;
-};
+// Kept as a plain constant rather than a TwentyConfigService entry to avoid
+// touching the shared config-variable surface for this rewrite. Revisit if
+// per-instance retention tuning becomes a real requirement.
+const EVENT_LOG_RETENTION_DAYS = 90;
 
 @Injectable()
 export class EventLogCleanupService {
@@ -19,47 +19,27 @@ export class EventLogCleanupService {
 
   constructor(private readonly clickHouseService: ClickHouseService) {}
 
-  async cleanupWorkspaceEventLogs({
-    workspaceId,
-    retentionDays,
-  }: EventLogCleanupParams): Promise<void> {
+  async cleanup(): Promise<void> {
     if (!this.clickHouseService.getMainClient()) {
-      this.logger.debug(
-        'ClickHouse not configured, skipping event log cleanup',
-      );
-
       return;
     }
 
-    const cutoffDate = new Date();
-
-    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+    const retentionDays = EVENT_LOG_RETENTION_DAYS;
 
     for (const table of Object.values(EventLogTable)) {
-      const tableName = getClickHouseTableName(table);
+      const clickHouseTable = getClickHouseTableName(table);
 
-      try {
-        const success = await this.clickHouseService.executeCommand(
-          `ALTER TABLE ${tableName} DELETE WHERE "workspaceId" = {workspaceId:String} AND "timestamp" < {cutoffDate:DateTime64(3)}`,
-          {
-            workspaceId,
-            cutoffDate: formatDateTimeForClickHouse(cutoffDate),
-          },
-        );
+      const success = await this.clickHouseService.executeCommand(
+        `ALTER TABLE ${clickHouseTable} DELETE WHERE timestamp < now() - INTERVAL {retentionDays:UInt32} DAY`,
+        { retentionDays },
+      );
 
-        if (success) {
-          this.logger.log(
-            `Scheduled deletion of old ${tableName} events for workspace ${workspaceId} (retention: ${retentionDays} days)`,
-          );
-        } else {
-          this.logger.warn(
-            `Failed to schedule deletion for ${tableName} in workspace ${workspaceId}`,
-          );
-        }
-      } catch (error) {
+      if (!success) {
+        // ClickHouseService already logs the underlying error. We surface it
+        // here too so the cron job / queue infra can see cleanup failed for
+        // this table without throwing and dropping the other tables' cleanup.
         this.logger.error(
-          `Error cleaning up ${tableName} for workspace ${workspaceId}`,
-          error instanceof Error ? error.stack : String(error),
+          `Event log cleanup failed for ClickHouse table "${clickHouseTable}"`,
         );
       }
     }

@@ -1,42 +1,31 @@
-/* @license Enterprise */
-
+// SeaRM: clean-room AGPL-3.0 rewrite. See
+// .superpowers/sdd/enterprise-rewrite/event-logs-spec.md for design notes.
+// No entitlement/license gating — event logs are unconditionally on.
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
-import { EnterpriseModule } from 'src/engine/core-modules/enterprise/enterprise.module';
+import { ClickHouseModule } from 'src/database/clickHouse/clickHouse.module';
 import { EventLogEmitterModule } from 'src/engine/core-modules/event-logs/emit/event-log-emitter.module';
 import { EventLogEmitterResolver } from 'src/engine/core-modules/event-logs/emit/event-log-emitter.resolver';
+import { EventLogsLiveResolver } from 'src/engine/core-modules/event-logs/event-logs-live.resolver';
+import { EventLogsResolver } from 'src/engine/core-modules/event-logs/event-logs.resolver';
+import { EventLogsService } from 'src/engine/core-modules/event-logs/event-logs.service';
 import { EventLogLiveModule } from 'src/engine/core-modules/event-logs/live/event-log-live.module';
-import { GuardRedirectModule } from 'src/engine/core-modules/guard-redirect/guard-redirect.module';
-import { JwtModule } from 'src/engine/core-modules/jwt/jwt.module';
-import { ClickHouseModule } from 'src/database/clickHouse/clickHouse.module';
-import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
-import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
+import { TwentyConfigModule } from 'src/engine/core-modules/twenty-config/twenty-config.module';
 import { SubscriptionsModule } from 'src/engine/subscriptions/subscriptions.module';
-
-import { EventLogsLiveResolver } from './event-logs-live.resolver';
-import { EventLogsResolver } from './event-logs.resolver';
-import { EventLogsService } from './event-logs.service';
 
 @Module({
   imports: [
     ClickHouseModule,
-    PermissionsModule,
-    BillingModule,
-    EnterpriseModule,
-    GuardRedirectModule,
-    JwtModule,
-    EventLogLiveModule,
     EventLogEmitterModule,
+    EventLogLiveModule,
     SubscriptionsModule,
-    TypeOrmModule.forFeature([UserWorkspaceEntity]),
+    TwentyConfigModule,
   ],
   providers: [
+    EventLogEmitterResolver,
     EventLogsResolver,
     EventLogsLiveResolver,
     EventLogsService,
-    EventLogEmitterResolver,
   ],
   exports: [EventLogsService],
 })

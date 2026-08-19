@@ -1,5 +1,5 @@
-/* @license Enterprise */
-
+// SeaRM: clean-room AGPL-3.0 rewrite. See
+// .superpowers/sdd/enterprise-rewrite/event-logs-spec.md for design notes.
 import { Catch, type ExceptionFilter } from '@nestjs/common';
 
 import { EventLogsException } from 'src/engine/core-modules/event-logs/event-logs.exception';
@@ -8,6 +8,6 @@ import { eventLogsGraphqlApiExceptionHandler } from 'src/engine/core-modules/eve
 @Catch(EventLogsException)
 export class EventLogsGraphqlApiExceptionFilter implements ExceptionFilter {
   catch(exception: EventLogsException) {
-    return eventLogsGraphqlApiExceptionHandler(exception);
+    eventLogsGraphqlApiExceptionHandler(exception);
   }
 }

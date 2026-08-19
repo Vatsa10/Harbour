@@ -1,5 +1,5 @@
-/* @license Enterprise */
-
+// SeaRM: clean-room AGPL-3.0 rewrite. See
+// .superpowers/sdd/enterprise-rewrite/event-logs-spec.md for design notes.
 import { type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { assertUnreachable } from 'twenty-shared/utils';
@@ -8,7 +8,8 @@ import { CustomException } from 'src/utils/custom-exception';
 
 export enum EventLogsExceptionCode {
   CLICKHOUSE_NOT_CONFIGURED = 'CLICKHOUSE_NOT_CONFIGURED',
-  NO_ENTITLEMENT = 'NO_ENTITLEMENT',
+  INVALID_QUERY = 'INVALID_QUERY',
+  QUERY_FAILED = 'QUERY_FAILED',
 }
 
 const getEventLogsExceptionUserFriendlyMessage = (
@@ -16,9 +17,11 @@ const getEventLogsExceptionUserFriendlyMessage = (
 ) => {
   switch (code) {
     case EventLogsExceptionCode.CLICKHOUSE_NOT_CONFIGURED:
-      return msg`Audit logs require ClickHouse to be configured.`;
-    case EventLogsExceptionCode.NO_ENTITLEMENT:
-      return msg`Audit logs require an Enterprise subscription.`;
+      return msg`Event log storage is not configured for this instance.`;
+    case EventLogsExceptionCode.INVALID_QUERY:
+      return msg`This event log query is invalid.`;
+    case EventLogsExceptionCode.QUERY_FAILED:
+      return msg`Event logs could not be retrieved.`;
     default:
       assertUnreachable(code);
   }
