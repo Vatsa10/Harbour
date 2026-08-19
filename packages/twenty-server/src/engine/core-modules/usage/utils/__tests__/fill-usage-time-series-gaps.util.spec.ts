@@ -1,3 +1,7 @@
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the usage ledger
+// (no Twenty Enterprise source consulted; derived from consumer-facing
+// expectations for the admin usage charts).
+
 import { fillUsageTimeSeriesGaps } from 'src/engine/core-modules/usage/utils/fill-usage-time-series-gaps.util';
 
 describe('fillUsageTimeSeriesGaps', () => {
@@ -34,7 +38,7 @@ describe('fillUsageTimeSeriesGaps', () => {
     ]);
   });
 
-  it('should pad trailing dates with zero when data stops before period end (Félix bug)', () => {
+  it('should pad trailing dates with zero when data stops before period end', () => {
     const result = fillUsageTimeSeriesGaps({
       rows: [
         { date: '2026-04-15', creditsUsed: 50 },

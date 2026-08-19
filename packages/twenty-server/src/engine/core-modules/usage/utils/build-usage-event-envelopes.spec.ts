@@ -1,3 +1,6 @@
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the usage ledger
+// (no Twenty Enterprise source consulted; derived from consumer call sites).
+
 import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
 import { UsageResourceType } from 'src/engine/core-modules/usage/enums/usage-resource-type.enum';
 import { UsageUnit } from 'src/engine/core-modules/usage/enums/usage-unit.enum';
@@ -58,5 +61,19 @@ describe('buildUsageEventEnvelopes', () => {
     expect((envelope.row as { periodStart?: string }).periodStart).toBe(
       '2026-01-01 00:00:00.000',
     );
+  });
+
+  it('produces one envelope per event and preserves order', () => {
+    const envelopes = buildUsageEventEnvelopes('ws-1', [
+      usageEvent({ resourceId: 'first' }),
+      usageEvent({ resourceId: 'second' }),
+      usageEvent({ resourceId: 'third' }),
+    ]);
+
+    expect(envelopes.map((e) => (e.row as { resourceId: string }).resourceId)).toEqual([
+      'first',
+      'second',
+      'third',
+    ]);
   });
 });

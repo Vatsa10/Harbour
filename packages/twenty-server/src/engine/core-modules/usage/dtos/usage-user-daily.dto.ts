@@ -1,14 +1,16 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the usage ledger
+// (no Twenty Enterprise source consulted).
 
-import { Field, ObjectType } from '@nestjs/graphql';
+import { Field, Float, ObjectType } from '@nestjs/graphql';
 
-import { UsageTimeSeriesDTO } from 'src/engine/core-modules/usage/dtos/usage-time-series.dto';
-
-@ObjectType('UsageUserDaily')
+@ObjectType()
 export class UsageUserDailyDTO {
-  @Field(() => String)
+  @Field()
   userWorkspaceId: string;
 
-  @Field(() => [UsageTimeSeriesDTO])
-  dailyUsage: UsageTimeSeriesDTO[];
+  @Field()
+  date: string;
+
+  @Field(() => Float)
+  creditsUsed: number;
 }

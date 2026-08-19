@@ -1,17 +1,17 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the usage ledger
+// (no Twenty Enterprise source consulted; derived from consumer call sites).
 
 import { registerEnumType } from '@nestjs/graphql';
 
+// The specific kind of operation that consumed a resource. Members are
+// derived from every call site that constructs a UsageEvent.
 export enum UsageOperationType {
   AI_CHAT_TOKEN = 'AI_CHAT_TOKEN',
   AI_WORKFLOW_TOKEN = 'AI_WORKFLOW_TOKEN',
-  WORKFLOW_EXECUTION = 'WORKFLOW_EXECUTION',
-  CODE_EXECUTION = 'CODE_EXECUTION',
   WEB_SEARCH = 'WEB_SEARCH',
-  CALL_RECORDING = 'CALL_RECORDING',
+  CODE_EXECUTION = 'CODE_EXECUTION',
   EMAIL_SEND = 'EMAIL_SEND',
+  WORKFLOW_EXECUTION = 'WORKFLOW_EXECUTION',
 }
 
-registerEnumType(UsageOperationType, {
-  name: 'UsageOperationType',
-});
+registerEnumType(UsageOperationType, { name: 'UsageOperationType' });

@@ -1,3 +1,6 @@
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the usage ledger
+// (no Twenty Enterprise source consulted; derived from consumer call sites).
+
 import { Logger } from '@nestjs/common';
 
 import { EventLogEmitterService } from 'src/engine/core-modules/event-logs/emit/event-log-emitter.service';
@@ -41,7 +44,7 @@ describe('UsageEventListener', () => {
     } as unknown as EventLogEmitterService);
   });
 
-  it('dispatchs a usageEvent envelope for each event in the batch', async () => {
+  it('dispatches a usageEvent envelope for each event in the batch', async () => {
     await listener.handleUsageRecordedEvent(buildBatch());
 
     expect(dispatch).toHaveBeenCalledTimes(1);
@@ -75,5 +78,19 @@ describe('UsageEventListener', () => {
     await expect(
       listener.handleUsageRecordedEvent(buildBatch()),
     ).resolves.toBeUndefined();
+  });
+
+  it('accumulates multiple events into one dispatch call with one envelope per event', async () => {
+    const batch = buildBatch({
+      events: [
+        USAGE_EVENT,
+        { ...USAGE_EVENT, creditsUsedMicro: 5, quantity: 3 },
+      ],
+    });
+
+    await listener.handleUsageRecordedEvent(batch);
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch.mock.calls[0][0]).toHaveLength(2);
   });
 });

@@ -1,15 +1,19 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the usage ledger
+// (no Twenty Enterprise source consulted; derived from consumer call sites —
+// admin-panel.resolver.ts's getAdminAiUsageByWorkspace uses `.key`).
 
 import { Field, Float, ObjectType } from '@nestjs/graphql';
 
-@ObjectType('UsageBreakdownItem')
+// One row of a "usage grouped by X" breakdown, e.g. usage grouped by
+// workspaceId for the admin panel.
+@ObjectType()
 export class UsageBreakdownItemDTO {
-  @Field(() => String)
+  @Field()
   key: string;
 
-  @Field(() => String, { nullable: true })
-  label?: string;
-
   @Field(() => Float)
-  creditsUsed: number;
+  value: number;
+
+  @Field({ nullable: true })
+  label?: string;
 }

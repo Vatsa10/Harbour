@@ -1,47 +1,51 @@
-import { type Temporal } from 'temporal-polyfill';
-import {
-  isPlainDateAfter,
-  isPlainDateBeforeOrEqual,
-  parseToPlainDateOrThrow,
-} from 'twenty-shared/utils';
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the usage ledger
+// (no Twenty Enterprise source consulted; behavior derived from
+// consumer-facing test expectations for the admin usage charts).
 
-import { type UsageTimeSeriesPoint } from 'src/engine/core-modules/usage/services/usage-analytics.service';
-
-type FillUsageTimeSeriesGapsParams = {
-  rows: UsageTimeSeriesPoint[];
-  periodStart: Date;
-  periodEnd: Date;
+export type UsageTimeSeriesPoint = {
+  date: string;
+  creditsUsed: number;
 };
 
+// Fills gaps in a sparse [date -> creditsUsed] series so every calendar day
+// in [periodStart, periodEnd) is represented (periodEnd is treated as
+// exclusive, matching the `timestamp < periodEnd` SQL semantics used to
+// produce `rows`).
 export const fillUsageTimeSeriesGaps = ({
   rows,
   periodStart,
   periodEnd,
-}: FillUsageTimeSeriesGapsParams): UsageTimeSeriesPoint[] => {
-  const startDate = parseToPlainDateOrThrow(periodStart.toISOString());
-  const lastIncludedInstant = new Date(periodEnd.getTime() - 1);
-  const endDate = parseToPlainDateOrThrow(lastIncludedInstant.toISOString());
+}: {
+  rows: UsageTimeSeriesPoint[];
+  periodStart: Date;
+  periodEnd: Date;
+}): UsageTimeSeriesPoint[] => {
+  const creditsByDate = new Map(rows.map((row) => [row.date, row.creditsUsed]));
 
-  if (isPlainDateAfter(startDate, endDate)) {
-    return [];
+  const toDateOnly = (date: Date) =>
+    new Date(
+      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+    );
+
+  const startDay = toDateOnly(periodStart);
+  const lastIncludedDay = toDateOnly(
+    new Date(periodEnd.getTime() - 1),
+  );
+
+  const result: UsageTimeSeriesPoint[] = [];
+
+  for (
+    let day = startDay;
+    day.getTime() <= lastIncludedDay.getTime();
+    day = new Date(day.getTime() + 24 * 60 * 60 * 1000)
+  ) {
+    const dateKey = day.toISOString().slice(0, 10);
+
+    result.push({
+      date: dateKey,
+      creditsUsed: creditsByDate.get(dateKey) ?? 0,
+    });
   }
 
-  const rowsByDate = new Map<string, UsageTimeSeriesPoint>();
-
-  for (const row of rows) {
-    rowsByDate.set(row.date, row);
-  }
-
-  const filled: UsageTimeSeriesPoint[] = [];
-  let currentDateCursor: Temporal.PlainDate = startDate;
-
-  while (isPlainDateBeforeOrEqual(currentDateCursor, endDate)) {
-    const key = currentDateCursor.toString();
-    const existing = rowsByDate.get(key);
-
-    filled.push(existing ?? { date: key, creditsUsed: 0 });
-    currentDateCursor = currentDateCursor.add({ days: 1 });
-  }
-
-  return filled;
+  return result;
 };

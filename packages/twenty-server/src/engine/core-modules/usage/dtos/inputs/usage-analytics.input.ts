@@ -1,4 +1,5 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the usage ledger
+// (no Twenty Enterprise source consulted).
 
 import { Field, InputType } from '@nestjs/graphql';
 
@@ -6,15 +7,12 @@ import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-op
 
 @InputType()
 export class UsageAnalyticsInput {
-  @Field(() => Date, { nullable: true })
-  periodStart?: Date;
+  @Field()
+  periodStart: Date;
 
-  @Field(() => Date, { nullable: true })
-  periodEnd?: Date;
+  @Field()
+  periodEnd: Date;
 
-  @Field(() => String, { nullable: true })
-  userWorkspaceId?: string;
-
-  @Field(() => [UsageOperationType], { nullable: true })
-  operationTypes?: UsageOperationType[];
+  @Field(() => UsageOperationType, { nullable: true })
+  operationType?: UsageOperationType;
 }
