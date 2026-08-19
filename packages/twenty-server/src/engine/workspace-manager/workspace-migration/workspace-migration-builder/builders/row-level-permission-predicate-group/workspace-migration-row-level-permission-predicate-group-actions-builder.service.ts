@@ -1,4 +1,7 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the row-level-permission
+// predicate group workspace-migration actions builder (no Twenty Enterprise
+// source consulted; derived from the sibling viewFilterGroup actions builder
+// service).
 
 import { Injectable } from '@nestjs/common';
 
@@ -41,14 +44,16 @@ export class WorkspaceMigrationRowLevelPermissionPredicateGroupActionsBuilderSer
       };
     }
 
-    const { flatEntityToValidate } = args;
+    const {
+      flatEntityToValidate: flatRowLevelPermissionPredicateGroupToValidate,
+    } = args;
 
     return {
       status: 'success',
       action: {
         type: 'create',
         metadataName: 'rowLevelPermissionPredicateGroup',
-        flatEntity: flatEntityToValidate,
+        flatEntity: flatRowLevelPermissionPredicateGroupToValidate,
       },
     };
   }
@@ -74,9 +79,7 @@ export class WorkspaceMigrationRowLevelPermissionPredicateGroupActionsBuilderSer
     }
 
     const {
-      flatEntityToValidate: {
-        universalIdentifier: predicateGroupUniversalIdentifier,
-      },
+      flatEntityToValidate: flatRowLevelPermissionPredicateGroupToValidate,
     } = args;
 
     return {
@@ -84,7 +87,8 @@ export class WorkspaceMigrationRowLevelPermissionPredicateGroupActionsBuilderSer
       action: {
         type: 'delete',
         metadataName: 'rowLevelPermissionPredicateGroup',
-        universalIdentifier: predicateGroupUniversalIdentifier,
+        universalIdentifier:
+          flatRowLevelPermissionPredicateGroupToValidate.universalIdentifier,
       },
     };
   }
@@ -111,7 +115,7 @@ export class WorkspaceMigrationRowLevelPermissionPredicateGroupActionsBuilderSer
 
     const { universalIdentifier, flatEntityUpdate } = args;
 
-    const updateAction: UniversalUpdateRowLevelPermissionPredicateGroupAction =
+    const updateRowLevelPermissionPredicateGroupAction: UniversalUpdateRowLevelPermissionPredicateGroupAction =
       {
         type: 'update',
         metadataName: 'rowLevelPermissionPredicateGroup',
@@ -121,7 +125,7 @@ export class WorkspaceMigrationRowLevelPermissionPredicateGroupActionsBuilderSer
 
     return {
       status: 'success',
-      action: updateAction,
+      action: updateRowLevelPermissionPredicateGroupAction,
     };
   }
 }

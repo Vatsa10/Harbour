@@ -1,4 +1,6 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the row-level-permission
+// predicate workspace-migration actions builder (no Twenty Enterprise source
+// consulted; derived from the sibling viewFilter actions builder service).
 
 import { Injectable } from '@nestjs/common';
 
@@ -41,14 +43,15 @@ export class WorkspaceMigrationRowLevelPermissionPredicateActionsBuilderService 
       };
     }
 
-    const { flatEntityToValidate } = args;
+    const { flatEntityToValidate: flatRowLevelPermissionPredicateToValidate } =
+      args;
 
     return {
       status: 'success',
       action: {
         type: 'create',
         metadataName: 'rowLevelPermissionPredicate',
-        flatEntity: flatEntityToValidate,
+        flatEntity: flatRowLevelPermissionPredicateToValidate,
       },
     };
   }
@@ -73,18 +76,16 @@ export class WorkspaceMigrationRowLevelPermissionPredicateActionsBuilderService 
       };
     }
 
-    const {
-      flatEntityToValidate: {
-        universalIdentifier: predicateUniversalIdentifier,
-      },
-    } = args;
+    const { flatEntityToValidate: flatRowLevelPermissionPredicateToValidate } =
+      args;
 
     return {
       status: 'success',
       action: {
         type: 'delete',
         metadataName: 'rowLevelPermissionPredicate',
-        universalIdentifier: predicateUniversalIdentifier,
+        universalIdentifier:
+          flatRowLevelPermissionPredicateToValidate.universalIdentifier,
       },
     };
   }
@@ -111,16 +112,17 @@ export class WorkspaceMigrationRowLevelPermissionPredicateActionsBuilderService 
 
     const { universalIdentifier, flatEntityUpdate } = args;
 
-    const updateAction: UniversalUpdateRowLevelPermissionPredicateAction = {
-      type: 'update',
-      metadataName: 'rowLevelPermissionPredicate',
-      universalIdentifier,
-      update: flatEntityUpdate,
-    };
+    const updateRowLevelPermissionPredicateAction: UniversalUpdateRowLevelPermissionPredicateAction =
+      {
+        type: 'update',
+        metadataName: 'rowLevelPermissionPredicate',
+        universalIdentifier,
+        update: flatEntityUpdate,
+      };
 
     return {
       status: 'success',
-      action: updateAction,
+      action: updateRowLevelPermissionPredicateAction,
     };
   }
 }
