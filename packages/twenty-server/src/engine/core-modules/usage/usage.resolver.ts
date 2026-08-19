@@ -19,7 +19,7 @@ export class UsageResolver {
   @Query(() => UsageAnalyticsDTO)
   async getUsageAnalytics(
     @AuthWorkspace() workspace: WorkspaceEntity,
-    @Args() input: UsageAnalyticsInput,
+    @Args('input') input: UsageAnalyticsInput,
   ): Promise<UsageAnalyticsDTO> {
     return this.usageAnalyticsService.getUsageAnalytics({
       workspaceId: workspace.id,
