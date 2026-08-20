@@ -6,19 +6,27 @@ export const fromFlatRowLevelPermissionPredicateGroupToDto = (
 ): RowLevelPermissionPredicateGroupDTO => {
   const {
     id,
+    workspaceId,
     roleId,
     objectMetadataId,
     logicalOperator,
     parentRowLevelPermissionPredicateGroupId,
     positionInRowLevelPermissionPredicateGroup,
+    createdAt,
+    updatedAt,
+    deletedAt,
   } = flatRowLevelPermissionPredicateGroup;
 
   return {
     id,
+    workspaceId,
     roleId,
     objectMetadataId,
     logicalOperator,
     parentRowLevelPermissionPredicateGroupId,
     positionInRowLevelPermissionPredicateGroup,
+    createdAt: new Date(createdAt),
+    updatedAt: new Date(updatedAt),
+    deletedAt: deletedAt ? new Date(deletedAt) : null,
   };
 };

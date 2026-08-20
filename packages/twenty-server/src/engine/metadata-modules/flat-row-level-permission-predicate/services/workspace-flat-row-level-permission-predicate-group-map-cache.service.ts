@@ -87,8 +87,7 @@ export class WorkspaceFlatRowLevelPermissionPredicateGroupMapCacheService extend
             applicationIdToUniversalIdentifierMap,
             roleIdToUniversalIdentifierMap,
             objectMetadataIdToUniversalIdentifierMap,
-            parentRowLevelPermissionPredicateGroupIdToUniversalIdentifierMap:
-              rowLevelPermissionPredicateGroupIdToUniversalIdentifierMap,
+            rowLevelPermissionPredicateGroupIdToUniversalIdentifierMap,
           },
         );
 

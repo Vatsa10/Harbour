@@ -1,25 +1,35 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation, mirroring the structure of
+// the already-AGPL ViewFilterGroupService (no Enterprise source consulted).
+// Diff/soft-delete semantics ("omitted groups are deleted") come from the
+// AGPL tool contract in
+// role/tools/upsert-row-level-permission-rules.tool.ts, which documents
+// "the complete list of predicate groups to keep for this role and object.
+// Existing groups omitted from the list are deleted."
 
 import { Injectable } from '@nestjs/common';
 
 import { isDefined } from 'twenty-shared/utils';
 
+import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
-import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
+import { type AllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/all-flat-entity-maps.type';
+import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
+import { fromCreateRowLevelPermissionPredicateGroupInputToFlatRowLevelPermissionPredicateGroup } from 'src/engine/metadata-modules/flat-row-level-permission-predicate/utils/from-create-row-level-permission-predicate-group-input-to-flat-row-level-permission-predicate-group.util';
 import { fromFlatRowLevelPermissionPredicateGroupToDto } from 'src/engine/metadata-modules/flat-row-level-permission-predicate/utils/from-flat-row-level-permission-predicate-group-to-dto.util';
-import { RowLevelPermissionPredicateGroupDTO } from 'src/engine/metadata-modules/row-level-permission-predicate/dtos/row-level-permission-predicate-group.dto';
-import { RowLevelPermissionPredicateGroupEntity } from 'src/engine/metadata-modules/row-level-permission-predicate/entities/row-level-permission-predicate-group.entity';
-import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
-import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
-import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import { fromUpdateRowLevelPermissionPredicateGroupInputToFlatRowLevelPermissionPredicateGroup } from 'src/engine/metadata-modules/flat-row-level-permission-predicate/utils/from-update-row-level-permission-predicate-group-input-to-flat-row-level-permission-predicate-group.util';
+import { type RowLevelPermissionPredicateGroupInput } from 'src/engine/metadata-modules/row-level-permission-predicate/dtos/inputs/upsert-row-level-permission-predicates.input';
+import { type RowLevelPermissionPredicateGroupDTO } from 'src/engine/metadata-modules/row-level-permission-predicate/dtos/row-level-permission-predicate-group.dto';
+import { type FlatRowLevelPermissionPredicateGroup } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate-group.type';
+
+export type RowLevelPermissionPredicateGroupUpsertOperations = {
+  flatEntityToCreate: FlatRowLevelPermissionPredicateGroup[];
+  flatEntityToUpdate: FlatRowLevelPermissionPredicateGroup[];
+};
 
 @Injectable()
 export class RowLevelPermissionPredicateGroupService {
   constructor(
     private readonly flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
-    private readonly workspaceCacheService: WorkspaceCacheService,
-    @InjectWorkspaceScopedRepository(RowLevelPermissionPredicateGroupEntity)
-    private readonly rowLevelPermissionPredicateGroupRepository: WorkspaceScopedRepository<RowLevelPermissionPredicateGroupEntity>,
   ) {}
 
   async findByWorkspaceId(
@@ -36,12 +46,9 @@ export class RowLevelPermissionPredicateGroupService {
     return Object.values(
       flatRowLevelPermissionPredicateGroupMaps.byUniversalIdentifier,
     )
-      .filter(isDefined)
-      .filter((group) => group.deletedAt === null)
-      .sort(
-        (a, b) =>
-          (a.positionInRowLevelPermissionPredicateGroup ?? 0) -
-          (b.positionInRowLevelPermissionPredicateGroup ?? 0),
+      .filter(
+        (flatGroup): flatGroup is FlatRowLevelPermissionPredicateGroup =>
+          isDefined(flatGroup) && !isDefined(flatGroup.deletedAt),
       )
       .map(fromFlatRowLevelPermissionPredicateGroupToDto);
   }
@@ -50,61 +57,96 @@ export class RowLevelPermissionPredicateGroupService {
     workspaceId: string,
     roleId: string,
   ): Promise<RowLevelPermissionPredicateGroupDTO[]> {
-    const { flatRowLevelPermissionPredicateGroupMaps } =
-      await this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
-        {
-          workspaceId,
-          flatMapsKeys: ['flatRowLevelPermissionPredicateGroupMaps'],
-        },
-      );
+    const allGroups = await this.findByWorkspaceId(workspaceId);
 
-    return Object.values(
-      flatRowLevelPermissionPredicateGroupMaps.byUniversalIdentifier,
-    )
-      .filter(isDefined)
-      .filter((group) => group.deletedAt === null && group.roleId === roleId)
-      .sort(
-        (a, b) =>
-          (a.positionInRowLevelPermissionPredicateGroup ?? 0) -
-          (b.positionInRowLevelPermissionPredicateGroup ?? 0),
-      )
-      .map(fromFlatRowLevelPermissionPredicateGroupToDto);
+    return allGroups.filter((group) => group.roleId === roleId);
   }
 
-  async findById(
-    id: string,
-    workspaceId: string,
-  ): Promise<RowLevelPermissionPredicateGroupDTO | null> {
-    const { flatRowLevelPermissionPredicateGroupMaps } =
-      await this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
-        {
-          workspaceId,
-          flatMapsKeys: ['flatRowLevelPermissionPredicateGroupMaps'],
-        },
-      );
-
-    const flatGroup = findFlatEntityByIdInFlatEntityMaps({
-      flatEntityId: id,
-      flatEntityMaps: flatRowLevelPermissionPredicateGroupMaps,
-    });
-
-    if (!isDefined(flatGroup) || flatGroup.deletedAt !== null) {
-      return null;
-    }
-
-    return fromFlatRowLevelPermissionPredicateGroupToDto(flatGroup);
-  }
-
-  public async deleteAllRowLevelPermissionPredicateGroups(workspaceId: string) {
-    await this.rowLevelPermissionPredicateGroupRepository.delete(
-      workspaceId,
-      {},
+  buildUpsertOperations({
+    roleId,
+    roleUniversalIdentifier,
+    objectMetadataId,
+    workspaceId,
+    flatApplication,
+    predicateGroupInputs,
+    existingFlatRowLevelPermissionPredicateGroupMaps,
+    flatObjectMetadataMaps,
+  }: {
+    roleId: string;
+    roleUniversalIdentifier: string;
+    objectMetadataId: string;
+    workspaceId: string;
+    flatApplication: FlatApplication;
+    predicateGroupInputs: RowLevelPermissionPredicateGroupInput[];
+    existingFlatRowLevelPermissionPredicateGroupMaps: FlatEntityMaps<FlatRowLevelPermissionPredicateGroup>;
+  } & Pick<
+    AllFlatEntityMaps,
+    'flatObjectMetadataMaps'
+  >): RowLevelPermissionPredicateGroupUpsertOperations {
+    const existingOwnedGroups = Object.values(
+      existingFlatRowLevelPermissionPredicateGroupMaps.byUniversalIdentifier,
+    ).filter(
+      (
+        flatGroup,
+      ): flatGroup is FlatRowLevelPermissionPredicateGroup =>
+        isDefined(flatGroup) &&
+        flatGroup.roleId === roleId &&
+        flatGroup.objectMetadataId === objectMetadataId &&
+        !isDefined(flatGroup.deletedAt),
     );
 
-    await this.workspaceCacheService.invalidateAndRecompute(workspaceId, [
-      'rolesPermissions',
-      'flatRowLevelPermissionPredicateMaps',
-      'flatRowLevelPermissionPredicateGroupMaps',
-    ]);
+    const inputIds = new Set(
+      predicateGroupInputs.map((input) => input.id).filter(isDefined),
+    );
+
+    const flatEntityToCreate: FlatRowLevelPermissionPredicateGroup[] = [];
+    const flatEntityToUpdate: FlatRowLevelPermissionPredicateGroup[] = [];
+
+    for (const input of predicateGroupInputs) {
+      const existingGroup = isDefined(input.id)
+        ? existingOwnedGroups.find((group) => group.id === input.id)
+        : undefined;
+
+      if (isDefined(existingGroup)) {
+        flatEntityToUpdate.push(
+          fromUpdateRowLevelPermissionPredicateGroupInputToFlatRowLevelPermissionPredicateGroup(
+            {
+              input,
+              existingGroup,
+              flatRowLevelPermissionPredicateGroupMaps:
+                existingFlatRowLevelPermissionPredicateGroupMaps,
+            },
+          ),
+        );
+      } else {
+        flatEntityToCreate.push(
+          fromCreateRowLevelPermissionPredicateGroupInputToFlatRowLevelPermissionPredicateGroup(
+            {
+              input,
+              roleId,
+              workspaceId,
+              roleUniversalIdentifier,
+              flatApplication,
+              flatObjectMetadataMaps,
+              flatRowLevelPermissionPredicateGroupMaps:
+                existingFlatRowLevelPermissionPredicateGroupMaps,
+            },
+          ),
+        );
+      }
+    }
+
+    const deletedAt = new Date().toISOString();
+
+    for (const existingGroup of existingOwnedGroups) {
+      if (!inputIds.has(existingGroup.id)) {
+        flatEntityToUpdate.push({
+          ...existingGroup,
+          deletedAt,
+        });
+      }
+    }
+
+    return { flatEntityToCreate, flatEntityToUpdate };
   }
 }

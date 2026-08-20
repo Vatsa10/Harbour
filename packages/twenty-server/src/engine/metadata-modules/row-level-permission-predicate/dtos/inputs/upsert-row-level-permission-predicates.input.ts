@@ -49,27 +49,27 @@ export class RowLevelPermissionPredicateInput {
   @IsOptional()
   @IsString()
   @Field({ nullable: true })
-  subFieldName?: string;
+  subFieldName?: string | null;
 
   @IsOptional()
   @IsUUID()
   @Field(() => UUIDScalarType, { nullable: true })
-  workspaceMemberFieldMetadataId?: string;
+  workspaceMemberFieldMetadataId?: string | null;
 
   @IsOptional()
   @IsString()
   @Field({ nullable: true })
-  workspaceMemberSubFieldName?: string;
+  workspaceMemberSubFieldName?: string | null;
 
   @IsOptional()
   @IsUUID()
   @Field(() => UUIDScalarType, { nullable: true })
-  rowLevelPermissionPredicateGroupId?: string;
+  rowLevelPermissionPredicateGroupId?: string | null;
 
   @IsOptional()
   @IsNumber()
   @Field({ nullable: true })
-  positionInRowLevelPermissionPredicateGroup?: number;
+  positionInRowLevelPermissionPredicateGroup?: number | null;
 
   @HideField()
   universalIdentifier?: string;
@@ -98,12 +98,12 @@ export class RowLevelPermissionPredicateGroupInput {
   @IsOptional()
   @IsUUID()
   @Field(() => UUIDScalarType, { nullable: true })
-  parentRowLevelPermissionPredicateGroupId?: string;
+  parentRowLevelPermissionPredicateGroupId?: string | null;
 
   @IsOptional()
   @IsNumber()
   @Field({ nullable: true })
-  positionInRowLevelPermissionPredicateGroup?: number;
+  positionInRowLevelPermissionPredicateGroup?: number | null;
 
   @HideField()
   universalIdentifier?: string;

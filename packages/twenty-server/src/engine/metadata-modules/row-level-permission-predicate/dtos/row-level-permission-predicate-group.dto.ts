@@ -35,14 +35,14 @@ export class RowLevelPermissionPredicateGroupDTO {
   @Field(() => Number, { nullable: true })
   positionInRowLevelPermissionPredicateGroup?: number | null;
 
-  @Field(() => UUIDScalarType, { nullable: false })
-  workspaceId: string;
+  @Field(() => UUIDScalarType, { nullable: true })
+  workspaceId?: string;
 
-  @Field()
-  createdAt: Date;
+  @Field({ nullable: true })
+  createdAt?: Date;
 
-  @Field()
-  updatedAt: Date;
+  @Field({ nullable: true })
+  updatedAt?: Date;
 
   @Field(() => Date, { nullable: true })
   deletedAt?: Date | null;
