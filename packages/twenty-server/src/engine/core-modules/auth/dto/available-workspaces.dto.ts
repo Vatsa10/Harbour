@@ -1,24 +1,9 @@
+// AvailableSSOIdentityProvider is declared once, by the module that owns SSO
+// types. Re-exported here so auth consumers keep their import path.
+import { AvailableSSOIdentityProviderDTO } from 'src/engine/core-modules/sso/dtos/find-available-SSO-IDP.dto';
 import { Field, ObjectType } from '@nestjs/graphql';
 
 import { WorkspaceUrlsDTO } from 'src/engine/core-modules/workspace/dtos/workspace-urls.dto';
-
-@ObjectType('AvailableSSOIdentityProvider')
-export class AvailableSSOIdentityProviderDTO {
-  @Field(() => String)
-  id: string;
-
-  @Field(() => String)
-  name: string;
-
-  @Field(() => String)
-  issuer: string;
-
-  @Field(() => String)
-  type: string;
-
-  @Field(() => String)
-  status: string;
-}
 
 @ObjectType('AvailableWorkspace')
 export class AvailableWorkspace {
@@ -52,3 +37,5 @@ export class AvailableWorkspaces {
   @Field(() => [AvailableWorkspace])
   availableWorkspacesForSignIn: AvailableWorkspace[];
 }
+
+export { AvailableSSOIdentityProviderDTO };

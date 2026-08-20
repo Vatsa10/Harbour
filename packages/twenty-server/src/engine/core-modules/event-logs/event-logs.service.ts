@@ -25,14 +25,7 @@ const DEFAULT_PAGE_SIZE = 100;
 
 @Injectable()
 export class EventLogsService {
-  constructor(
-    private readonly clickHouseService: ClickHouseService,
-    // Reserved for future configurable behaviour (e.g. retention/page-size
-    // overrides). Not currently used — kept as an untyped optional slot so
-    // adding a real dependency later isn't a breaking constructor change,
-    // and so this class doesn't pull in unrelated modules it doesn't need.
-    private readonly reserved?: unknown,
-  ) {}
+  constructor(private readonly clickHouseService: ClickHouseService) {}
 
   async validateAccess(
     _workspaceId: string,

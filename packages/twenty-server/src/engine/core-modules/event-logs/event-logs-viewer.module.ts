@@ -10,6 +10,7 @@ import { EventLogsLiveResolver } from 'src/engine/core-modules/event-logs/event-
 import { EventLogsResolver } from 'src/engine/core-modules/event-logs/event-logs.resolver';
 import { EventLogsService } from 'src/engine/core-modules/event-logs/event-logs.service';
 import { EventLogLiveModule } from 'src/engine/core-modules/event-logs/live/event-log-live.module';
+import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { TwentyConfigModule } from 'src/engine/core-modules/twenty-config/twenty-config.module';
 import { SubscriptionsModule } from 'src/engine/subscriptions/subscriptions.module';
 
@@ -18,6 +19,9 @@ import { SubscriptionsModule } from 'src/engine/subscriptions/subscriptions.modu
     ClickHouseModule,
     EventLogEmitterModule,
     EventLogLiveModule,
+    // The resolvers sit behind SettingsPermissionGuard, which injects
+    // PermissionsService.
+    PermissionsModule,
     SubscriptionsModule,
     TwentyConfigModule,
   ],
