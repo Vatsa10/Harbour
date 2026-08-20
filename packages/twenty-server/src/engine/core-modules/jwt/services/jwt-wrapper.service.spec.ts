@@ -3,6 +3,7 @@ import { generateKeyPairSync } from 'crypto';
 import * as jwt from 'jsonwebtoken';
 
 import { AuthException } from 'src/engine/core-modules/auth/auth.exception';
+import { AuthProviderEnum } from 'src/engine/core-modules/workspace/types/workspace.type';
 import { JwtTokenTypeEnum } from 'src/engine/core-modules/auth/types/jwt-token-type.enum';
 import { JWT_ASYMMETRIC_ALGORITHM } from 'src/engine/core-modules/jwt/constants/jwt-algorithm.constant';
 
@@ -120,7 +121,14 @@ describe('JwtWrapperService (security-critical verification path)', () => {
 
   it('signs and verifies a normal ES256 access token round-trip (sanity check)', async () => {
     const token = await service.signAsyncOrThrow(
-      { sub: 'user-1', type: JwtTokenTypeEnum.ACCESS },
+      {
+          sub: 'user-1',
+          type: JwtTokenTypeEnum.ACCESS,
+          workspaceId: 'workspace-1',
+          userId: 'user-1',
+          userWorkspaceId: 'user-workspace-1',
+          authProvider: AuthProviderEnum.Password,
+        },
       { expiresIn: '1h' },
     );
 
@@ -228,7 +236,14 @@ describe('JwtWrapperService (security-critical verification path)', () => {
 
     it('rejects an ES256 token whose kid does not correspond to any known signing key', async () => {
       const token = signAsymmetric(
-        { sub: 'user-1', type: JwtTokenTypeEnum.ACCESS },
+        {
+          sub: 'user-1',
+          type: JwtTokenTypeEnum.ACCESS,
+          workspaceId: 'workspace-1',
+          userId: 'user-1',
+          userWorkspaceId: 'user-workspace-1',
+          authProvider: AuthProviderEnum.Password,
+        },
         currentKey.privateKeyPem,
         'unknown-kid',
         { expiresIn: '1h' },
@@ -334,7 +349,14 @@ describe('JwtWrapperService (security-critical verification path)', () => {
 
     it('verifies successfully when a token carries the correct iss/aud pair for its type (round-trip via signAsyncOrThrow)', async () => {
       const token = await service.signAsyncOrThrow(
-        { sub: 'user-1', type: JwtTokenTypeEnum.ACCESS },
+        {
+          sub: 'user-1',
+          type: JwtTokenTypeEnum.ACCESS,
+          workspaceId: 'workspace-1',
+          userId: 'user-1',
+          userWorkspaceId: 'user-workspace-1',
+          authProvider: AuthProviderEnum.Password,
+        },
         { expiresIn: '1h' },
       );
 
@@ -350,7 +372,12 @@ describe('JwtWrapperService (security-critical verification path)', () => {
 
     it('rejects a token issued for one audience/type (REFRESH) when verification expects a different one (ACCESS) — audience confusion', async () => {
       const refreshToken = await service.signAsyncOrThrow(
-        { sub: 'user-1', type: JwtTokenTypeEnum.REFRESH },
+        {
+          sub: 'user-1',
+          type: JwtTokenTypeEnum.REFRESH,
+          userId: 'user-1',
+          targetedTokenType: JwtTokenTypeEnum.ACCESS,
+        },
         { expiresIn: '1h' },
       );
 
@@ -379,10 +406,25 @@ describe('JwtWrapperService (security-critical verification path)', () => {
   describe('retired vs revoked signing keys', () => {
     it('POSITIVE CASE: a token signed by a RETIRED key (isCurrent=false, revokedAt=null) still verifies successfully until natural expiry', async () => {
       const token = signAsymmetric(
-        { sub: 'user-1', type: JwtTokenTypeEnum.ACCESS },
+        {
+          sub: 'user-1',
+          type: JwtTokenTypeEnum.ACCESS,
+          workspaceId: 'workspace-1',
+          userId: 'user-1',
+          userWorkspaceId: 'user-workspace-1',
+          authProvider: AuthProviderEnum.Password,
+        },
         retiredKey.privateKeyPem,
         retiredKeyId,
-        { expiresIn: '1h' },
+        {
+          expiresIn: '1h',
+          // Retirement must not change the claim contract: a retired key still
+          // signs a fully-formed token, so it carries the same iss/aud a
+          // current key would. Omitting them here would make this pass or fail
+          // for the wrong reason.
+          issuer: 'http://localhost:3000',
+          audience: 'urn:searm:jwt-audience:access',
+        },
       );
 
       const verified = await service.verifyJwtToken(token);
@@ -395,7 +437,14 @@ describe('JwtWrapperService (security-critical verification path)', () => {
 
     it('NEGATIVE CASE: a token signed by a REVOKED key (revokedAt set) does NOT verify, unlike the retired case above', async () => {
       const token = signAsymmetric(
-        { sub: 'user-1', type: JwtTokenTypeEnum.ACCESS },
+        {
+          sub: 'user-1',
+          type: JwtTokenTypeEnum.ACCESS,
+          workspaceId: 'workspace-1',
+          userId: 'user-1',
+          userWorkspaceId: 'user-workspace-1',
+          authProvider: AuthProviderEnum.Password,
+        },
         revokedKey.privateKeyPem,
         revokedKeyId,
         { expiresIn: '1h' },

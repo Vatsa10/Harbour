@@ -1,6 +1,10 @@
 import { JwtKeyManagerService } from 'src/engine/core-modules/jwt/services/jwt-key-manager.service';
 import { SigningKeyRotationService } from 'src/engine/core-modules/jwt/services/signing-key-rotation.service';
 
+// Narrow structural fakes to the service's real dependency types without
+// restating them; the spec exercises behaviour, not the ORM surface.
+type JwtKeyManagerDeps = ConstructorParameters<typeof JwtKeyManagerService>;
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 describe('SigningKeyRotationService', () => {
@@ -149,9 +153,9 @@ describe('JwtKeyManagerService.rotateCurrent (retire-not-revoke, exercised again
     };
 
     const service = new JwtKeyManagerService(
-      fakeSigningKeyRepository,
-      fakeCoreEntityCacheService,
-      fakeSecretEncryptionService,
+      fakeSigningKeyRepository as unknown as JwtKeyManagerDeps[0],
+      fakeCoreEntityCacheService as unknown as JwtKeyManagerDeps[1],
+      fakeSecretEncryptionService as unknown as JwtKeyManagerDeps[2],
     );
 
     const result = await service.rotateCurrent();
