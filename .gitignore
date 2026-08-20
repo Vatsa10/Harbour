@@ -70,3 +70,12 @@ screenshots/
 /.diag*.mjs
 /.compare*.mjs
 /.narrow*.mjs
+
+# Reference CRM/ERP sources kept locally for feature extraction only.
+# Each carries its own .git and its own upstream license — never vendored,
+# never redistributed from this repo.
+/ref/
+
+# Local git bundles (archival snapshots of the reference repos)
+*.bundle
+*.bundle.lock
