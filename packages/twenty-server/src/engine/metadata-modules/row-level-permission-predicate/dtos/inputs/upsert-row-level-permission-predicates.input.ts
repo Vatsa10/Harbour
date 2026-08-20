@@ -48,7 +48,7 @@ export class RowLevelPermissionPredicateInput {
 
   @IsOptional()
   @IsString()
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   subFieldName?: string | null;
 
   @IsOptional()
@@ -58,7 +58,7 @@ export class RowLevelPermissionPredicateInput {
 
   @IsOptional()
   @IsString()
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   workspaceMemberSubFieldName?: string | null;
 
   @IsOptional()
@@ -68,7 +68,7 @@ export class RowLevelPermissionPredicateInput {
 
   @IsOptional()
   @IsNumber()
-  @Field({ nullable: true })
+  @Field(() => Number, { nullable: true })
   positionInRowLevelPermissionPredicateGroup?: number | null;
 
   @HideField()
@@ -102,7 +102,7 @@ export class RowLevelPermissionPredicateGroupInput {
 
   @IsOptional()
   @IsNumber()
-  @Field({ nullable: true })
+  @Field(() => Number, { nullable: true })
   positionInRowLevelPermissionPredicateGroup?: number | null;
 
   @HideField()
