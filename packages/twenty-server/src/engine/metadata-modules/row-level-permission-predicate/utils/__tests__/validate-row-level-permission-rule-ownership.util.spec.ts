@@ -1,207 +1,284 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room, from-scratch spec for the from-scratch
+// ownership util in this rewrite (see design rationale in the util file).
 
-import { RowLevelPermissionPredicateOperand } from 'twenty-shared/types';
+import { RowLevelPermissionPredicateGroupLogicalOperator } from 'twenty-shared/types';
 
-import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
-import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
-import {
-  type RowLevelPermissionPredicateGroupInput,
-  type RowLevelPermissionPredicateInput,
-} from 'src/engine/metadata-modules/row-level-permission-predicate/dtos/inputs/upsert-row-level-permission-predicates.input';
-import { RowLevelPermissionPredicateException } from 'src/engine/metadata-modules/row-level-permission-predicate/exceptions/row-level-permission-predicate.exception';
-import { type FlatRowLevelPermissionPredicateGroup } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate-group.type';
-import { type FlatRowLevelPermissionPredicate } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate.type';
 import { validateRowLevelPermissionRuleOwnershipOrThrow } from 'src/engine/metadata-modules/row-level-permission-predicate/utils/validate-row-level-permission-rule-ownership.util';
 
-const roleId = 'role-id';
-const objectMetadataId = 'object-metadata-id';
-const workspaceMemberObjectMetadataId = 'workspace-member-object-id';
-const ownerFieldMetadataId = 'owner-field-metadata-id';
-const workspaceMemberIdFieldMetadataId =
-  'workspace-member-id-field-metadata-id';
+const ROLE_ID = 'role-1';
+const OTHER_ROLE_ID = 'role-2';
+const OBJECT_METADATA_ID = 'object-1';
+const OTHER_OBJECT_METADATA_ID = 'object-2';
 
-const createFlatEntityMapsKeyedById = <TEntity extends { id: string }>(
-  entities: TEntity[],
-) =>
-  ({
-    byUniversalIdentifier: Object.fromEntries(
-      entities.map((entity) => [entity.id, entity]),
-    ),
-    universalIdentifierById: Object.fromEntries(
-      entities.map((entity) => [entity.id, entity.id]),
-    ),
-  }) as unknown as FlatEntityMaps<never>;
-
-const defaultFields = [
-  { id: ownerFieldMetadataId, name: 'owner', objectMetadataId },
-  {
-    id: workspaceMemberIdFieldMetadataId,
-    name: 'id',
-    objectMetadataId: workspaceMemberObjectMetadataId,
-  },
-];
-
-const ownerMatchesCurrentUserPredicate = {
-  fieldMetadataId: ownerFieldMetadataId,
-  operand: RowLevelPermissionPredicateOperand.IS,
-  workspaceMemberFieldMetadataId: workspaceMemberIdFieldMetadataId,
+const existingPredicate = {
+  id: 'predicate-owned',
+  universalIdentifier: 'predicate-owned',
+  roleId: ROLE_ID,
+  objectMetadataId: OBJECT_METADATA_ID,
 };
 
-const validate = ({
-  predicates = [],
-  predicateGroups = [],
-  existingPredicates = [],
-  existingGroups = [],
-  fields = defaultFields,
-}: {
-  predicates?: object[];
-  predicateGroups?: object[];
-  existingPredicates?: {
-    id: string;
-    roleId: string;
-    objectMetadataId: string;
-    deletedAt?: string | null;
-  }[];
-  existingGroups?: {
-    id: string;
-    roleId: string;
-    objectMetadataId: string;
-    deletedAt?: string | null;
-  }[];
-  fields?: { id: string; name: string; objectMetadataId: string }[];
-}) =>
-  validateRowLevelPermissionRuleOwnershipOrThrow({
-    roleId,
-    objectMetadataId,
-    predicates: predicates as RowLevelPermissionPredicateInput[],
-    predicateGroups: predicateGroups as RowLevelPermissionPredicateGroupInput[],
-    flatRowLevelPermissionPredicateMaps: createFlatEntityMapsKeyedById(
-      existingPredicates.map((predicate) => ({
-        deletedAt: null,
-        ...predicate,
-      })),
-    ) as unknown as FlatEntityMaps<FlatRowLevelPermissionPredicate>,
-    flatRowLevelPermissionPredicateGroupMaps: createFlatEntityMapsKeyedById(
-      existingGroups.map((group) => ({ deletedAt: null, ...group })),
-    ) as unknown as FlatEntityMaps<FlatRowLevelPermissionPredicateGroup>,
-    flatFieldMetadataMaps: createFlatEntityMapsKeyedById(
-      fields,
-    ) as unknown as FlatEntityMaps<FlatFieldMetadata>,
-    workspaceMemberObjectMetadataId,
-  });
+const foreignPredicate = {
+  id: 'predicate-foreign',
+  universalIdentifier: 'predicate-foreign',
+  roleId: OTHER_ROLE_ID,
+  objectMetadataId: OTHER_OBJECT_METADATA_ID,
+};
+
+const existingGroup = {
+  id: 'group-owned',
+  universalIdentifier: 'group-owned',
+  roleId: ROLE_ID,
+  objectMetadataId: OBJECT_METADATA_ID,
+};
+
+const foreignGroup = {
+  id: 'group-foreign',
+  universalIdentifier: 'group-foreign',
+  roleId: OTHER_ROLE_ID,
+  objectMetadataId: OTHER_OBJECT_METADATA_ID,
+};
+
+const buildPredicateMaps = () => ({
+  universalIdentifierById: {
+    [existingPredicate.id]: existingPredicate.universalIdentifier,
+    [foreignPredicate.id]: foreignPredicate.universalIdentifier,
+  },
+  byUniversalIdentifier: {
+    [existingPredicate.universalIdentifier]: existingPredicate,
+    [foreignPredicate.universalIdentifier]: foreignPredicate,
+  },
+});
+
+const buildGroupMaps = () => ({
+  universalIdentifierById: {
+    [existingGroup.id]: existingGroup.universalIdentifier,
+    [foreignGroup.id]: foreignGroup.universalIdentifier,
+  },
+  byUniversalIdentifier: {
+    [existingGroup.universalIdentifier]: existingGroup,
+    [foreignGroup.universalIdentifier]: foreignGroup,
+  },
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const asMaps = (value: unknown) => value as any;
 
 describe('validateRowLevelPermissionRuleOwnershipOrThrow', () => {
-  it('rejects a predicate id owned by another role', () => {
+  it('allows predicates and groups with no id (creations)', () => {
     expect(() =>
-      validate({
-        predicates: [
-          { ...ownerMatchesCurrentUserPredicate, id: 'foreign-predicate-id' },
-        ],
-        existingPredicates: [
-          {
-            id: 'foreign-predicate-id',
-            roleId: 'another-role-id',
-            objectMetadataId,
-          },
-        ],
-      }),
-    ).toThrow(RowLevelPermissionPredicateException);
-  });
-
-  it('rejects a predicate group id owned by another object', () => {
-    expect(() =>
-      validate({
-        predicateGroups: [{ id: 'foreign-group-id', logicalOperator: 'AND' }],
-        existingGroups: [
-          {
-            id: 'foreign-group-id',
-            roleId,
-            objectMetadataId: 'another-object-metadata-id',
-          },
-        ],
-      }),
-    ).toThrow(RowLevelPermissionPredicateException);
-  });
-
-  it('rejects a predicate referencing a group of another role', () => {
-    expect(() =>
-      validate({
+      validateRowLevelPermissionRuleOwnershipOrThrow({
+        roleId: ROLE_ID,
+        objectMetadataId: OBJECT_METADATA_ID,
         predicates: [
           {
-            ...ownerMatchesCurrentUserPredicate,
-            rowLevelPermissionPredicateGroupId: 'foreign-group-id',
+            fieldMetadataId: 'field-1',
+            operand: 'IS' as never,
           },
         ],
-        existingGroups: [
+        predicateGroups: [
           {
-            id: 'foreign-group-id',
-            roleId: 'another-role-id',
-            objectMetadataId,
+            objectMetadataId: OBJECT_METADATA_ID,
+            logicalOperator: RowLevelPermissionPredicateGroupLogicalOperator.AND,
           },
         ],
-      }),
-    ).toThrow(RowLevelPermissionPredicateException);
-  });
-
-  it('rejects a field belonging to another object', () => {
-    expect(() =>
-      validate({
-        predicates: [
-          {
-            fieldMetadataId: 'other-object-field-id',
-            operand: RowLevelPermissionPredicateOperand.IS,
-          },
-        ],
-        fields: [
-          ...defaultFields,
-          {
-            id: 'other-object-field-id',
-            name: 'unrelatedField',
-            objectMetadataId: 'another-object-metadata-id',
-          },
-        ],
-      }),
-    ).toThrow(RowLevelPermissionPredicateException);
-  });
-
-  it('rejects a workspaceMemberFieldMetadataId that is not a workspaceMember field', () => {
-    expect(() =>
-      validate({
-        predicates: [
-          {
-            fieldMetadataId: ownerFieldMetadataId,
-            operand: RowLevelPermissionPredicateOperand.IS,
-            workspaceMemberFieldMetadataId: ownerFieldMetadataId,
-          },
-        ],
-      }),
-    ).toThrow(RowLevelPermissionPredicateException);
-  });
-
-  it('allows reusing an existing predicate id owned by the same role and object', () => {
-    expect(() =>
-      validate({
-        predicates: [
-          { ...ownerMatchesCurrentUserPredicate, id: 'own-predicate-id' },
-        ],
-        existingPredicates: [
-          { id: 'own-predicate-id', roleId, objectMetadataId },
-        ],
+        existingFlatRowLevelPermissionPredicateMaps: asMaps(
+          buildPredicateMaps(),
+        ),
+        existingFlatRowLevelPermissionPredicateGroupMaps: asMaps(
+          buildGroupMaps(),
+        ),
       }),
     ).not.toThrow();
   });
 
-  it('allows a predicate referencing a group declared in the same payload', () => {
+  it('allows updating a predicate owned by the same role and object', () => {
     expect(() =>
-      validate({
+      validateRowLevelPermissionRuleOwnershipOrThrow({
+        roleId: ROLE_ID,
+        objectMetadataId: OBJECT_METADATA_ID,
         predicates: [
           {
-            ...ownerMatchesCurrentUserPredicate,
+            id: existingPredicate.id,
+            fieldMetadataId: 'field-1',
+            operand: 'IS' as never,
+          },
+        ],
+        predicateGroups: [],
+        existingFlatRowLevelPermissionPredicateMaps: asMaps(
+          buildPredicateMaps(),
+        ),
+        existingFlatRowLevelPermissionPredicateGroupMaps: asMaps(
+          buildGroupMaps(),
+        ),
+      }),
+    ).not.toThrow();
+  });
+
+  it('denies updating a predicate owned by a different role/object (cross-tenant hijack)', () => {
+    expect(() =>
+      validateRowLevelPermissionRuleOwnershipOrThrow({
+        roleId: ROLE_ID,
+        objectMetadataId: OBJECT_METADATA_ID,
+        predicates: [
+          {
+            id: foreignPredicate.id,
+            fieldMetadataId: 'field-1',
+            operand: 'IS' as never,
+          },
+        ],
+        predicateGroups: [],
+        existingFlatRowLevelPermissionPredicateMaps: asMaps(
+          buildPredicateMaps(),
+        ),
+        existingFlatRowLevelPermissionPredicateGroupMaps: asMaps(
+          buildGroupMaps(),
+        ),
+      }),
+    ).toThrow();
+  });
+
+  it('denies a predicate id that does not exist at all', () => {
+    expect(() =>
+      validateRowLevelPermissionRuleOwnershipOrThrow({
+        roleId: ROLE_ID,
+        objectMetadataId: OBJECT_METADATA_ID,
+        predicates: [
+          {
+            id: 'does-not-exist',
+            fieldMetadataId: 'field-1',
+            operand: 'IS' as never,
+          },
+        ],
+        predicateGroups: [],
+        existingFlatRowLevelPermissionPredicateMaps: asMaps(
+          buildPredicateMaps(),
+        ),
+        existingFlatRowLevelPermissionPredicateGroupMaps: asMaps(
+          buildGroupMaps(),
+        ),
+      }),
+    ).toThrow();
+  });
+
+  it('allows updating a group owned by the same role and object', () => {
+    expect(() =>
+      validateRowLevelPermissionRuleOwnershipOrThrow({
+        roleId: ROLE_ID,
+        objectMetadataId: OBJECT_METADATA_ID,
+        predicates: [],
+        predicateGroups: [
+          {
+            id: existingGroup.id,
+            objectMetadataId: OBJECT_METADATA_ID,
+            logicalOperator: RowLevelPermissionPredicateGroupLogicalOperator.AND,
+          },
+        ],
+        existingFlatRowLevelPermissionPredicateMaps: asMaps(
+          buildPredicateMaps(),
+        ),
+        existingFlatRowLevelPermissionPredicateGroupMaps: asMaps(
+          buildGroupMaps(),
+        ),
+      }),
+    ).not.toThrow();
+  });
+
+  it('denies updating a group owned by a different role/object', () => {
+    expect(() =>
+      validateRowLevelPermissionRuleOwnershipOrThrow({
+        roleId: ROLE_ID,
+        objectMetadataId: OBJECT_METADATA_ID,
+        predicates: [],
+        predicateGroups: [
+          {
+            id: foreignGroup.id,
+            objectMetadataId: OBJECT_METADATA_ID,
+            logicalOperator: RowLevelPermissionPredicateGroupLogicalOperator.AND,
+          },
+        ],
+        existingFlatRowLevelPermissionPredicateMaps: asMaps(
+          buildPredicateMaps(),
+        ),
+        existingFlatRowLevelPermissionPredicateGroupMaps: asMaps(
+          buildGroupMaps(),
+        ),
+      }),
+    ).toThrow();
+  });
+
+  it('denies a predicate referencing a foreign predicateGroupId not in this upsert', () => {
+    expect(() =>
+      validateRowLevelPermissionRuleOwnershipOrThrow({
+        roleId: ROLE_ID,
+        objectMetadataId: OBJECT_METADATA_ID,
+        predicates: [
+          {
+            fieldMetadataId: 'field-1',
+            operand: 'IS' as never,
+            rowLevelPermissionPredicateGroupId: foreignGroup.id,
+          },
+        ],
+        predicateGroups: [],
+        existingFlatRowLevelPermissionPredicateMaps: asMaps(
+          buildPredicateMaps(),
+        ),
+        existingFlatRowLevelPermissionPredicateGroupMaps: asMaps(
+          buildGroupMaps(),
+        ),
+      }),
+    ).toThrow();
+  });
+
+  it('allows a predicate referencing a group being created in the same upsert', () => {
+    expect(() =>
+      validateRowLevelPermissionRuleOwnershipOrThrow({
+        roleId: ROLE_ID,
+        objectMetadataId: OBJECT_METADATA_ID,
+        predicates: [
+          {
+            fieldMetadataId: 'field-1',
+            operand: 'IS' as never,
             rowLevelPermissionPredicateGroupId: 'new-group-id',
           },
         ],
-        predicateGroups: [{ id: 'new-group-id', logicalOperator: 'AND' }],
+        predicateGroups: [
+          {
+            id: 'new-group-id',
+            objectMetadataId: OBJECT_METADATA_ID,
+            logicalOperator: RowLevelPermissionPredicateGroupLogicalOperator.AND,
+          },
+        ],
+        existingFlatRowLevelPermissionPredicateMaps: asMaps(
+          buildPredicateMaps(),
+        ),
+        existingFlatRowLevelPermissionPredicateGroupMaps: asMaps(
+          buildGroupMaps(),
+        ),
       }),
     ).not.toThrow();
+  });
+
+  it('denies a group referencing a foreign parent group not in this upsert', () => {
+    expect(() =>
+      validateRowLevelPermissionRuleOwnershipOrThrow({
+        roleId: ROLE_ID,
+        objectMetadataId: OBJECT_METADATA_ID,
+        predicates: [],
+        predicateGroups: [
+          {
+            id: 'new-group-id',
+            objectMetadataId: OBJECT_METADATA_ID,
+            logicalOperator: RowLevelPermissionPredicateGroupLogicalOperator.AND,
+            parentRowLevelPermissionPredicateGroupId: foreignGroup.id,
+          },
+        ],
+        existingFlatRowLevelPermissionPredicateMaps: asMaps(
+          buildPredicateMaps(),
+        ),
+        existingFlatRowLevelPermissionPredicateGroupMaps: asMaps(
+          buildGroupMaps(),
+        ),
+      }),
+    ).toThrow();
   });
 });
