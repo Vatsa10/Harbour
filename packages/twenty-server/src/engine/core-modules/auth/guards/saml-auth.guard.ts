@@ -45,8 +45,31 @@ export class SamlAuthGuard extends AuthGuard('saml') {
         );
       }
 
+      // Scope the lookup to the workspace this request actually arrived for.
+      // An unscoped lookup by id alone lets an unauthenticated caller probe
+      // any workspace's identity-provider rows.
+      const { workspace } =
+        await this.workspaceDomainsService.resolveWorkspaceAndPublicDomain(
+          request.headers.origin ?? request.headers.host ?? '',
+        );
+
+      if (!workspace) {
+        throw new AuthException(
+          'SSO identity provider not found',
+          AuthExceptionCode.SSO_AUTH_FAILED,
+        );
+      }
+
       const identityProvider =
-        await this.ssoService.findSSOIdentityProviderById(identityProviderId);
+        await this.ssoService.findSSOIdentityProviderById(
+          identityProviderId,
+          workspace.id,
+        );
+
+      // Hand the resolved workspace to the strategy so it validates against a
+      // scoped provider rather than re-deriving scope from client input.
+      (request as Request & { ssoWorkspaceId?: string }).ssoWorkspaceId =
+        workspace.id;
 
       if (!identityProvider) {
         throw new AuthException(

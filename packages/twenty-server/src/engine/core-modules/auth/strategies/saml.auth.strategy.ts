@@ -26,6 +26,9 @@ export type SSORequest = Omit<
   params: {
     identityProviderId: string;
   };
+  // Set by SamlAuthGuard after it resolves the workspace from the request
+  // origin. The strategy never derives it from client-supplied data.
+  ssoWorkspaceId?: string;
 };
 
 /**
@@ -86,8 +89,20 @@ export class SamlAuthStrategy extends PassportStrategy(
       return;
     }
 
+    const workspaceId = req.ssoWorkspaceId;
+
+    if (typeof workspaceId !== 'string' || workspaceId.length === 0) {
+      // The guard resolves this from the request origin. Its absence means the
+      // guard did not run or could not resolve a workspace - fail closed rather
+      // than validating against an unscoped provider lookup.
+      this.fail('Unresolved workspace for SSO response', 400);
+
+      return;
+    }
+
     try {
       const validatedPrincipal = await this.ssoService.validateSAMLResponse({
+        workspaceId,
         identityProviderId,
         samlResponseXml: samlResponse,
         // RelayState round-trips whatever the authorization-URL generation step encoded

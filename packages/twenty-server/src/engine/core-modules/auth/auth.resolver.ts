@@ -178,10 +178,27 @@ export class AuthResolver {
   @UseGuards(PublicEndpointGuard, NoPermissionGuard)
   async getAuthorizationUrlForSSO(
     @Args('input') params: GetAuthorizationUrlForSSOInput,
+    @Context() context: { req: Request },
   ) {
+    // This mutation is unauthenticated (PublicEndpointGuard, NoPermissionGuard),
+    // so the workspace is resolved from the request origin rather than taken
+    // from the input. A client-supplied workspaceId would let an unauthenticated
+    // caller probe another workspace's identity-provider rows.
+    const workspace =
+      await this.workspaceDomainsService.getWorkspaceByOriginOrDefaultWorkspace(
+        context.req.headers.origin ?? context.req.headers.host ?? '',
+      );
+
+    if (!workspace) {
+      throw new AuthException(
+        'SSO identity provider not found',
+        AuthExceptionCode.SSO_AUTH_FAILED,
+      );
+    }
+
     return await this.ssoService.getAuthorizationUrlForSSO(
       params.identityProviderId,
-      omit(params, ['identityProviderId']),
+      { workspaceId: workspace.id, returnToPath: params.returnToPath },
     );
   }
 

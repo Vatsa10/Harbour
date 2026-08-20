@@ -1,19 +1,21 @@
-/* @license Enterprise */
-
 import { Field, InputType } from '@nestjs/graphql';
 
 import { IsOptional, IsString, IsUUID } from 'class-validator';
 
-import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
-
+// Input for the unauthenticated getAuthorizationUrlForSSO mutation.
+//
+// Deliberately carries no workspaceId: the resolver derives the workspace from
+// the request origin instead. Accepting it from the client would let an
+// unauthenticated caller pair an arbitrary workspaceId with an arbitrary
+// identityProviderId and probe which combinations exist.
 @InputType()
 export class GetAuthorizationUrlForSSOInput {
-  @Field(() => UUIDScalarType)
+  @Field(() => String)
   @IsUUID()
   identityProviderId: string;
 
   @Field(() => String, { nullable: true })
-  @IsString()
   @IsOptional()
-  workspaceInviteHash?: string;
+  @IsString()
+  returnToPath?: string;
 }
