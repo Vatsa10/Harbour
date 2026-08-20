@@ -8,7 +8,6 @@ import { type ResolverNameMapEntry } from 'src/engine/api/graphql/direct-executi
 import { type FlatApiKey } from 'src/engine/core-modules/api-key/types/flat-api-key.type';
 import { type ApplicationVariableCacheMaps } from 'src/engine/core-modules/application/application-variable/types/application-variable-cache-maps.type';
 import { type FlatApplicationCacheMaps } from 'src/engine/core-modules/application/types/flat-application-cache-maps.type';
-import { type CurrentBillingSubscription } from 'src/engine/core-modules/billing/types/flat-billing-subscription.type';
 import { type FlatWorkspaceMemberMaps } from 'src/engine/core-modules/user/types/flat-workspace-member-maps.type';
 import { type WorkflowAutomatedTriggerMaps } from 'src/engine/core-modules/workflow/types/workflow-automated-trigger-maps.type';
 import { type FlatRoleTargetByAgentIdMaps } from 'src/engine/metadata-modules/flat-agent/types/flat-role-target-by-agent-id-maps.type';
@@ -62,7 +61,6 @@ export const WORKSPACE_CACHE_KEYS_V2 = {
   apiKeyMap: 'cache:api-key-map',
   applicationVariableMaps: 'cache:application-variable',
   graphQLResolverNameMap: 'direct-execution:graphql-resolver-name-map',
-  currentBillingSubscription: 'billing:subscription',
   workflowAutomatedTriggerMaps: 'cache:workflow-automated-trigger',
 } as const satisfies Record<WorkspaceCacheKeyName, string>;
 
@@ -80,7 +78,6 @@ export type AdditionalCacheDataMaps = {
   flatWorkspaceMemberMaps: FlatWorkspaceMemberMaps;
   applicationVariableMaps: ApplicationVariableCacheMaps;
   graphQLResolverNameMap: Record<string, ResolverNameMapEntry>;
-  currentBillingSubscription: CurrentBillingSubscription;
   workflowAutomatedTriggerMaps: WorkflowAutomatedTriggerMaps;
 };
 

@@ -72,9 +72,12 @@ describe('JwtWrapperService (security-critical verification path)', () => {
       recordLegacyVerify: jest.fn(),
     };
     twentyConfigService = {
-      get: jest.fn().mockImplementation((key: string) =>
-        key === 'APP_SECRET' ? APP_SECRET : undefined,
-      ),
+      get: jest.fn().mockImplementation((key: string) => {
+        if (key === 'APP_SECRET') return APP_SECRET;
+        if (key === 'SERVER_URL') return 'http://localhost:3000';
+
+        return undefined;
+      }),
     };
     nestJwtService = {
       decode: jest.fn().mockImplementation((payload, options) =>
@@ -292,13 +295,31 @@ describe('JwtWrapperService (security-critical verification path)', () => {
     });
   });
 
-  describe('issuer / audience (documenting an absence, not asserting new behavior)', () => {
-    it('does NOT reject a token with a mismatched iss/aud, because no issuer/audience is ever checked in resolveVerificationKey/verifyJwtToken — this is a gap, not a passing security control', async () => {
+  describe('issuer / audience (strict by default)', () => {
+    it('rejects a token with a forged iss, even though it is validly signed by a real current key with the correct aud', async () => {
       const token = signAsymmetric(
         {
           sub: 'user-1',
           type: JwtTokenTypeEnum.ACCESS,
           iss: 'https://attacker.example.com',
+          aud: 'urn:searm:jwt-audience:access',
+        },
+        currentKey.privateKeyPem,
+        currentKeyId,
+        { expiresIn: '1h' },
+      );
+
+      await expect(service.verifyJwtToken(token)).rejects.toThrow(
+        AuthException,
+      );
+    });
+
+    it('rejects a token with a forged aud, even though it is validly signed by a real current key with the correct iss', async () => {
+      const token = signAsymmetric(
+        {
+          sub: 'user-1',
+          type: JwtTokenTypeEnum.ACCESS,
+          iss: 'http://localhost:3000',
           aud: 'some-other-audience',
         },
         currentKey.privateKeyPem,
@@ -306,13 +327,52 @@ describe('JwtWrapperService (security-critical verification path)', () => {
         { expiresIn: '1h' },
       );
 
-      // No `options` (which is where callers could pass { issuer, audience })
-      // are supplied by any caller in this codebase today (grep-verified),
-      // and JwtWrapperService.verifyJwtToken never adds its own default.
+      await expect(service.verifyJwtToken(token)).rejects.toThrow(
+        AuthException,
+      );
+    });
+
+    it('verifies successfully when a token carries the correct iss/aud pair for its type (round-trip via signAsyncOrThrow)', async () => {
+      const token = await service.signAsyncOrThrow(
+        { sub: 'user-1', type: JwtTokenTypeEnum.ACCESS },
+        { expiresIn: '1h' },
+      );
+
+      const decoded = jwt.decode(token) as { iss?: string; aud?: string };
+
+      expect(decoded.iss).toBe('http://localhost:3000');
+      expect(decoded.aud).toBe('urn:searm:jwt-audience:access');
+
       const verified = await service.verifyJwtToken(token);
 
-      expect(verified.iss).toBe('https://attacker.example.com');
-      expect(verified.aud).toBe('some-other-audience');
+      expect(verified.sub).toBe('user-1');
+    });
+
+    it('rejects a token issued for one audience/type (REFRESH) when verification expects a different one (ACCESS) — audience confusion', async () => {
+      const refreshToken = await service.signAsyncOrThrow(
+        { sub: 'user-1', type: JwtTokenTypeEnum.REFRESH },
+        { expiresIn: '1h' },
+      );
+
+      // Sanity check: verifying with no expectation, or with the matching
+      // expected type, both succeed.
+      await expect(service.verifyJwtToken(refreshToken)).resolves.toBeDefined();
+      await expect(
+        service.verifyJwtToken(
+          refreshToken,
+          undefined,
+          JwtTokenTypeEnum.REFRESH,
+        ),
+      ).resolves.toBeDefined();
+
+      // A caller expecting ACCESS must reject this REFRESH-audience token.
+      await expect(
+        service.verifyJwtToken(
+          refreshToken,
+          undefined,
+          JwtTokenTypeEnum.ACCESS,
+        ),
+      ).rejects.toThrow(AuthException);
     });
   });
 
@@ -358,7 +418,12 @@ describe('JwtWrapperService (security-critical verification path)', () => {
       const token = jwt.sign(
         { workspaceId: 'ws-1', type: JwtTokenTypeEnum.ACCESS },
         secret,
-        { algorithm: 'HS256', expiresIn: '1h' },
+        {
+          algorithm: 'HS256',
+          expiresIn: '1h',
+          issuer: 'http://localhost:3000',
+          audience: 'urn:searm:jwt-audience:access',
+        },
       );
 
       const verified = await service.verifyJwtToken(token);

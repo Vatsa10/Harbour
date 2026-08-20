@@ -18,6 +18,7 @@ import {
   JWT_ASYMMETRIC_ALGORITHM,
   JWT_LEGACY_ALGORITHM,
 } from 'src/engine/core-modules/jwt/constants/jwt-algorithm.constant';
+import { getJwtAudienceForType } from 'src/engine/core-modules/jwt/constants/jwt-audience.constant';
 import { JwtKeyManagerService } from 'src/engine/core-modules/jwt/services/jwt-key-manager.service';
 import { SigningKeyVerifyCounterService } from 'src/engine/core-modules/jwt/services/signing-key-verify-counter.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
@@ -64,10 +65,20 @@ export class JwtWrapperService {
       expiresIn: options.expiresIn as jwt.SignOptions['expiresIn'],
       algorithm: JWT_ASYMMETRIC_ALGORITHM,
       keyid: signingKey.id,
+      issuer: this.getIssuer(),
+      audience: getJwtAudienceForType(payload.type),
       ...(isDefined(options.jwtid) ? { jwtid: options.jwtid } : {}),
     };
 
     return jwt.sign(payload as object, signingKey.privateKeyPem, signOptions);
+  }
+
+  // Fixed, config-derived issuer used for both signing and verification.
+  // SERVER_URL is this instance's own base URL — already used elsewhere
+  // (file/file-upload token URLs) as the server's identity — so it doubles
+  // as a stable, non-attacker-controlled `iss` value with no new config.
+  private getIssuer(): string {
+    return this.twentyConfigService.get('SERVER_URL');
   }
 
   // oxlint-disable-next-line typescript/no-explicit-any
@@ -126,9 +137,18 @@ export class JwtWrapperService {
     };
   }
 
+  // `expectedType`, when passed, pins verification to that token type's
+  // audience: a token minted for one type (e.g. REFRESH) is cryptographically
+  // rejected when verified with a different expected type (e.g. ACCESS),
+  // independent of any caller-side `payload.type` check downstream. When
+  // omitted, the audience is still checked, but only for self-consistency
+  // against the token's own (signed) `type` claim — this still rejects any
+  // forged/absent `iss`/`aud`, it just can't detect cross-type confusion
+  // without the caller stating what type it expects.
   async verifyJwtToken(
     token: string,
     options?: JwtVerifyOptions,
+    expectedType?: JwtTokenTypeEnum,
     // oxlint-disable-next-line typescript/no-explicit-any
   ): Promise<any> {
     const header = decodeJwtHeader(token);
@@ -143,11 +163,26 @@ export class JwtWrapperService {
 
     const { key, algorithm } = await this.resolveVerificationKey(token);
 
+    let audience: string;
+
     try {
-      const verified = jwt.verify(token, key, {
-        ...options,
-        algorithms: [algorithm],
-      });
+      audience = getJwtAudienceForType(expectedType ?? payload.type);
+    } catch {
+      throw new AuthException(
+        'Invalid token type',
+        AuthExceptionCode.INVALID_JWT_TOKEN_TYPE,
+      );
+    }
+
+    const verifyOptions: JwtVerifyOptions = {
+      ...options,
+      algorithms: [algorithm],
+      issuer: this.getIssuer(),
+      audience,
+    };
+
+    try {
+      const verified = jwt.verify(token, key, verifyOptions);
 
       this.recordVerifyForAlgorithm(algorithm, header);
 
@@ -168,7 +203,7 @@ export class JwtWrapperService {
             const verified = jwt.verify(
               token,
               this.generateAppSecret(JwtTokenTypeEnum.ACCESS, appSecretBody),
-              { ...options, algorithms: [JWT_LEGACY_ALGORITHM] },
+              { ...verifyOptions, algorithms: [JWT_LEGACY_ALGORITHM] },
             );
 
             this.recordVerifyForAlgorithm(JWT_LEGACY_ALGORITHM, header);

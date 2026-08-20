@@ -549,7 +549,11 @@ export class UserSessionService {
     let payload: RefreshTokenJwtPayload | undefined;
 
     try {
-      await this.jwtWrapperService.verifyJwtToken(refreshToken);
+      await this.jwtWrapperService.verifyJwtToken(
+        refreshToken,
+        undefined,
+        JwtTokenTypeEnum.REFRESH,
+      );
 
       payload = this.jwtWrapperService.decode<RefreshTokenJwtPayload>(
         refreshToken,

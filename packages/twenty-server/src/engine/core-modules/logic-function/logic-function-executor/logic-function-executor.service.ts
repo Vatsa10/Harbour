@@ -30,9 +30,6 @@ import { ApplicationVariableEntityService } from 'src/engine/core-modules/applic
 import { type ApplicationVariableCacheMaps } from 'src/engine/core-modules/application/application-variable/types/application-variable-cache-maps.type';
 import { isBillingExemptApplication } from 'src/engine/core-modules/application/application-marketplace/utils/is-billing-exempt-application.util';
 import { ApplicationTokenService } from 'src/engine/core-modules/auth/token/services/application-token.service';
-import { NO_BILLING_SUBSCRIPTION } from 'src/engine/core-modules/billing/constants/no-billing-subscription.constant';
-import { BillingUsageService } from 'src/engine/core-modules/billing/services/billing-usage.service';
-import { BillingService } from 'src/engine/core-modules/billing/services/billing.service';
 import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
 import { FeatureFlagService } from 'src/engine/core-modules/feature-flag/services/feature-flag.service';
 import { LogicFunctionDriverFactory } from 'src/engine/core-modules/logic-function/logic-function-drivers/logic-function-driver.factory';
@@ -90,8 +87,6 @@ export class LogicFunctionExecutorService {
     private readonly eventLogLiveService: EventLogLiveService,
     private readonly eventLogEmitterService: EventLogEmitterService,
     private readonly workspaceEventEmitter: WorkspaceEventEmitter,
-    private readonly billingService: BillingService,
-    private readonly billingUsageService: BillingUsageService,
     private readonly featureFlagService: FeatureFlagService,
     private readonly workspaceDomainsService: WorkspaceDomainsService,
     private readonly applicationService: ApplicationService,
@@ -526,25 +521,7 @@ export class LogicFunctionExecutorService {
       ? 0
       : 100;
 
-    let periodStart: Date | undefined;
-
-    if (this.billingService.isBillingEnabled()) {
-      const { currentBillingSubscription } =
-        await this.workspaceCacheService.getOrRecompute(workspaceId, [
-          'currentBillingSubscription',
-        ]);
-
-      if (currentBillingSubscription !== NO_BILLING_SUBSCRIPTION) {
-        periodStart = currentBillingSubscription.currentPeriodStart;
-
-        if (creditsUsedMicro > 0) {
-          await this.billingUsageService.decrementAvailableCreditsInCache({
-            workspaceId,
-            usedCredits: creditsUsedMicro,
-          });
-        }
-      }
-    }
+    const periodStart: Date | undefined = undefined;
 
     this.workspaceEventEmitter.emitCustomBatchEvent<UsageEvent>(
       USAGE_RECORDED,

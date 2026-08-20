@@ -14,7 +14,6 @@ import { isDefined } from 'twenty-shared/utils';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
-import { BillingUsageService } from 'src/engine/core-modules/billing/services/billing-usage.service';
 import { RedisClientService } from 'src/engine/core-modules/redis-client/redis-client.service';
 import { toDisplayCredits } from 'src/engine/core-modules/usage/utils/to-display-credits.util';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
@@ -55,7 +54,6 @@ export class AgentChatResolver {
     private readonly agentChatStreamingService: AgentChatStreamingService,
     private readonly eventPublisherService: AgentChatEventPublisherService,
     private readonly systemPromptBuilderService: SystemPromptBuilderService,
-    private readonly billingUsageService: BillingUsageService,
     private readonly aiModelRegistryService: AiModelRegistryService,
     private readonly redisClientService: RedisClientService,
     @InjectWorkspaceScopedRepository(AgentChatThreadEntity)
@@ -179,8 +177,6 @@ export class AgentChatResolver {
       workspace,
     );
 
-    await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
-
     const thread = await this.threadRepository.findOne(workspace.id, {
       where: { id: threadId, userWorkspaceId },
     });
@@ -290,8 +286,6 @@ export class AgentChatResolver {
       workspace,
     );
 
-    await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
-
     const result = await this.agentChatStreamingService.retryLastFailedTurn({
       threadId,
       userWorkspaceId,
@@ -337,8 +331,6 @@ export class AgentChatResolver {
       resolvedModelId,
       workspace,
     );
-
-    await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
 
     const thread = await this.threadRepository.findOne(workspace.id, {
       where: { id: threadId, userWorkspaceId },

@@ -48,7 +48,11 @@ export class LoginTokenService {
   }
 
   async verifyLoginToken(loginToken: string): Promise<LoginTokenJwtPayload> {
-    await this.jwtWrapperService.verifyJwtToken(loginToken);
+    await this.jwtWrapperService.verifyJwtToken(
+      loginToken,
+      undefined,
+      JwtTokenTypeEnum.LOGIN,
+    );
 
     const decoded = this.jwtWrapperService.decode<LoginTokenJwtPayload>(
       loginToken,

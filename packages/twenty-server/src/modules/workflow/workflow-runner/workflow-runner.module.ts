@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
 import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
 import { WorkflowCommonModule } from 'src/modules/workflow/common/workflow-common.module';
 import { CodeStepBuildModule } from 'src/modules/workflow/workflow-builder/workflow-version-step/code-step/code-step-build.module';
@@ -15,7 +14,6 @@ import { WorkflowRunnerWorkspaceService } from 'src/modules/workflow/workflow-ru
   imports: [
     WorkflowCommonModule,
     WorkflowExecutorModule,
-    BillingModule,
     WorkflowRunModule,
     MetricsModule,
     WorkflowRunQueueModule,

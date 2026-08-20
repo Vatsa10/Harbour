@@ -18,7 +18,6 @@ import { AdminPanelQueueService } from 'src/engine/core-modules/admin-panel/admi
 import { AdminChatThreadMessagesDTO } from 'src/engine/core-modules/admin-panel/dtos/admin-chat-thread-messages.dto';
 import { AdminPanelRecentUserDTO } from 'src/engine/core-modules/admin-panel/dtos/admin-panel-recent-user.dto';
 import { AdminPanelTopWorkspaceDTO } from 'src/engine/core-modules/admin-panel/dtos/admin-panel-top-workspace.dto';
-import { AdminPanelWorkspaceBillingDTO } from 'src/engine/core-modules/admin-panel/dtos/admin-panel-workspace-billing.dto';
 import { AdminWorkspaceChatThreadDTO } from 'src/engine/core-modules/admin-panel/dtos/admin-workspace-chat-thread.dto';
 import { ConfigVariableDTO } from 'src/engine/core-modules/admin-panel/dtos/config-variable.dto';
 import { ConfigVariablesDTO } from 'src/engine/core-modules/admin-panel/dtos/config-variables.dto';
@@ -39,7 +38,6 @@ import { HealthIndicatorId } from 'src/engine/core-modules/admin-panel/enums/hea
 import { JobStateEnum } from 'src/engine/core-modules/admin-panel/enums/job-state.enum';
 import { QueueMetricsTimeRange } from 'src/engine/core-modules/admin-panel/enums/queue-metrics-time-range.enum';
 import { MaintenanceModeService } from 'src/engine/core-modules/admin-panel/maintenance-mode.service';
-import { AdminPanelBillingService } from 'src/engine/core-modules/admin-panel/services/admin-panel-billing.service';
 import { AdminPanelChatService } from 'src/engine/core-modules/admin-panel/services/admin-panel-chat.service';
 import { AdminPanelConfigService } from 'src/engine/core-modules/admin-panel/services/admin-panel-config.service';
 import { AdminPanelSigningKeyService } from 'src/engine/core-modules/admin-panel/services/admin-panel-signing-key.service';
@@ -122,7 +120,6 @@ export class AdminPanelResolver {
     private readonly adminUserLookupService: AdminPanelUserLookupService,
     private readonly adminServerAdminService: AdminPanelServerAdminService,
     private readonly adminStatisticsService: AdminPanelStatisticsService,
-    private readonly adminBillingService: AdminPanelBillingService,
     private readonly adminChatService: AdminPanelChatService,
     private readonly adminConfigService: AdminPanelConfigService,
     private readonly adminVersionService: AdminPanelVersionService,
@@ -771,14 +768,6 @@ export class AdminPanelResolver {
     @Args('workspaceId', { type: () => UUIDScalarType }) workspaceId: string,
   ): Promise<UserLookup> {
     return this.adminUserLookupService.workspaceLookup(workspaceId);
-  }
-
-  @UseGuards(ServerLevelImpersonateGuard)
-  @Query(() => AdminPanelWorkspaceBillingDTO, { nullable: true })
-  async workspaceBillingAdminPanel(
-    @Args('workspaceId', { type: () => UUIDScalarType }) workspaceId: string,
-  ): Promise<AdminPanelWorkspaceBillingDTO | null> {
-    return this.adminBillingService.getWorkspaceBilling(workspaceId);
   }
 
   @UseGuards(ServerLevelImpersonateGuard)

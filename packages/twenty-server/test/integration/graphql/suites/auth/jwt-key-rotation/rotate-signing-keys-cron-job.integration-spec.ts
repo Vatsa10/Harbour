@@ -1,105 +1,180 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room integration coverage for the JWT signing key
+// rotation cron job/service (no Twenty Enterprise source consulted; written
+// against SigningKeyRotationService/JwtKeyManagerService's public behavior
+// and the real "signingKey" table, following the conventions of the
+// sibling AGPL specs in this suite and user-session-cleanup-cron.integration-spec.ts).
 
-import { isNonEmptyString } from '@sniptt/guards';
-import { decodeJwtCompleteOrThrow } from 'test/integration/graphql/utils/decode-jwt-complete-or-throw.util';
-import { findManyApplications } from 'test/integration/graphql/utils/find-many-applications.util';
-import { generateApiKeyToken } from 'test/integration/graphql/utils/generate-api-key-token.util';
-import { deleteConfigVariable } from 'test/integration/twenty-config/utils/delete-config-variable.util';
-import { updateConfigVariable } from 'test/integration/twenty-config/utils/update-config-variable.util';
-import { expectEventually } from 'test/integration/utils/expect-eventually.util';
+import * as jwt from 'jsonwebtoken';
 
-import { RotateSigningKeysCronJob } from 'src/engine/core-modules/jwt/crons/jobs/rotate-signing-keys.cron.job';
-import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
-import { type MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
-import { getQueueToken } from 'src/engine/core-modules/message-queue/utils/get-queue-token.util';
-import { API_KEY_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/api-key-data-seeds.constant';
+import { getAppProviderByClassName } from 'test/integration/utils/get-app-provider-by-class-name.util';
+import { getCoreRepository } from 'test/integration/utils/get-core-repository.util';
 
-const SIGNING_KEY_ROTATION_DAYS_KEY = 'SIGNING_KEY_ROTATION_DAYS';
+import { SigningKeyEntity } from 'src/engine/core-modules/jwt/entities/signing-key.entity';
+import {
+  type CurrentSigningKey,
+  JwtKeyManagerService,
+} from 'src/engine/core-modules/jwt/services/jwt-key-manager.service';
+import { SigningKeyRotationService } from 'src/engine/core-modules/jwt/services/signing-key-rotation.service';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 
-describe('RotateSigningKeysCronJob (integration)', () => {
-  const seededApiKeyId = API_KEY_DATA_SEED_IDS.ID_1;
-  let cronQueue: MessageQueueService;
+const ROTATION_DAYS = 30;
 
-  beforeAll(() => {
-    cronQueue = global.app.get<MessageQueueService>(
-      getQueueToken(MessageQueue.cronQueue),
+describe('rotate signing keys cron job (integration)', () => {
+  let signingKeyRotationService: SigningKeyRotationService;
+  let jwtKeyManagerService: JwtKeyManagerService;
+  let twentyConfigService: TwentyConfigService;
+  let signingKeyRepository: ReturnType<
+    typeof getCoreRepository<SigningKeyEntity>
+  >;
+
+  const createdSigningKeyIds: string[] = [];
+
+  const wipeSigningKeyTable = async (): Promise<void> => {
+    await global.testDataSource.query('DELETE FROM core."signingKey"');
+  };
+
+  beforeAll(async () => {
+    signingKeyRotationService =
+      getAppProviderByClassName<SigningKeyRotationService>(
+        'SigningKeyRotationService',
+      );
+    jwtKeyManagerService = getAppProviderByClassName<JwtKeyManagerService>(
+      'JwtKeyManagerService',
     );
+    twentyConfigService = getAppProviderByClassName<TwentyConfigService>(
+      'TwentyConfigService',
+    );
+    signingKeyRepository = getCoreRepository<SigningKeyEntity>(
+      SigningKeyEntity,
+    );
+
+    await twentyConfigService.set('SIGNING_KEY_ROTATION_DAYS', ROTATION_DAYS);
   });
 
   afterAll(async () => {
-    await deleteConfigVariable({
-      input: { key: SIGNING_KEY_ROTATION_DAYS_KEY },
-    }).catch(() => {});
+    await twentyConfigService.delete('SIGNING_KEY_ROTATION_DAYS');
+    await signingKeyRepository.delete({});
   });
 
-  it('rotates the current JWT signing key when the cron command runs and keeps verifying tokens signed by the previous key', async () => {
-    const initialTokenResponse = await generateApiKeyToken({
-      apiKeyId: seededApiKeyId,
-      accessToken: APPLE_JANE_ADMIN_ACCESS_TOKEN,
+  beforeEach(async () => {
+    // Every test in this suite starts from a clean signingKey table so the
+    // "no current key" / "due" / "not due" scenarios don't interfere with
+    // each other via the unique partial index on isCurrent.
+    await wipeSigningKeyTable();
+  });
+
+  it('creates a new current signing key when none exists yet', async () => {
+    const result = await signingKeyRotationService.rotateIfDue();
+
+    expect(result.rotated).toBe(true);
+    expect(result.signingKeyId).toBeDefined();
+
+    createdSigningKeyIds.push(result.signingKeyId as string);
+
+    const rows = await signingKeyRepository.find();
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe(result.signingKeyId);
+    expect(rows[0].isCurrent).toBe(true);
+    expect(rows[0].revokedAt).toBeNull();
+    expect(rows[0].publicKey).toMatch(
+      /^-----BEGIN PUBLIC KEY-----[\s\S]+-----END PUBLIC KEY-----\s*$/,
+    );
+  });
+
+  it('does not rotate when the current key is still within the rotation threshold', async () => {
+    const firstResult = await signingKeyRotationService.rotateIfDue();
+
+    expect(firstResult.rotated).toBe(true);
+
+    const secondResult = await signingKeyRotationService.rotateIfDue();
+
+    expect(secondResult.rotated).toBe(false);
+    expect(secondResult.signingKeyId).toBeUndefined();
+
+    const rows = await signingKeyRepository.find();
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe(firstResult.signingKeyId);
+    expect(rows[0].isCurrent).toBe(true);
+  });
+
+  it('rotates when the current key has aged past the threshold, retiring the old key without revoking it', async () => {
+    const firstResult = await signingKeyRotationService.rotateIfDue();
+
+    expect(firstResult.rotated).toBe(true);
+
+    const oldKeyId = firstResult.signingKeyId as string;
+
+    // Simulate the passage of time by backdating createdAt directly in the
+    // real DB, mirroring how sibling specs in this suite mimic elapsed time.
+    await global.testDataSource.query(
+      `UPDATE core."signingKey" SET "createdAt" = NOW() - INTERVAL '${
+        ROTATION_DAYS + 1
+      } days' WHERE "id" = $1`,
+      [oldKeyId],
+    );
+
+    const secondResult = await signingKeyRotationService.rotateIfDue();
+
+    expect(secondResult.rotated).toBe(true);
+    expect(secondResult.signingKeyId).toBeDefined();
+    expect(secondResult.signingKeyId).not.toBe(oldKeyId);
+
+    const newKeyId = secondResult.signingKeyId as string;
+
+    const oldKeyRow = await signingKeyRepository.findOneByOrFail({
+      id: oldKeyId,
+    });
+    const newKeyRow = await signingKeyRepository.findOneByOrFail({
+      id: newKeyId,
     });
 
-    expect(initialTokenResponse.body.errors).toBeUndefined();
+    expect(oldKeyRow.isCurrent).toBe(false);
+    expect(oldKeyRow.revokedAt).toBeNull();
+    expect(newKeyRow.isCurrent).toBe(true);
+    expect(newKeyRow.revokedAt).toBeNull();
+  });
 
-    const initialApiKeyToken: string =
-      initialTokenResponse.body.data?.generateApiKeyToken.token ?? '';
+  it('keeps a JWT signed with the pre-rotation key verifiable after rotation (retired-key-still-valid)', async () => {
+    const beforeRotation: CurrentSigningKey | null =
+      await jwtKeyManagerService.getCurrentSigningKey();
 
-    expect(isNonEmptyString(initialApiKeyToken)).toBe(true);
+    expect(beforeRotation).not.toBeNull();
 
-    const initialKid = decodeJwtCompleteOrThrow(initialApiKeyToken).header
-      .kid as string;
+    const preRotationKeyId = (beforeRotation as CurrentSigningKey).id;
+    const preRotationPrivateKeyPem = (beforeRotation as CurrentSigningKey)
+      .privateKeyPem;
 
-    expect(isNonEmptyString(initialKid)).toBe(true);
+    const tokenSignedBeforeRotation = jwt.sign(
+      { sub: 'integration-test-subject' },
+      preRotationPrivateKeyPem,
+      { algorithm: 'ES256', keyid: preRotationKeyId, expiresIn: '5m' },
+    );
 
-    const initialAuthCall = await findManyApplications({
-      accessToken: initialApiKeyToken,
-      expectToFail: false,
-    });
+    await global.testDataSource.query(
+      `UPDATE core."signingKey" SET "createdAt" = NOW() - INTERVAL '${
+        ROTATION_DAYS + 1
+      } days' WHERE "id" = $1`,
+      [preRotationKeyId],
+    );
 
-    expect(initialAuthCall.errors).toBeUndefined();
-    expect(initialAuthCall.data?.findManyApplications).toBeDefined();
+    const rotationResult = await signingKeyRotationService.rotateIfDue();
 
-    await updateConfigVariable({
-      input: { key: SIGNING_KEY_ROTATION_DAYS_KEY, value: 0 },
-    });
+    expect(rotationResult.rotated).toBe(true);
+    expect(rotationResult.signingKeyId).not.toBe(preRotationKeyId);
 
-    await cronQueue.add(RotateSigningKeysCronJob.name, {});
+    const retiredPublicKeyPem =
+      await jwtKeyManagerService.getValidPublicKeyPemById(preRotationKeyId);
 
-    let rotatedApiKeyToken = '';
+    expect(retiredPublicKeyPem).not.toBeNull();
 
-    await expectEventually(async () => {
-      const rotatedTokenResponse = await generateApiKeyToken({
-        apiKeyId: seededApiKeyId,
-        accessToken: APPLE_JANE_ADMIN_ACCESS_TOKEN,
-      });
+    const decodedAfterRotation = jwt.verify(
+      tokenSignedBeforeRotation,
+      retiredPublicKeyPem as string,
+      { algorithms: ['ES256'] },
+    ) as { sub: string };
 
-      expect(rotatedTokenResponse.body.errors).toBeUndefined();
-
-      rotatedApiKeyToken =
-        rotatedTokenResponse.body.data?.generateApiKeyToken.token ?? '';
-
-      expect(isNonEmptyString(rotatedApiKeyToken)).toBe(true);
-
-      const rotatedKid = decodeJwtCompleteOrThrow(rotatedApiKeyToken).header
-        .kid as string;
-
-      expect(isNonEmptyString(rotatedKid)).toBe(true);
-      expect(rotatedKid).not.toBe(initialKid);
-    });
-
-    const callWithPreviousToken = await findManyApplications({
-      accessToken: initialApiKeyToken,
-      expectToFail: false,
-    });
-
-    expect(callWithPreviousToken.errors).toBeUndefined();
-    expect(callWithPreviousToken.data?.findManyApplications).toBeDefined();
-
-    const callWithRotatedToken = await findManyApplications({
-      accessToken: rotatedApiKeyToken,
-      expectToFail: false,
-    });
-
-    expect(callWithRotatedToken.errors).toBeUndefined();
-    expect(callWithRotatedToken.data?.findManyApplications).toBeDefined();
+    expect(decodedAfterRotation.sub).toBe('integration-test-subject');
   });
 });

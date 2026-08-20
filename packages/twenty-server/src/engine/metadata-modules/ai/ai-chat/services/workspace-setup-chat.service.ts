@@ -8,7 +8,6 @@ import { QueryFailedError } from 'typeorm';
 import { v5 } from 'uuid';
 
 import { POSTGRESQL_ERROR_CODES } from 'src/engine/api/graphql/workspace-query-runner/constants/postgres-error-codes.constants';
-import { BillingUsageService } from 'src/engine/core-modules/billing/services/billing-usage.service';
 import { I18nService } from 'src/engine/core-modules/i18n/i18n.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { UserWorkspaceService } from 'src/engine/core-modules/user-workspace/user-workspace.service';
@@ -47,7 +46,6 @@ export class WorkspaceSetupChatService {
 
   constructor(
     private readonly twentyConfigService: TwentyConfigService,
-    private readonly billingUsageService: BillingUsageService,
     private readonly aiModelRegistryService: AiModelRegistryService,
     private readonly userWorkspaceService: UserWorkspaceService,
     private readonly i18nService: I18nService,
@@ -137,13 +135,6 @@ export class WorkspaceSetupChatService {
       if (hasConversationMessages) {
         return { outcome: WorkspaceSetupChatOutcome.ALREADY_STARTED, thread };
       }
-    }
-
-    const hasAvailableCredits =
-      await this.billingUsageService.hasAvailableCredits(workspace.id);
-
-    if (!hasAvailableCredits) {
-      return { outcome: WorkspaceSetupChatOutcome.UNAVAILABLE, thread: null };
     }
 
     const locale = await localePromise;

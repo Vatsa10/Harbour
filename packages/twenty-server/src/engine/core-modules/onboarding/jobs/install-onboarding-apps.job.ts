@@ -28,11 +28,6 @@ export class InstallOnboardingAppsJob {
     workspaceId,
     universalIdentifiers,
   }: InstallOnboardingAppsJobData): Promise<void> {
-    await this.onboardingService.creditInstallAppsReward({
-      workspaceId,
-      rewardAppsCount: universalIdentifiers.length,
-    });
-
     for (const universalIdentifier of universalIdentifiers) {
       await this.installApp({ universalIdentifier, workspaceId });
     }

@@ -67,7 +67,11 @@ export class WorkspaceAgnosticTokenService {
 
   async validateToken(token: string): Promise<AuthContext> {
     try {
-      await this.jwtWrapperService.verifyJwtToken(token);
+      await this.jwtWrapperService.verifyJwtToken(
+        token,
+        undefined,
+        JwtTokenTypeEnum.WORKSPACE_AGNOSTIC,
+      );
 
       const decoded =
         this.jwtWrapperService.decode<WorkspaceAgnosticTokenJwtPayload>(token);

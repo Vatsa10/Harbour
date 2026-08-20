@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
 import { EmailingDomainModule } from 'src/engine/core-modules/emailing-domain/emailing-domain.module';
 import { EmailingDomainEntity } from 'src/engine/core-modules/emailing-domain/emailing-domain.entity';
 import { MessageSuppressionEntity } from 'src/engine/core-modules/emailing-domain/message-suppression.entity';
@@ -32,7 +31,6 @@ import { UnsubscribeTopicService } from 'src/modules/emailing/services/unsubscri
     FeatureFlagModule,
     PermissionsModule,
     UserRoleModule,
-    BillingModule,
     WorkspaceEventEmitterModule,
     WorkspaceCacheModule,
     TypeOrmModule.forFeature([

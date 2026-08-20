@@ -36,7 +36,11 @@ export class RefreshTokenService {
       'REFRESH_TOKEN_REUSE_GRACE_PERIOD',
     );
 
-    await this.jwtWrapperService.verifyJwtToken(refreshToken);
+    await this.jwtWrapperService.verifyJwtToken(
+      refreshToken,
+      undefined,
+      JwtTokenTypeEnum.REFRESH,
+    );
     const jwtPayload =
       this.jwtWrapperService.decode<RefreshTokenJwtPayload>(refreshToken);
 

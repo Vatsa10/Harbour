@@ -228,14 +228,6 @@ const SettingsSubdomainPage = lazy(() =>
   })),
 );
 
-const SettingsCustomDomainPage = lazy(() =>
-  import('~/pages/settings/domains/SettingsCustomDomainPage').then(
-    (module) => ({
-      default: module.SettingsCustomDomainPage,
-    }),
-  ),
-);
-
 const SettingsApiWebhooks = lazy(() =>
   import('~/pages/settings/api-webhooks/SettingsApiWebhooks').then(
     (module) => ({
@@ -448,30 +440,6 @@ const SettingsAccountsCalendars = lazy(() =>
       default: module.SettingsAccountsCalendars,
     }),
   ),
-);
-
-const SettingsBilling = lazy(() =>
-  import('~/pages/settings/billing/SettingsBilling').then((module) => ({
-    default: module.SettingsBilling,
-  })),
-);
-
-const SettingsBillingPlans = lazy(() =>
-  import('~/pages/settings/billing/SettingsBillingPlans').then((module) => ({
-    default: module.SettingsBillingPlans,
-  })),
-);
-
-const SettingsUsage = lazy(() =>
-  import('~/pages/settings/billing/SettingsUsage').then((module) => ({
-    default: module.SettingsUsage,
-  })),
-);
-
-const SettingsUsageUserDetail = lazy(() =>
-  import('~/pages/settings/billing/SettingsUsageUserDetail').then((module) => ({
-    default: module.SettingsUsageUserDetail,
-  })),
 );
 
 const SettingsObjects = lazy(() =>
@@ -760,23 +728,9 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
           path={SettingsPath.Unsubscribe}
           element={<SettingsWorkspaceUnsubscribe />}
         />
-        <Route path={SettingsPath.Billing} element={<SettingsBilling />} />
-        <Route
-          path={SettingsPath.BillingPlans}
-          element={<SettingsBillingPlans />}
-        />
-        <Route path={SettingsPath.Usage} element={<SettingsUsage />} />
-        <Route
-          path={SettingsPath.UsageUserDetail}
-          element={<SettingsUsageUserDetail />}
-        />
         <Route
           path={SettingsPath.Subdomain}
           element={<SettingsSubdomainPage />}
-        />
-        <Route
-          path={SettingsPath.CustomDomain}
-          element={<SettingsCustomDomainPage />}
         />
         <Route
           path={SettingsPath.PublicDomain}

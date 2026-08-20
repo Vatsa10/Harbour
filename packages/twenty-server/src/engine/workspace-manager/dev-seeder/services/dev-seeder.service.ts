@@ -19,8 +19,6 @@ import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadat
 import { WorkspaceCacheStorageService } from 'src/engine/workspace-cache-storage/workspace-cache-storage.service';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { WorkspaceDataSourceService } from 'src/engine/workspace-datasource/workspace-datasource.service';
-import { seedBillingCustomers } from 'src/engine/workspace-manager/dev-seeder/core/billing/utils/seed-billing-customers.util';
-import { seedBillingSubscriptions } from 'src/engine/workspace-manager/dev-seeder/core/billing/utils/seed-billing-subscriptions.util';
 import {
   type SeededWorkspacesIds,
   SEEDER_CREATE_WORKSPACE_INPUT,
@@ -79,7 +77,6 @@ export class DevSeederService {
     options?: { light?: boolean },
   ): Promise<void> {
     const light = options?.light ?? false;
-    const isBillingEnabled = this.twentyConfigService.get('IS_BILLING_ENABLED');
     const appVersion = this.twentyConfigService.get('APP_VERSION') ?? 'unknown';
 
     const lastAttemptedInstanceCommand =
@@ -91,7 +88,6 @@ export class DevSeederService {
 
     await this.seedCoreSchema({
       workspaceId,
-      seedBilling: isBillingEnabled,
       appVersion,
       initialCursor,
     });
@@ -200,12 +196,10 @@ export class DevSeederService {
     workspaceId,
     appVersion,
     initialCursor,
-    seedBilling = true,
   }: {
     workspaceId: SeededWorkspacesIds;
     appVersion: string;
     initialCursor: { name: string; status: UpgradeMigrationStatus };
-    seedBilling?: boolean;
   }): Promise<void> {
     const schemaName = 'core';
     const createWorkspaceStaticInput =
@@ -267,15 +261,6 @@ export class DevSeederService {
       await seedUnsubscribeTopics({ queryRunner, schemaName, workspaceId });
       await seedMessageSuppressions({ queryRunner, schemaName, workspaceId });
       await seedFeatureFlags({ queryRunner, schemaName, workspaceId });
-
-      if (seedBilling) {
-        await seedBillingCustomers({ queryRunner, schemaName, workspaceId });
-        await seedBillingSubscriptions({
-          queryRunner,
-          schemaName,
-          workspaceId,
-        });
-      }
 
       await seedMetadataEntities({ queryRunner, schemaName, workspaceId });
 

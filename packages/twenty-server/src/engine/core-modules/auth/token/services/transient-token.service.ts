@@ -50,7 +50,11 @@ export class TransientTokenService {
   async verifyTransientToken(
     transientToken: string,
   ): Promise<Omit<TransientTokenJwtPayload, 'type' | 'sub'>> {
-    await this.jwtWrapperService.verifyJwtToken(transientToken);
+    await this.jwtWrapperService.verifyJwtToken(
+      transientToken,
+      undefined,
+      JwtTokenTypeEnum.LOGIN,
+    );
 
     const { type, ...payload } =
       this.jwtWrapperService.decode<TransientTokenJwtPayload>(transientToken);

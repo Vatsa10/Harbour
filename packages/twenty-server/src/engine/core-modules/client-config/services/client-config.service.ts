@@ -35,10 +35,8 @@ export class ClientConfigService {
   ) {}
 
   private isCloudflareIntegrationEnabled(): boolean {
-    return (
-      !!this.twentyConfigService.get('CLOUDFLARE_API_KEY') &&
-      !!this.twentyConfigService.get('CLOUDFLARE_ZONE_ID')
-    );
+    // Cloudflare custom domain feature is not supported in self-hosted deployments
+    return false;
   }
 
   async getClientConfig(): Promise<ClientConfig> {
@@ -52,7 +50,6 @@ export class ClientConfigService {
       this.twentyConfigService.get('EMAILING_DOMAIN_DRIVER') ===
       EmailingDomainDriver.LOG;
 
-    const isBillingEnabled = this.twentyConfigService.get('IS_BILLING_ENABLED');
 
     const availableModels =
       this.aiModelRegistryService.getAdminFilteredModels();
@@ -161,26 +158,9 @@ export class ClientConfigService {
 
     const clientConfig: ClientConfig = {
       appVersion: this.twentyConfigService.get('APP_VERSION'),
+      // AGPL build: this distribution has no paid tiers, billing is always off.
       billing: {
-        isBillingEnabled,
-        billingUrl: this.twentyConfigService.get('BILLING_PLAN_REQUIRED_LINK'),
-        stripePublishableKey: this.twentyConfigService.get(
-          'BILLING_STRIPE_PUBLISHABLE_KEY',
-        ),
-        trialPeriods: [
-          {
-            duration: this.twentyConfigService.get(
-              'BILLING_FREE_TRIAL_WITH_CREDIT_CARD_DURATION_IN_DAYS',
-            ),
-            isCreditCardRequired: true,
-          },
-          {
-            duration: this.twentyConfigService.get(
-              'BILLING_FREE_TRIAL_WITHOUT_CREDIT_CARD_DURATION_IN_DAYS',
-            ),
-            isCreditCardRequired: false,
-          },
-        ],
+        isBillingEnabled: false,
       },
       aiModels,
       authProviders: {
@@ -222,30 +202,7 @@ export class ClientConfigService {
           'MUTATION_MAXIMUM_AFFECTED_RECORDS',
         ),
       },
-      onboarding: isBillingEnabled
-        ? {
-            importContactsCreditsReward: toDisplayCredits(
-              this.twentyConfigService.get(
-                'ONBOARDING_IMPORT_CONTACTS_CREDITS_REWARD',
-              ),
-            ),
-            inviteTeamCreditsRewardPerUser: toDisplayCredits(
-              this.twentyConfigService.get(
-                'ONBOARDING_INVITE_TEAM_CREDITS_REWARD_PER_USER',
-              ),
-            ),
-            upgradeCreditsReward: toDisplayCredits(
-              this.twentyConfigService.get(
-                'BILLING_FREE_WORKFLOW_CREDITS_FOR_TRIAL_PERIOD_WITH_CREDIT_CARD',
-              ),
-            ),
-            installAppsCreditsRewardPerApp: toDisplayCredits(
-              this.twentyConfigService.get(
-                'ONBOARDING_INSTALL_APPS_CREDITS_REWARD_PER_APP',
-              ),
-            ),
-          }
-        : null,
+      onboarding: null,
       isAttachmentPreviewEnabled: this.twentyConfigService.get(
         'IS_ATTACHMENT_PREVIEW_ENABLED',
       ),
@@ -253,7 +210,6 @@ export class ClientConfigService {
       canManageFeatureFlags:
         this.twentyConfigService.get('NODE_ENV') ===
           NodeEnvironment.DEVELOPMENT ||
-        isBillingEnabled ||
         this.twentyConfigService.get('IS_FEATURE_FLAG_MANAGEMENT_ENABLED'),
       publicFeatureFlags: PUBLIC_FEATURE_FLAGS,
       isCookieSessionEnabled: this.twentyConfigService.get(

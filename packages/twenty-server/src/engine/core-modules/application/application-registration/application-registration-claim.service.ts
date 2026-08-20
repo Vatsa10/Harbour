@@ -125,7 +125,11 @@ export class ApplicationRegistrationClaimService {
   async verifyClaimState(
     state: string,
   ): Promise<ApplicationRegistrationGithubClaimStateJwtPayload> {
-    await this.jwtWrapperService.verifyJwtToken(state);
+    await this.jwtWrapperService.verifyJwtToken(
+      state,
+      undefined,
+      JwtTokenTypeEnum.APPLICATION_REGISTRATION_GITHUB_CLAIM_STATE,
+    );
 
     const payload =
       this.jwtWrapperService.decode<ApplicationRegistrationGithubClaimStateJwtPayload>(

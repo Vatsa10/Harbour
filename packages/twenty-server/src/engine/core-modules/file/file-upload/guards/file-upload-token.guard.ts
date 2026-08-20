@@ -20,7 +20,11 @@ export class FileUploadTokenGuard implements CanActivate {
     let payload: FileUploadTokenJwtPayload;
 
     try {
-      payload = await this.jwtWrapperService.verifyJwtToken(uploadToken);
+      payload = await this.jwtWrapperService.verifyJwtToken(
+        uploadToken,
+        undefined,
+        JwtTokenTypeEnum.FILE_UPLOAD,
+      );
     } catch {
       return false;
     }

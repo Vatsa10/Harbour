@@ -117,7 +117,11 @@ export class ApplicationTokenService {
     refreshToken: string,
   ): Promise<ApplicationRefreshTokenJwtPayload> {
     try {
-      await this.jwtWrapperService.verifyJwtToken(refreshToken);
+      await this.jwtWrapperService.verifyJwtToken(
+        refreshToken,
+        undefined,
+        JwtTokenTypeEnum.APPLICATION_REFRESH,
+      );
 
       const payload =
         this.jwtWrapperService.decode<ApplicationRefreshTokenJwtPayload>(
@@ -153,7 +157,11 @@ export class ApplicationTokenService {
     token: string,
   ): Promise<ApplicationAccessTokenJwtPayload> {
     try {
-      await this.jwtWrapperService.verifyJwtToken(token);
+      await this.jwtWrapperService.verifyJwtToken(
+        token,
+        undefined,
+        JwtTokenTypeEnum.APPLICATION_ACCESS,
+      );
 
       const payload =
         this.jwtWrapperService.decode<ApplicationAccessTokenJwtPayload>(token, {

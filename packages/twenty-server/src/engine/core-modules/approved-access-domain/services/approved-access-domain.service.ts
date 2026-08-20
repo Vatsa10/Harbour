@@ -163,6 +163,8 @@ export class ApprovedAccessDomainService {
     try {
       payload = (await this.jwtWrapperService.verifyJwtToken(
         validationToken,
+        undefined,
+        JwtTokenTypeEnum.APPROVED_ACCESS_DOMAIN,
       )) as ApprovedAccessDomainJwtPayload;
     } catch (error) {
       this.logger.warn(

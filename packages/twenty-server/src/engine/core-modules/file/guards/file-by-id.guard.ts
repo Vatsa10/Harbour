@@ -5,6 +5,7 @@ import { FileFolder } from 'twenty-shared/types';
 import { fileFolderConfigs } from 'src/engine/core-modules/file/interfaces/file-folder.interface';
 
 import { FileTokenJwtPayload } from 'src/engine/core-modules/auth/types/file-token-jwt-payload.type';
+import { JwtTokenTypeEnum } from 'src/engine/core-modules/auth/types/jwt-token-type.enum';
 import { JwtWrapperService } from 'src/engine/core-modules/jwt/services/jwt-wrapper.service';
 
 export const SUPPORTED_FILE_FOLDERS = [
@@ -38,9 +39,14 @@ export class FileByIdGuard implements CanActivate {
     }
 
     try {
-      const payload = await this.jwtWrapperService.verifyJwtToken(fileToken, {
-        ignoreExpiration: fileFolderConfigs[fileFolder].ignoreExpirationToken,
-      });
+      const payload = await this.jwtWrapperService.verifyJwtToken(
+        fileToken,
+        {
+          ignoreExpiration:
+            fileFolderConfigs[fileFolder].ignoreExpirationToken,
+        },
+        JwtTokenTypeEnum.FILE,
+      );
 
       if (!payload.workspaceId) {
         return false;

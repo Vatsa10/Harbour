@@ -5,8 +5,6 @@ import { isDefined } from 'twenty-shared/utils';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 import { type QueryRunner, Repository } from 'typeorm';
 
-import { BillingCreditService } from 'src/engine/core-modules/billing/services/billing-credit.service';
-import { BillingService } from 'src/engine/core-modules/billing/services/billing.service';
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
@@ -41,8 +39,6 @@ export class OnboardingService {
   private readonly logger = new Logger(OnboardingService.name);
 
   constructor(
-    private readonly billingService: BillingService,
-    private readonly billingCreditService: BillingCreditService,
     private readonly userVarsService: UserVarsService<OnboardingKeyValueTypeMap>,
     private readonly twentyConfigService: TwentyConfigService,
     @InjectRepository(WorkspaceEntity)
@@ -119,14 +115,6 @@ export class OnboardingService {
       return OnboardingStatus.INVITE_TEAM;
     }
 
-    if (
-      await this.billingService.isSubscriptionIncompleteOnboardingStatus(
-        workspace.id,
-      )
-    ) {
-      return OnboardingStatus.PLAN_REQUIRED;
-    }
-
     return OnboardingStatus.COMPLETED;
   }
 
@@ -192,8 +180,6 @@ export class OnboardingService {
     if (!hasClaimedConnectAccountStep) {
       return;
     }
-
-    await this.creditImportContactsRewardForFirstWorkspaceUser({ workspaceId });
   }
 
   private async isFirstWorkspaceUser({
@@ -222,34 +208,6 @@ export class OnboardingService {
     });
 
     return isDefined(affectedRows) && affectedRows > 0;
-  }
-
-  private async creditImportContactsRewardForFirstWorkspaceUser({
-    workspaceId,
-  }: {
-    workspaceId: string;
-  }) {
-    try {
-      const isFirstWorkspaceUser = await this.isFirstWorkspaceUser({
-        workspaceId,
-      });
-
-      if (!isFirstWorkspaceUser) {
-        return;
-      }
-
-      await this.billingCreditService.creditWorkspaceBalance({
-        workspaceId,
-        amountMicro: this.twentyConfigService.get(
-          'ONBOARDING_IMPORT_CONTACTS_CREDITS_REWARD',
-        ),
-      });
-    } catch (error) {
-      this.logger.error(
-        `Failed to credit onboarding import-contacts reward for workspace ${workspaceId}`,
-        error,
-      );
-    }
   }
 
   async setOnboardingInstallAppsPending(
@@ -337,29 +295,6 @@ export class OnboardingService {
     });
 
     return isDefined(affectedRows) && affectedRows > 0;
-  }
-
-  async creditInstallAppsReward({
-    workspaceId,
-    rewardAppsCount,
-  }: {
-    workspaceId: string;
-    rewardAppsCount: number;
-  }) {
-    try {
-      await this.billingCreditService.creditWorkspaceBalance({
-        workspaceId,
-        amountMicro:
-          this.twentyConfigService.get(
-            'ONBOARDING_INSTALL_APPS_CREDITS_REWARD_PER_APP',
-          ) * rewardAppsCount,
-      });
-    } catch (error) {
-      this.logger.error(
-        `Failed to credit onboarding install-apps reward for workspace ${workspaceId}`,
-        error,
-      );
-    }
   }
 
   async setOnboardingInviteTeamPending(

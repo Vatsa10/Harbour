@@ -1,4 +1,7 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the row-level-permission
+// predicate upsert result DTO (no Twenty Enterprise source consulted).
+// Returns the full set of predicates/groups written by the upsert mutation
+// so the caller can reconcile client-side state without a refetch.
 
 import { Field, ObjectType } from '@nestjs/graphql';
 

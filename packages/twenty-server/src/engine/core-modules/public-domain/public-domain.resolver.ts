@@ -7,8 +7,6 @@ import { PermissionFlagType } from 'twenty-shared/constants';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
-import { DomainValidRecords } from 'src/engine/core-modules/dns-manager/dtos/domain-valid-records';
-import { DnsManagerService } from 'src/engine/core-modules/dns-manager/services/dns-manager.service';
 import { PreventNestToAutoLogGraphqlErrorsFilter } from 'src/engine/core-modules/graphql/filters/prevent-nest-to-auto-log-graphql-errors.filter';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
 import { CreatePublicDomainInput } from 'src/engine/core-modules/public-domain/dtos/create-public-domain.input';
@@ -16,10 +14,6 @@ import { PublicDomainDTO } from 'src/engine/core-modules/public-domain/dtos/publ
 import { PublicDomainInput } from 'src/engine/core-modules/public-domain/dtos/public-domain.input';
 import { PublicDomainExceptionFilter } from 'src/engine/core-modules/public-domain/public-domain-exception-filter';
 import { PublicDomainEntity } from 'src/engine/core-modules/public-domain/public-domain.entity';
-import {
-  PublicDomainException,
-  PublicDomainExceptionCode,
-} from 'src/engine/core-modules/public-domain/public-domain.exception';
 import { PublicDomainService } from 'src/engine/core-modules/public-domain/public-domain.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
@@ -41,7 +35,6 @@ export class PublicDomainResolver {
     @InjectWorkspaceScopedRepository(PublicDomainEntity)
     private readonly publicDomainRepository: WorkspaceScopedRepository<PublicDomainEntity>,
     private readonly publicDomainService: PublicDomainService,
-    private readonly dnsManagerService: DnsManagerService,
   ) {}
 
   @Query(() => [PublicDomainDTO])
@@ -74,36 +67,5 @@ export class PublicDomainResolver {
     });
 
     return true;
-  }
-
-  @Mutation(() => DomainValidRecords, { nullable: true })
-  async checkPublicDomainValidRecords(
-    @Args() { domain }: PublicDomainInput,
-    @AuthWorkspace() workspace: WorkspaceEntity,
-  ): Promise<DomainValidRecords | undefined> {
-    const publicDomain = await this.publicDomainRepository.findOne(
-      workspace.id,
-      { where: { domain } },
-    );
-
-    assertIsDefinedOrThrow(
-      publicDomain,
-      new PublicDomainException(
-        `Public domain ${domain} not found`,
-        PublicDomainExceptionCode.PUBLIC_DOMAIN_NOT_FOUND,
-      ),
-    );
-
-    const domainValidRecords = await this.dnsManagerService.refreshHostname(
-      domain,
-      {
-        isPublicDomain: true,
-      },
-    );
-
-    return this.publicDomainService.checkPublicDomainValidRecords(
-      publicDomain,
-      domainValidRecords,
-    );
   }
 }

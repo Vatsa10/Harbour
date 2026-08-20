@@ -27,25 +27,7 @@ export class CheckPublicDomainsValidRecordsCronJob {
     CHECK_PUBLIC_DOMAINS_VALID_RECORDS_CRON_PATTERN,
   )
   async handle(): Promise<void> {
-    const publicDomains = await this.publicDomainRepository.find({
-      where: {
-        isValidated: false,
-        createdAt: Raw(
-          (alias) => `EXTRACT(HOUR FROM ${alias}) = EXTRACT(HOUR FROM NOW())`,
-        ),
-      },
-    });
-
-    for (const publicDomain of publicDomains) {
-      try {
-        await this.publicDomainService.checkPublicDomainValidRecords(
-          publicDomain,
-        );
-      } catch (error) {
-        throw new Error(
-          `[${CheckPublicDomainsValidRecordsCronJob.name}] Cannot check public domain: ${error.message}`,
-        );
-      }
-    }
+    // Public domains are not supported in self-hosted deployments
+    return;
   }
 }

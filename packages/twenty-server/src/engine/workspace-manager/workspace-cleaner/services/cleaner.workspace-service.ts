@@ -13,9 +13,6 @@ import { getSettingsPath, isDefined } from 'twenty-shared/utils';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 import { In, Repository } from 'typeorm';
 
-import { BillingSubscriptionEntity } from 'src/engine/core-modules/billing/entities/billing-subscription.entity';
-import { SubscriptionStatus } from 'src/engine/core-modules/billing/enums/billing-subscription-status.enum';
-import { BillingSubscriptionService } from 'src/engine/core-modules/billing/services/billing-subscription.service';
 import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
 import { EmailService } from 'src/engine/core-modules/email/email.service';
 import { I18nService } from 'src/engine/core-modules/i18n/i18n.service';
@@ -62,9 +59,6 @@ export class CleanerWorkspaceService {
     private readonly emailService: EmailService,
     @InjectRepository(WorkspaceEntity)
     private readonly workspaceRepository: Repository<WorkspaceEntity>,
-    @InjectWorkspaceScopedRepository(BillingSubscriptionEntity)
-    private readonly billingSubscriptionRepository: WorkspaceScopedRepository<BillingSubscriptionEntity>,
-    private readonly billingSubscriptionService: BillingSubscriptionService,
     @InjectRepository(UserWorkspaceEntity)
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
     private readonly i18nService: I18nService,
@@ -328,21 +322,9 @@ export class CleanerWorkspaceService {
               );
             }
 
-            if (this.twentyConfigService.get('IS_BILLING_ENABLED')) {
-              await this.billingSubscriptionService.cancelSubscription(
-                workspace.id,
-              );
-            }
-
             await this.workspaceService.deleteWorkspace(workspace.id, true);
           }
         } else {
-          if (this.twentyConfigService.get('IS_BILLING_ENABLED')) {
-            await this.billingSubscriptionService.assertSubscriptionCanceledOrNone(
-              workspace.id,
-            );
-          }
-
           this.logger.log(
             `${dryRun ? 'DRY RUN - ' : ''}Hard deleting onboarding workspace ${workspace.id}`,
           );
@@ -495,12 +477,12 @@ export class CleanerWorkspaceService {
     );
   }
 
-  async destroyBillingDeactivatedAndSoftDeletedWorkspaces(
+  async destroySoftDeletedWorkspaces(
     workspaceIds: string[],
     dryRun = false,
   ): Promise<void> {
     this.logger.log(
-      `${dryRun ? 'DRY RUN - ' : ''}destroyBillingDeactivatedAndSoftDeletedWorkspaces running...`,
+      `${dryRun ? 'DRY RUN - ' : ''}destroySoftDeletedWorkspaces running...`,
     );
 
     const workspaces = await this.workspaceRepository.find({
@@ -517,26 +499,6 @@ export class CleanerWorkspaceService {
         );
 
         continue;
-      }
-
-      if (this.twentyConfigService.get('IS_BILLING_ENABLED')) {
-        const activeBillingSubscription =
-          await this.billingSubscriptionRepository.findOne(workspace.id, {
-            where: {
-              status: In([
-                SubscriptionStatus.Active,
-                SubscriptionStatus.Trialing,
-              ]),
-            },
-          });
-
-        if (isDefined(activeBillingSubscription)) {
-          this.logger.warn(
-            `${dryRun ? 'DRY RUN - ' : ''}Workspace ${workspace.id} has an active billing subscription, skipping`,
-          );
-
-          continue;
-        }
       }
 
       this.logger.log(

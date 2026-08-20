@@ -212,6 +212,8 @@ export class ConnectionProviderOAuthFlowService {
     try {
       const verified = (await this.jwtWrapperService.verifyJwtToken(
         state,
+        undefined,
+        JwtTokenTypeEnum.APP_OAUTH_STATE,
       )) as AppOAuthStateJwtPayload;
 
       if (verified.type !== JwtTokenTypeEnum.APP_OAUTH_STATE) {
