@@ -1,11 +1,13 @@
-/* @license Enterprise */
+// SeaRM — AGPL-3.0. Clean-room reimplementation, mirroring the structure of
+// the already-AGPL sibling WorkspaceFlatRowLevelPermissionPredicateMapCacheService
+// in the same package, adapted for the predicate-group variant (adds
+// self-referential parent-group id resolution). No Enterprise source
+// consulted.
 
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { Repository } from 'typeorm';
-
-import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
 
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
 import { createEmptyFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-flat-entity-maps.constant';
@@ -13,13 +15,12 @@ import { fromRowLevelPermissionPredicateGroupEntityToFlatRowLevelPermissionPredi
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import { RowLevelPermissionPredicateGroupEntity } from 'src/engine/metadata-modules/row-level-permission-predicate/entities/row-level-permission-predicate-group.entity';
-import { RowLevelPermissionPredicateEntity } from 'src/engine/metadata-modules/row-level-permission-predicate/entities/row-level-permission-predicate.entity';
 import { type FlatRowLevelPermissionPredicateGroupMaps } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate-group-maps.type';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { WorkspaceCache } from 'src/engine/workspace-cache/decorators/workspace-cache.decorator';
+import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
 import { createIdToUniversalIdentifierMap } from 'src/engine/workspace-cache/utils/create-id-to-universal-identifier-map.util';
-import { regroupEntitiesByRelatedEntityId } from 'src/engine/workspace-cache/utils/regroup-entities-by-related-entity-id';
 import { addFlatEntityToFlatEntityMapsThroughMutationOrThrow } from 'src/engine/workspace-manager/workspace-migration/utils/add-flat-entity-to-flat-entity-maps-through-mutation-or-throw.util';
 
 @Injectable()
@@ -30,12 +31,10 @@ export class WorkspaceFlatRowLevelPermissionPredicateGroupMapCacheService extend
     private readonly rowLevelPermissionPredicateGroupRepository: WorkspaceScopedRepository<RowLevelPermissionPredicateGroupEntity>,
     @InjectRepository(ApplicationEntity)
     private readonly applicationRepository: Repository<ApplicationEntity>,
-    @InjectRepository(ObjectMetadataEntity)
-    private readonly objectMetadataRepository: Repository<ObjectMetadataEntity>,
     @InjectWorkspaceScopedRepository(RoleEntity)
     private readonly roleRepository: WorkspaceScopedRepository<RoleEntity>,
-    @InjectWorkspaceScopedRepository(RowLevelPermissionPredicateEntity)
-    private readonly rowLevelPermissionPredicateRepository: WorkspaceScopedRepository<RowLevelPermissionPredicateEntity>,
+    @InjectRepository(ObjectMetadataEntity)
+    private readonly objectMetadataRepository: Repository<ObjectMetadataEntity>,
   ) {
     super();
   }
@@ -46,9 +45,8 @@ export class WorkspaceFlatRowLevelPermissionPredicateGroupMapCacheService extend
     const [
       rowLevelPermissionPredicateGroups,
       applications,
-      objectMetadatas,
       roles,
-      rowLevelPermissionPredicates,
+      objectMetadatas,
     ] = await Promise.all([
       this.rowLevelPermissionPredicateGroupRepository.find(workspaceId, {
         withDeleted: true,
@@ -58,47 +56,23 @@ export class WorkspaceFlatRowLevelPermissionPredicateGroupMapCacheService extend
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
+      this.roleRepository.find(workspaceId, {
+        select: ['id', 'universalIdentifier'],
+        withDeleted: true,
+      }),
       this.objectMetadataRepository.find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.roleRepository.find(workspaceId, {
-        select: ['id', 'universalIdentifier'],
-        withDeleted: true,
-      }),
-      this.rowLevelPermissionPredicateRepository.find(workspaceId, {
-        select: [
-          'id',
-          'universalIdentifier',
-          'rowLevelPermissionPredicateGroupId',
-        ],
-        withDeleted: true,
-      }),
     ]);
-
-    const [
-      childRowLevelPermissionPredicateGroupsByParentId,
-      rowLevelPermissionPredicatesByGroupId,
-    ] = (
-      [
-        {
-          entities: rowLevelPermissionPredicateGroups,
-          foreignKey: 'parentRowLevelPermissionPredicateGroupId',
-        },
-        {
-          entities: rowLevelPermissionPredicates,
-          foreignKey: 'rowLevelPermissionPredicateGroupId',
-        },
-      ] as const
-    ).map(regroupEntitiesByRelatedEntityId);
 
     const applicationIdToUniversalIdentifierMap =
       createIdToUniversalIdentifierMap(applications);
-    const objectMetadataIdToUniversalIdentifierMap =
-      createIdToUniversalIdentifierMap(objectMetadatas);
     const roleIdToUniversalIdentifierMap =
       createIdToUniversalIdentifierMap(roles);
+    const objectMetadataIdToUniversalIdentifierMap =
+      createIdToUniversalIdentifierMap(objectMetadatas);
     const rowLevelPermissionPredicateGroupIdToUniversalIdentifierMap =
       createIdToUniversalIdentifierMap(rowLevelPermissionPredicateGroups);
 
@@ -109,21 +83,12 @@ export class WorkspaceFlatRowLevelPermissionPredicateGroupMapCacheService extend
       const flatRowLevelPermissionPredicateGroup =
         fromRowLevelPermissionPredicateGroupEntityToFlatRowLevelPermissionPredicateGroup(
           {
-            entity: {
-              ...rowLevelPermissionPredicateGroupEntity,
-              childRowLevelPermissionPredicateGroups:
-                childRowLevelPermissionPredicateGroupsByParentId.get(
-                  rowLevelPermissionPredicateGroupEntity.id,
-                ) || [],
-              rowLevelPermissionPredicates:
-                rowLevelPermissionPredicatesByGroupId.get(
-                  rowLevelPermissionPredicateGroupEntity.id,
-                ) || [],
-            },
+            entity: rowLevelPermissionPredicateGroupEntity,
             applicationIdToUniversalIdentifierMap,
-            objectMetadataIdToUniversalIdentifierMap,
             roleIdToUniversalIdentifierMap,
-            rowLevelPermissionPredicateGroupIdToUniversalIdentifierMap,
+            objectMetadataIdToUniversalIdentifierMap,
+            parentRowLevelPermissionPredicateGroupIdToUniversalIdentifierMap:
+              rowLevelPermissionPredicateGroupIdToUniversalIdentifierMap,
           },
         );
 
