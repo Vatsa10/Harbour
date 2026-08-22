@@ -1,0 +1,7 @@
+export enum AgentTaskStatus {
+  PENDING = 'PENDING',
+  LEASED = 'LEASED',
+  SUCCEEDED = 'SUCCEEDED',
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED',
+}

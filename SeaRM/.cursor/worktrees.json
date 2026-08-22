@@ -1,0 +1,8 @@
+{
+  "setup-worktree": [
+    "nvm use",
+    "yarn",
+    "cp $ROOT_WORKTREE_PATH/packages/searm-server/.env packages/searm-server/.env || true",
+    "cp $ROOT_WORKTREE_PATH/packages/searm-front/.env packages/searm-front/.env || true"
+  ]
+}

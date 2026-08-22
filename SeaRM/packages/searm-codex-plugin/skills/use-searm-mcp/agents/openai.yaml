@@ -1,0 +1,4 @@
+interface:
+  display_name: "Use SeaRM MCP"
+  short_description: "Query SeaRM MCP and format readable records."
+  default_prompt: "Use $use-searm-mcp to connect Codex to SeaRM MCP or retrieve readable workspace data."

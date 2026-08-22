@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+
+mkdir -p ~/.config/systemd/user
+[ -f searmcrm.service ] || { echo "Error: searmcrm.service not found"; exit 1; }
+cp searmcrm.service ~/.config/systemd/user
+
+
+systemctl --user daemon-reload
+systemctl --user enable searmcrm.service
+systemctl --user start searmcrm.service

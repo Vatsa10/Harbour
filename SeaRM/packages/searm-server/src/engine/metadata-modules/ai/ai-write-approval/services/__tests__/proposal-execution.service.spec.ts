@@ -1,0 +1,962 @@
+import { ModuleRef } from '@nestjs/core';
+import { Test, type TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+
+import { CreateManyRecordsService } from 'src/engine/core-modules/record-crud/services/create-many-records.service';
+import { CreateRecordService } from 'src/engine/core-modules/record-crud/services/create-record.service';
+import { DeleteManyRecordsService } from 'src/engine/core-modules/record-crud/services/delete-many-records.service';
+import { DeleteRecordService } from 'src/engine/core-modules/record-crud/services/delete-record.service';
+import { FindRecordsService } from 'src/engine/core-modules/record-crud/services/find-records.service';
+import { UpdateManyRecordsService } from 'src/engine/core-modules/record-crud/services/update-many-records.service';
+import { UpdateRecordService } from 'src/engine/core-modules/record-crud/services/update-record.service';
+import { UpsertManyRecordsService } from 'src/engine/core-modules/record-crud/services/upsert-many-records.service';
+import { CreateCalendarEventTool } from 'src/engine/core-modules/tool/tools/calendar-tool/create-calendar-event-tool';
+import { SendEmailTool } from 'src/engine/core-modules/tool/tools/email-tool/send-email-tool';
+import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
+import { UserEntity } from 'src/engine/core-modules/user/user.entity';
+import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
+import { ProposalEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity';
+import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services/fact.service';
+import { ProposalExecutionService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-execution.service';
+import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
+import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
+import { GlobalWorkspaceOrmManager } from 'src/engine/searm-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+
+const buildItem = (overrides: Record<string, unknown> = {}) => ({
+  id: 'item-1',
+  proposalId: 'proposal-1',
+  actionType: 'UPDATE_RECORD',
+  objectNameSingular: 'person',
+  recordId: 'record-1',
+  toolId: null,
+  toolCategory: null,
+  payload: { jobTitle: 'New title' },
+  baseline: { jobTitle: 'Old title' },
+  status: 'PENDING',
+  factIds: [],
+  ...overrides,
+});
+
+describe('ProposalExecutionService', () => {
+  let service: ProposalExecutionService;
+
+  const proposalRepository = {
+    findOne: jest.fn(),
+    save: jest.fn(),
+    update: jest.fn(),
+  };
+  const proposalItemRepository = {
+    find: jest.fn(),
+    save: jest.fn(),
+    update: jest.fn(),
+  };
+  const findRecordsService = { execute: jest.fn() };
+  const updateRecordService = { execute: jest.fn() };
+  const updateManyRecordsService = { execute: jest.fn() };
+  const createRecordService = { execute: jest.fn() };
+  const createManyRecordsService = { execute: jest.fn() };
+  const upsertManyRecordsService = { execute: jest.fn() };
+  const deleteRecordService = { execute: jest.fn() };
+  const deleteManyRecordsService = { execute: jest.fn() };
+  const userRoleService = { getRoleIdForUserWorkspace: jest.fn() };
+  const permissionsService = { hasToolPermission: jest.fn() };
+  const workspaceCacheService = { getOrRecompute: jest.fn() };
+  const sendEmailTool = { execute: jest.fn() };
+  const createCalendarEventTool = { execute: jest.fn() };
+  const userRepository = { findOne: jest.fn() };
+  const userWorkspaceRepository = { findOne: jest.fn() };
+  const staticToolProvider = {
+    category: 'view',
+    isAvailable: jest.fn(),
+    executeStaticTool: jest.fn(),
+  };
+  const moduleRef = { get: jest.fn() };
+  const factService = { markDismissed: jest.fn() };
+  const workspaceRepository = { update: jest.fn() };
+  const globalWorkspaceOrmManager = {
+    getRepository: jest.fn(),
+    executeInWorkspaceContext: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+
+    proposalRepository.findOne.mockResolvedValue({
+      id: 'proposal-1',
+      workspaceId: 'workspace-1',
+      status: 'PENDING',
+      expiresAt: new Date(Date.now() + 86400000),
+      // Proposals are AI-originated by construction (ProposalGateService
+      // stamps createdByActor from the tool-call/agent context). The default
+      // fixture reflects that so tests don't accidentally exercise the
+      // "no creator recorded" fallback unless they opt into it.
+      createdByActor: {
+        source: 'AGENT',
+        workspaceMemberId: null,
+        name: 'Sales Agent',
+        context: {},
+      },
+    });
+    // Every conditional UPDATE claims its row unless a test says otherwise.
+    proposalRepository.update.mockResolvedValue({ affected: 1 });
+    proposalItemRepository.update.mockResolvedValue({ affected: 1 });
+    proposalItemRepository.save.mockImplementation(async (entity) => entity);
+    userRoleService.getRoleIdForUserWorkspace.mockResolvedValue('role-1');
+    permissionsService.hasToolPermission.mockResolvedValue(true);
+    userWorkspaceRepository.findOne.mockResolvedValue({
+      id: 'user-workspace-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+    userRepository.findOne.mockResolvedValue({
+      id: 'user-1',
+      firstName: 'Jane',
+      lastName: 'Austen',
+      email: 'jane@apple.dev',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    workspaceCacheService.getOrRecompute.mockResolvedValue({
+      flatWorkspaceMemberMaps: {
+        idByUserId: { 'user-1': 'workspace-member-1' },
+        byId: { 'workspace-member-1': { id: 'workspace-member-1' } },
+      },
+    });
+    updateRecordService.execute.mockResolvedValue({
+      success: true,
+      message: 'updated',
+    });
+    createManyRecordsService.execute.mockResolvedValue({
+      success: true,
+      message: 'created',
+    });
+    upsertManyRecordsService.execute.mockResolvedValue({
+      success: true,
+      message: 'upserted',
+    });
+    updateManyRecordsService.execute.mockResolvedValue({
+      success: true,
+      message: 'updated',
+    });
+    deleteManyRecordsService.execute.mockResolvedValue({
+      success: true,
+      message: 'deleted',
+    });
+    staticToolProvider.isAvailable.mockResolvedValue(true);
+    staticToolProvider.executeStaticTool.mockResolvedValue({
+      success: true,
+      message: 'ran',
+    });
+    moduleRef.get.mockReturnValue([staticToolProvider]);
+    workspaceRepository.update.mockResolvedValue({ affected: 1 });
+    globalWorkspaceOrmManager.getRepository.mockResolvedValue(
+      workspaceRepository,
+    );
+    globalWorkspaceOrmManager.executeInWorkspaceContext.mockImplementation(
+      async (fn: () => unknown) => fn(),
+    );
+    findRecordsService.execute.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      result: { records: [{ id: 'record-1', jobTitle: 'Old title' }] },
+    });
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ProposalExecutionService,
+        { provide: FindRecordsService, useValue: findRecordsService },
+        { provide: UpdateRecordService, useValue: updateRecordService },
+        {
+          provide: UpdateManyRecordsService,
+          useValue: updateManyRecordsService,
+        },
+        { provide: CreateRecordService, useValue: createRecordService },
+        {
+          provide: CreateManyRecordsService,
+          useValue: createManyRecordsService,
+        },
+        {
+          provide: UpsertManyRecordsService,
+          useValue: upsertManyRecordsService,
+        },
+        { provide: DeleteRecordService, useValue: deleteRecordService },
+        {
+          provide: DeleteManyRecordsService,
+          useValue: deleteManyRecordsService,
+        },
+        { provide: UserRoleService, useValue: userRoleService },
+        { provide: PermissionsService, useValue: permissionsService },
+        { provide: WorkspaceCacheService, useValue: workspaceCacheService },
+        { provide: SendEmailTool, useValue: sendEmailTool },
+        { provide: CreateCalendarEventTool, useValue: createCalendarEventTool },
+        { provide: ModuleRef, useValue: moduleRef },
+        {
+          provide: getRepositoryToken(UserEntity),
+          useValue: userRepository,
+        },
+        {
+          provide: getRepositoryToken(UserWorkspaceEntity),
+          useValue: userWorkspaceRepository,
+        },
+        {
+          provide: getRepositoryToken(ProposalEntity),
+          useValue: proposalRepository,
+        },
+        {
+          provide: getRepositoryToken(ProposalItemEntity),
+          useValue: proposalItemRepository,
+        },
+        { provide: FactService, useValue: factService },
+        {
+          provide: GlobalWorkspaceOrmManager,
+          useValue: globalWorkspaceOrmManager,
+        },
+      ],
+    }).compile();
+
+    service = module.get<ProposalExecutionService>(ProposalExecutionService);
+  });
+
+  const approve = (selectedItemIds: string[]) =>
+    service.approve({
+      proposalId: 'proposal-1',
+      selectedItemIds,
+      workspaceId: 'workspace-1',
+      approverUserWorkspaceId: 'user-workspace-1',
+    });
+
+  const proposalStatusWrites = () =>
+    proposalRepository.update.mock.calls.map(([, patch]) => patch.status);
+
+  const itemStatusWrite = (itemId: string) =>
+    proposalItemRepository.update.mock.calls.find(([where]) => {
+      if (where.id === itemId) {
+        return true;
+      }
+
+      const inValues = (where.id as { _value?: unknown })?._value;
+
+      return Array.isArray(inValues) && inValues.includes(itemId);
+    })?.[1];
+
+  it('should apply a selected item whose baseline still matches', async () => {
+    proposalItemRepository.find.mockResolvedValue([buildItem()]);
+
+    const result = await approve(['item-1']);
+
+    expect(updateRecordService.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        objectName: 'person',
+        objectRecordId: 'record-1',
+        objectRecord: { jobTitle: 'New title' },
+      }),
+    );
+    expect(result.appliedItemIds).toEqual(['item-1']);
+    expect(result.aborted).toBe(false);
+  });
+
+  // Principal contract: the write is executed as the approver (auth/roles),
+  // but stamped with the actor that PROPOSED it, never with the approver's
+  // own identity — an approved AI change must never masquerade as MANUAL.
+  // Both parties stay traceable: the proposer via source/name, the approver
+  // via context.approvedByWorkspaceMemberId.
+  it('should stamp the write with the AI proposer, carrying the approver in context, not the approver as the actor', async () => {
+    proposalItemRepository.find.mockResolvedValue([buildItem()]);
+
+    await approve(['item-1']);
+
+    expect(updateRecordService.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rolePermissionConfig: { unionOf: ['role-1'] },
+        updatedBy: expect.objectContaining({
+          source: 'AGENT',
+          name: 'Sales Agent',
+          context: expect.objectContaining({
+            proposalId: 'proposal-1',
+            approvedByWorkspaceMemberId: 'workspace-member-1',
+          }),
+        }),
+        authContext: expect.objectContaining({
+          userWorkspaceId: 'user-workspace-1',
+        }),
+      }),
+    );
+    expect(updateRecordService.execute).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        updatedBy: expect.objectContaining({ source: 'MANUAL' }),
+      }),
+    );
+  });
+
+  it('should pass the AI proposer as createdBy on a create, with the approver recorded in context', async () => {
+    createRecordService.execute.mockResolvedValue({
+      success: true,
+      message: 'created',
+      result: { record: { id: 'new-record-1' } },
+    });
+    proposalItemRepository.find.mockResolvedValue([
+      buildItem({
+        actionType: 'CREATE_RECORD',
+        recordId: null,
+        baseline: {},
+        payload: { name: 'A' },
+      }),
+    ]);
+
+    await approve(['item-1']);
+
+    expect(createRecordService.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        createdBy: expect.objectContaining({
+          source: 'AGENT',
+          name: 'Sales Agent',
+          context: expect.objectContaining({
+            proposalId: 'proposal-1',
+            approvedByWorkspaceMemberId: 'workspace-member-1',
+          }),
+        }),
+      }),
+    );
+    expect(itemStatusWrite('item-1')).toMatchObject({
+      status: 'APPLIED',
+      resultRecordId: 'new-record-1',
+    });
+  });
+
+  // If a write genuinely has no recorded principal, it must be attributable
+  // as such (SYSTEM, with an explicit note) rather than silently defaulting
+  // to MANUAL, which would make an unattributed AI write indistinguishable
+  // from a hand-typed one.
+  it('should attribute the write to SYSTEM, never MANUAL, when the proposal recorded no creator actor', async () => {
+    proposalRepository.findOne.mockResolvedValue({
+      id: 'proposal-1',
+      workspaceId: 'workspace-1',
+      status: 'PENDING',
+      expiresAt: new Date(Date.now() + 86400000),
+      createdByActor: null,
+    });
+    proposalItemRepository.find.mockResolvedValue([buildItem()]);
+
+    await approve(['item-1']);
+
+    expect(updateRecordService.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        updatedBy: expect.objectContaining({
+          source: 'SYSTEM',
+          context: expect.objectContaining({
+            proposalId: 'proposal-1',
+            approvedByWorkspaceMemberId: 'workspace-member-1',
+          }),
+        }),
+      }),
+    );
+    expect(updateRecordService.execute).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        updatedBy: expect.objectContaining({ source: 'MANUAL' }),
+      }),
+    );
+  });
+
+  // C3: each bulk envelope must replay through its own service, unmerged.
+  describe('bulk items replay their real envelope', () => {
+    it('should create every record of a CREATE_RECORDS item', async () => {
+      const records = [{ name: 'A' }, { name: 'B' }, { name: 'C' }];
+
+      proposalItemRepository.find.mockResolvedValue([
+        buildItem({
+          actionType: 'CREATE_RECORDS',
+          recordId: null,
+          baseline: {},
+          payload: { records },
+        }),
+      ]);
+
+      const result = await approve(['item-1']);
+
+      expect(createManyRecordsService.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          objectName: 'person',
+          objectRecords: records,
+        }),
+      );
+      expect(createRecordService.execute).not.toHaveBeenCalled();
+      expect(result.appliedItemIds).toEqual(['item-1']);
+    });
+
+    it('should upsert rather than create an UPSERT_RECORDS item', async () => {
+      const records = [{ name: 'A' }, { name: 'B' }];
+
+      proposalItemRepository.find.mockResolvedValue([
+        buildItem({
+          actionType: 'UPSERT_RECORDS',
+          recordId: null,
+          baseline: {},
+          payload: { records },
+        }),
+      ]);
+
+      await approve(['item-1']);
+
+      expect(upsertManyRecordsService.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ objectRecords: records }),
+      );
+      expect(createManyRecordsService.execute).not.toHaveBeenCalled();
+    });
+
+    it('should replay an UPDATE_RECORDS item with its filter', async () => {
+      const filter = { city: { eq: 'Berlin' } };
+
+      proposalItemRepository.find.mockResolvedValue([
+        buildItem({
+          actionType: 'UPDATE_RECORDS',
+          recordId: null,
+          baseline: {},
+          payload: { filter, data: { jobTitle: 'Lead' } },
+        }),
+      ]);
+
+      const result = await approve(['item-1']);
+
+      expect(updateManyRecordsService.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ filter, data: { jobTitle: 'Lead' } }),
+      );
+      expect(result.failedItemIds).toEqual([]);
+      expect(result.appliedItemIds).toEqual(['item-1']);
+    });
+
+    it('should replay a DELETE_RECORDS item with its filter', async () => {
+      const filter = { city: { eq: 'Berlin' } };
+
+      proposalItemRepository.find.mockResolvedValue([
+        buildItem({
+          actionType: 'DELETE_RECORDS',
+          recordId: null,
+          baseline: {},
+          payload: { filter },
+        }),
+      ]);
+
+      const result = await approve(['item-1']);
+
+      expect(deleteManyRecordsService.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ filter }),
+      );
+      expect(result.appliedItemIds).toEqual(['item-1']);
+    });
+  });
+
+  // I2: only the items that actually went stale may be flagged.
+  it('should flag only the conflicted item and leave the rest reviewable', async () => {
+    proposalItemRepository.find.mockResolvedValue([
+      buildItem(),
+      buildItem({ id: 'item-2', recordId: 'record-2' }),
+    ]);
+    findRecordsService.execute.mockImplementation(async ({ filter }) =>
+      filter.id.eq === 'record-1'
+        ? {
+            success: true,
+            message: 'ok',
+            result: { records: [{ jobTitle: 'Human edited this' }] },
+          }
+        : {
+            success: true,
+            message: 'ok',
+            result: { records: [{ jobTitle: 'Old title' }] },
+          },
+    );
+
+    const result = await approve(['item-1', 'item-2']);
+
+    expect(updateRecordService.execute).not.toHaveBeenCalled();
+    expect(result.aborted).toBe(true);
+    expect(result.conflictedItemIds).toEqual(['item-1']);
+    // The proposal goes back to PENDING so the clean item stays reviewable.
+    expect(proposalStatusWrites()).toEqual(['APPLYING', 'PENDING']);
+  });
+
+  it('should reject items the reviewer did not select', async () => {
+    proposalItemRepository.find.mockResolvedValue([
+      buildItem(),
+      buildItem({ id: 'item-2' }),
+    ]);
+
+    await approve(['item-1']);
+
+    expect(itemStatusWrite('item-2')).toMatchObject({ status: 'REJECTED' });
+  });
+
+  it('should dismiss the facts behind an item the reviewer deselected', async () => {
+    proposalItemRepository.find.mockResolvedValue([
+      buildItem({ factIds: ['fact-1'] }),
+      buildItem({ id: 'item-2', factIds: ['fact-2'] }),
+    ]);
+
+    await approve(['item-1']);
+
+    // Only the deselected item's facts. Approving item-1 is a "yes" to its
+    // facts, not a "no".
+    expect(factService.markDismissed).toHaveBeenCalledWith('workspace-1', [
+      'fact-2',
+    ]);
+  });
+
+  it('should not dismiss anything when every item was selected', async () => {
+    proposalItemRepository.find.mockResolvedValue([
+      buildItem({ factIds: ['fact-1'] }),
+    ]);
+
+    await approve(['item-1']);
+
+    expect(factService.markDismissed).toHaveBeenCalledWith('workspace-1', []);
+  });
+
+  it('should dismiss the facts behind every still-open item in a whole-proposal reject', async () => {
+    proposalItemRepository.find.mockResolvedValue([
+      buildItem({ factIds: ['fact-1'] }),
+      // reject() clears CONFLICTED items too — their facts are dismissed with
+      // the rest, which an earlier draft of this task silently dropped.
+      buildItem({ id: 'item-2', status: 'CONFLICTED', factIds: ['fact-2'] }),
+    ]);
+
+    await service.reject({
+      proposalId: 'proposal-1',
+      workspaceId: 'workspace-1',
+      approverUserWorkspaceId: 'user-workspace-1',
+    });
+
+    expect(factService.markDismissed).toHaveBeenCalledWith('workspace-1', [
+      'fact-1',
+      'fact-2',
+    ]);
+  });
+
+  // I5: a batch that wrote nothing successfully is not APPLIED.
+  describe('final status reflects the real outcome', () => {
+    it('should mark a fully failed batch FAILED', async () => {
+      proposalItemRepository.find.mockResolvedValue([buildItem()]);
+      updateRecordService.execute.mockResolvedValue({
+        success: false,
+        message: 'permission denied',
+        error: 'permission denied',
+      });
+
+      const result = await approve(['item-1']);
+
+      expect(result.failedItemIds).toEqual(['item-1']);
+      expect(proposalStatusWrites()).toEqual(['APPLYING', 'FAILED']);
+    });
+
+    it('should mark a mixed batch PARTIALLY_APPLIED', async () => {
+      proposalItemRepository.find.mockResolvedValue([
+        buildItem(),
+        buildItem({ id: 'item-2' }),
+      ]);
+      updateRecordService.execute
+        .mockResolvedValueOnce({ success: true, message: 'updated' })
+        .mockResolvedValueOnce({
+          success: false,
+          message: 'nope',
+          error: 'nope',
+        });
+
+      await approve(['item-1', 'item-2']);
+
+      expect(proposalStatusWrites()).toEqual(['APPLYING', 'PARTIALLY_APPLIED']);
+    });
+
+    it('should mark a batch approved with an empty selection REJECTED', async () => {
+      proposalItemRepository.find.mockResolvedValue([buildItem()]);
+
+      await approve([]);
+
+      expect(updateRecordService.execute).not.toHaveBeenCalled();
+      expect(proposalStatusWrites()).toEqual(['APPLYING', 'REJECTED']);
+    });
+
+    it('should mark a fully applied batch APPLIED', async () => {
+      proposalItemRepository.find.mockResolvedValue([buildItem()]);
+
+      await approve(['item-1']);
+
+      expect(proposalStatusWrites()).toEqual(['APPLYING', 'APPLIED']);
+    });
+  });
+
+  // I5: two concurrent approvals must not both apply.
+  it('should bail without writing when it cannot claim the proposal', async () => {
+    proposalItemRepository.find.mockResolvedValue([buildItem()]);
+    proposalRepository.update.mockResolvedValue({ affected: 0 });
+
+    const result = await approve(['item-1']);
+
+    expect(updateRecordService.execute).not.toHaveBeenCalled();
+    expect(sendEmailTool.execute).not.toHaveBeenCalled();
+    expect(result.aborted).toBe(true);
+    expect(result.appliedItemIds).toEqual([]);
+  });
+
+  it('should claim the proposal only while it is still PENDING', async () => {
+    proposalItemRepository.find.mockResolvedValue([buildItem()]);
+
+    await approve(['item-1']);
+
+    expect(proposalRepository.update).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ id: 'proposal-1', status: 'PENDING' }),
+      { status: 'APPLYING' },
+    );
+  });
+
+  it('should apply record writes before outbound sends', async () => {
+    const applyOrder: string[] = [];
+
+    updateRecordService.execute.mockImplementation(async () => {
+      applyOrder.push('record');
+
+      return { success: true, message: 'updated' };
+    });
+    sendEmailTool.execute.mockImplementation(async () => {
+      applyOrder.push('email');
+
+      return { success: true, message: 'sent' };
+    });
+
+    proposalItemRepository.find.mockResolvedValue([
+      buildItem({
+        id: 'item-email',
+        actionType: 'SEND_EMAIL',
+        objectNameSingular: null,
+        recordId: null,
+        baseline: {},
+        payload: { to: 'a@example.com', subject: 'Hi', body: 'Hello' },
+      }),
+      buildItem({ id: 'item-record' }),
+    ]);
+
+    await approve(['item-email', 'item-record']);
+
+    expect(applyOrder).toEqual(['record', 'email']);
+  });
+
+  // I7: the dispatch path re-checks tool permissions; approval must too.
+  it('should refuse an outbound send the approver lacks permission for', async () => {
+    permissionsService.hasToolPermission.mockResolvedValue(false);
+    proposalItemRepository.find.mockResolvedValue([
+      buildItem({
+        actionType: 'SEND_EMAIL',
+        objectNameSingular: null,
+        recordId: null,
+        baseline: {},
+        payload: { to: 'a@example.com' },
+      }),
+    ]);
+
+    const result = await approve(['item-1']);
+
+    expect(sendEmailTool.execute).not.toHaveBeenCalled();
+    expect(result.failedItemIds).toEqual(['item-1']);
+  });
+
+  describe('static tool items', () => {
+    const staticItem = (overrides: Record<string, unknown> = {}) =>
+      buildItem({
+        actionType: 'STATIC_TOOL',
+        objectNameSingular: null,
+        recordId: null,
+        baseline: {},
+        toolId: 'create_view',
+        toolCategory: 'view',
+        payload: { name: 'My view' },
+        ...overrides,
+      });
+
+    it('should replay an approved static tool through its provider', async () => {
+      proposalItemRepository.find.mockResolvedValue([staticItem()]);
+
+      const result = await approve(['item-1']);
+
+      expect(staticToolProvider.executeStaticTool).toHaveBeenCalledWith(
+        'create_view',
+        { name: 'My view' },
+        expect.objectContaining({ userWorkspaceId: 'user-workspace-1' }),
+      );
+      expect(result.appliedItemIds).toEqual(['item-1']);
+    });
+
+    it('should refuse when the tool is unavailable to the approver', async () => {
+      staticToolProvider.isAvailable.mockResolvedValue(false);
+      proposalItemRepository.find.mockResolvedValue([staticItem()]);
+
+      const result = await approve(['item-1']);
+
+      expect(staticToolProvider.executeStaticTool).not.toHaveBeenCalled();
+      expect(result.failedItemIds).toEqual(['item-1']);
+    });
+  });
+
+  it('should refuse to approve an expired proposal', async () => {
+    proposalRepository.findOne.mockResolvedValue({
+      id: 'proposal-1',
+      workspaceId: 'workspace-1',
+      status: 'PENDING',
+      expiresAt: new Date(Date.now() - 86400000),
+    });
+    proposalItemRepository.find.mockResolvedValue([buildItem()]);
+
+    const result = await approve(['item-1']);
+
+    expect(result.aborted).toBe(true);
+    expect(updateRecordService.execute).not.toHaveBeenCalled();
+    expect(proposalStatusWrites()).toEqual(['EXPIRED']);
+  });
+
+  describe('reject', () => {
+    it('should reject pending and conflicted items', async () => {
+      proposalItemRepository.find.mockResolvedValue([]);
+
+      const result = await service.reject({
+        proposalId: 'proposal-1',
+        workspaceId: 'workspace-1',
+        approverUserWorkspaceId: 'user-workspace-1',
+      });
+
+      expect(result.aborted).toBe(false);
+      expect(proposalItemRepository.update).toHaveBeenCalledWith(
+        expect.objectContaining({ proposalId: 'proposal-1' }),
+        { status: 'REJECTED' },
+      );
+    });
+
+    it('should bail when the proposal is no longer pending', async () => {
+      proposalRepository.update.mockResolvedValue({ affected: 0 });
+
+      const result = await service.reject({
+        proposalId: 'proposal-1',
+        workspaceId: 'workspace-1',
+        approverUserWorkspaceId: 'user-workspace-1',
+      });
+
+      expect(result.aborted).toBe(true);
+      expect(proposalItemRepository.update).not.toHaveBeenCalled();
+      expect(factService.markDismissed).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('objects blocked from automation', () => {
+    const participantItem = (overrides: Record<string, unknown> = {}) =>
+      buildItem({
+        objectNameSingular: 'messageParticipant',
+        recordId: 'participant-1',
+        payload: { personId: 'person-1' },
+        baseline: { personId: null },
+        ...overrides,
+      });
+
+    beforeEach(() => {
+      findRecordsService.execute.mockResolvedValue({
+        success: true,
+        message: 'ok',
+        result: { records: [{ id: 'participant-1', personId: null }] },
+      });
+    });
+
+    it('should apply a messageParticipant link that record-crud refuses on automation grounds', async () => {
+      proposalItemRepository.find.mockResolvedValue([participantItem()]);
+
+      const result = await approve(['item-1']);
+
+      // The write must still go through record-crud so the update event
+      // fires, updatedBy is stamped and composites are formatted. The
+      // blocklist is waived only by the explicit human-approval flag, never
+      // by writing behind the ORM's back.
+      expect(updateRecordService.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          objectName: 'messageParticipant',
+          objectRecordId: 'participant-1',
+          objectRecord: { personId: 'person-1' },
+          rolePermissionConfig: { unionOf: ['role-1'] },
+          isHumanApproved: true,
+          updatedBy: expect.objectContaining({ name: 'Sales Agent' }),
+        }),
+      );
+      expect(globalWorkspaceOrmManager.getRepository).not.toHaveBeenCalled();
+      expect(workspaceRepository.update).not.toHaveBeenCalled();
+      expect(result.appliedItemIds).toEqual(['item-1']);
+      expect(result.failedItemIds).toEqual([]);
+      expect(result.failures).toEqual([]);
+      expect(itemStatusWrite('item-1')?.status).toBe('APPLIED');
+    });
+
+    // The automation-blocklist exemption and a record-scope exemption look
+    // identical from four lines away, and the next person here will be tempted
+    // to make them one. isHumanApproved waives the blocklist and nothing else:
+    // the write still runs as the approver, under the approver's roles, so
+    // object, field and record-scope checks all still apply.
+    it('should still pass the approver principal on the automation-blocked branch', async () => {
+      proposalItemRepository.find.mockResolvedValue([participantItem()]);
+
+      await approve(['item-1']);
+
+      expect(updateRecordService.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isHumanApproved: true,
+          rolePermissionConfig: { unionOf: ['role-1'] },
+          authContext: expect.objectContaining({
+            type: 'user',
+            workspaceMemberId: 'workspace-member-1',
+          }),
+        }),
+      );
+    });
+
+    it('should fail the item with a reason when the row no longer exists', async () => {
+      proposalItemRepository.find.mockResolvedValue([participantItem()]);
+      updateRecordService.execute.mockResolvedValue({
+        success: false,
+        message: 'Failed to update record in messageParticipant',
+        error: 'Record participant-1 not found',
+      });
+
+      const result = await approve(['item-1']);
+
+      expect(result.appliedItemIds).toEqual([]);
+      expect(result.failedItemIds).toEqual(['item-1']);
+      expect(result.failures).toEqual([
+        {
+          itemId: 'item-1',
+          error: expect.stringContaining('participant-1'),
+        },
+      ]);
+      expect(itemStatusWrite('item-1')?.error).toContain('participant-1');
+    });
+
+    it('should refuse an action shape other than a single-record update', async () => {
+      proposalItemRepository.find.mockResolvedValue([
+        participantItem({ actionType: 'DELETE_RECORD', baseline: {} }),
+      ]);
+
+      const result = await approve(['item-1']);
+
+      expect(workspaceRepository.update).not.toHaveBeenCalled();
+      expect(updateRecordService.execute).not.toHaveBeenCalled();
+      expect(deleteRecordService.execute).not.toHaveBeenCalled();
+      expect(result.failedItemIds).toEqual(['item-1']);
+      expect(result.failures[0].error).toContain('blocked from automated writes');
+    });
+  });
+
+  it('should surface the underlying error text for a failed item', async () => {
+    proposalItemRepository.find.mockResolvedValue([buildItem()]);
+    updateRecordService.execute.mockResolvedValue({
+      success: false,
+      message: 'Failed to update record in person',
+      error: 'Field jobTitle is not writable by this role',
+    });
+
+    const result = await approve(['item-1']);
+
+    expect(result.failures).toEqual([
+      {
+        itemId: 'item-1',
+        error: 'Field jobTitle is not writable by this role',
+      },
+    ]);
+  });
+
+  // The approver-scope boundary. Approval executes as the approving user, so
+  // a row outside that user's record scope must be refused at the same
+  // strength as an object or field denial � and must be told apart from a row
+  // that is simply gone, because the two need different things from the human.
+  describe('approver record scope', () => {
+    const outOfScope = () =>
+      findRecordsService.execute
+        // As the approver: the scoped read returns nothing.
+        .mockResolvedValueOnce({ success: true, result: { records: [] } })
+        // With bypass: the row is there, so the approver simply cannot see it.
+        .mockResolvedValueOnce({
+          success: true,
+          result: { records: [{ id: 'record-1' }] },
+        });
+
+    it('should refuse to apply an item whose target row is outside the approver scope', async () => {
+      proposalItemRepository.find.mockResolvedValue([buildItem()]);
+      outOfScope();
+
+      const result = await approve(['item-1']);
+
+      expect(result.outOfScopeItemIds).toEqual(['item-1']);
+      expect(result.conflictedItemIds).toEqual([]);
+      expect(result.appliedItemIds).toEqual([]);
+      expect(result.aborted).toBe(true);
+      // The point of the whole feature: no write reached the ORM at all.
+      expect(updateRecordService.execute).not.toHaveBeenCalled();
+      expect(itemStatusWrite('item-1')).toMatchObject({
+        status: 'OUT_OF_SCOPE',
+      });
+    });
+
+    it('should return the proposal to PENDING so the reviewer can deselect the blocked item', async () => {
+      proposalItemRepository.find.mockResolvedValue([buildItem()]);
+      outOfScope();
+
+      await approve(['item-1']);
+
+      expect(proposalStatusWrites()).toContain('PENDING');
+    });
+
+    it('should mark an item CONFLICTED, not OUT_OF_SCOPE, when the record is genuinely gone', async () => {
+      proposalItemRepository.find.mockResolvedValue([buildItem()]);
+      // Three reads: the scoped probe, the bypass probe, and then the baseline
+      // conflict read. The row is gone, so all three come back empty.
+      findRecordsService.execute.mockResolvedValue({
+        success: true,
+        result: { records: [] },
+      });
+
+      const result = await approve(['item-1']);
+
+      expect(result.outOfScopeItemIds).toEqual([]);
+      expect(result.conflictedItemIds).toEqual(['item-1']);
+    });
+
+    it('should not scope-check an outbound send, which targets no record', async () => {
+      sendEmailTool.execute.mockResolvedValue({ success: true, message: 'sent' });
+      proposalItemRepository.find.mockResolvedValue([
+        buildItem({
+          actionType: 'SEND_EMAIL',
+          objectNameSingular: null,
+          recordId: null,
+          baseline: {},
+          payload: { to: 'a@b.dev', subject: 's', body: 'b' },
+        }),
+      ]);
+
+      const result = await approve(['item-1']);
+
+      expect(result.outOfScopeItemIds).toEqual([]);
+      expect(sendEmailTool.execute).toHaveBeenCalled();
+    });
+
+    it('should apply normally when the target row is inside the approver scope', async () => {
+      proposalItemRepository.find.mockResolvedValue([buildItem()]);
+
+      const result = await approve(['item-1']);
+
+      expect(result.outOfScopeItemIds).toEqual([]);
+      expect(result.appliedItemIds).toEqual(['item-1']);
+    });
+
+    // The scope probe reads with bypass on purpose. It must convert that read
+    // into a single boolean and never let a bypassed value reach an apply.
+    it('should never approve with a bypass config, even after a bypass probe', async () => {
+      proposalItemRepository.find.mockResolvedValue([buildItem()]);
+
+      await approve(['item-1']);
+
+      for (const call of updateRecordService.execute.mock.calls) {
+        expect(call[0].rolePermissionConfig).toEqual({ unionOf: ['role-1'] });
+      }
+    });
+  });
+});

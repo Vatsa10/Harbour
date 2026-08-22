@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request: {}
+
+permissions:
+  contents: read
+
+env:
+  SEARM_VERSION: latest
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Spawn SeaRM test instance
+        id: searm
+        uses: Vatsa10/Harbour/.github/actions/spawn-searm-app-dev-test@main
+        with:
+          searm-version: ${{ env.SEARM_VERSION }}
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Run integration tests
+        run: yarn test
+        env:
+          SEARM_API_URL: ${{ steps.searm.outputs.server-url }}
+          SEARM_API_KEY: ${{ steps.searm.outputs.api-key }}

@@ -1,0 +1,52 @@
+// SeaRM — AGPL-3.0. Clean-room reimplementation of the JWT signing key
+// rotation cron job (no SeaRM Enterprise source consulted; structural
+// pattern independently confirmed against the purely-AGPL
+// trash-cleanup.cron.job.ts and user-session-cleanup.cron.job.ts).
+
+import { Injectable, Logger } from '@nestjs/common';
+
+import { SentryCronMonitor } from 'src/engine/core-modules/cron/sentry-cron-monitor.decorator';
+import { ROTATE_SIGNING_KEYS_CRON_PATTERN } from 'src/engine/core-modules/jwt/constants/rotate-signing-keys-cron-pattern.constant';
+import { SigningKeyRotationService } from 'src/engine/core-modules/jwt/services/signing-key-rotation.service';
+import { Process } from 'src/engine/core-modules/message-queue/decorators/process.decorator';
+import { Processor } from 'src/engine/core-modules/message-queue/decorators/processor.decorator';
+import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
+
+@Injectable()
+@Processor(MessageQueue.cronQueue)
+export class RotateSigningKeysCronJob {
+  private readonly logger = new Logger(RotateSigningKeysCronJob.name);
+
+  constructor(
+    private readonly signingKeyRotationService: SigningKeyRotationService,
+  ) {}
+
+  @Process(RotateSigningKeysCronJob.name)
+  @SentryCronMonitor(
+    RotateSigningKeysCronJob.name,
+    ROTATE_SIGNING_KEYS_CRON_PATTERN,
+  )
+  async handle(): Promise<void> {
+    try {
+      const result = await this.signingKeyRotationService.rotateIfDue();
+
+      if (result.rotated) {
+        this.logger.log(
+          `JWT signing key rotated (kid=${result.signingKeyId})`,
+        );
+      } else {
+        this.logger.log(
+          'JWT signing key rotation skipped (not due or disabled)',
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to rotate JWT signing key: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+
+      throw error;
+    }
+  }
+}

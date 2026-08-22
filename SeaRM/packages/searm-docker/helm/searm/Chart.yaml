@@ -1,0 +1,7 @@
+apiVersion: v2
+name: searm
+description: A Helm chart to deploy SeaRM CRM (server + worker) with optional PostgreSQL and Redis dependencies.
+type: application
+version: 0.1.0
+appVersion: "v1.14.0"
+icon: https://raw.githubusercontent.com/Vatsa10/Harbour/2f25922f4cd5bd61e1427c57c4f8ea224e1d552c/packages/searm-website/public/images/core/logo.svg

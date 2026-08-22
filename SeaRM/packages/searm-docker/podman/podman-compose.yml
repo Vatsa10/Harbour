@@ -1,0 +1,56 @@
+version: "3.8"
+
+services:
+  db:
+    container_name: searm-db
+    image: postgres:16
+    environment:
+      POSTGRES_DB: searm
+      POSTGRES_USER: searm
+      POSTGRES_PASSWORD: ${PG_DATABASE_PASSWORD}
+    volumes:
+      - searm-db-data:/var/lib/postgresql/data:Z
+
+  redis:
+    container_name: searm-redis
+    image: redis:latest
+    command: ["--maxmemory-policy", "noeviction"]
+    volumes:
+      - searm-redis-data:/data:Z
+
+  server:
+    container_name: searm-server
+    image: searmcrm/searm:latest
+    environment:
+      NODE_PORT: "3000"
+      SERVER_URL: ${SERVER_URL}
+      PG_DATABASE_URL: "postgresql://searm:${PG_DATABASE_PASSWORD}@searm-db:5432/searm"
+      REDIS_URL: "redis://searm-redis:6379"
+      APP_SECRET: ${APP_SECRET}
+      NODE_ENV: production
+      LOG_LEVEL: info
+    volumes:
+      - searm-server-data:/app/docker-data:Z
+    ports:
+      - 127.0.0.1:8080:3000
+
+  worker:
+    container_name: searm-worker
+    image: searmcrm/searm:latest
+    command: yarn worker:prod
+    environment:
+      SERVER_URL: ${SERVER_URL}
+      PG_DATABASE_URL: "postgresql://searm:${PG_DATABASE_PASSWORD}@searm-db:5432/searm"
+      REDIS_URL: "redis://searm-redis:6379"
+      APP_SECRET: ${APP_SECRET}
+      DISABLE_DB_MIGRATIONS: "true"
+      NODE_ENV: production
+      LOG_LEVEL: info
+    volumes:
+      - searm-server-data:/app/docker-data:Z
+    init: true
+
+volumes:
+  searm-db-data:
+  searm-server-data:
+  searm-redis-data:

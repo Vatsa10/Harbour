@@ -1,0 +1,10 @@
+{
+  "install": "yarn install",
+  "start": "(sudo service docker start || service docker start || true) && bash packages/searm-utils/setup-dev-env.sh && npx nx database:reset searm-server",
+  "terminals": [
+    {
+      "name": "Development Server",
+      "command": "yarn start"
+    }
+  ]
+}

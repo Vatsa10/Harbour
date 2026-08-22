@@ -1,0 +1,22 @@
+[36m> [39m[46m[1m SWC [22m[49m [36mRunning...[39m
+Successfully compiled: 7203 files with swc (996.96ms)
+Frontend build not found or not writable, assuming it is served independently
+Exception Captured
+  undefined
+  [
+    Error: listen EADDRINUSE: address already in use :::3000
+        at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+        at listenInCluster (node:net:1997:12)
+        at Server.listen (node:net:2102:7)
+        at ExpressAdapter.listen (D:\Files\Vatsa\Projects\AI-CRM\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+        at D:\Files\Vatsa\Projects\AI-CRM\node_modules\@nestjs\core\nest-application.js:190:30
+        at new Promise (<anonymous>)
+        at NestApplication.listen (D:\Files\Vatsa\Projects\AI-CRM\node_modules\@nestjs\core\nest-application.js:180:16)
+        at async bootstrap (D:\Files\Vatsa\Projects\AI-CRM\packages\searm-server\src\main.ts:113:3) {
+      code: 'EADDRINUSE',
+      errno: -4091,
+      syscall: 'listen',
+      address: '::',
+      port: 3000
+    }
+  ]

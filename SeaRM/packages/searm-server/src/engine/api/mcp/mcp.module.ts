@@ -1,0 +1,46 @@
+import { Module } from '@nestjs/common';
+
+import { McpCoreController } from 'src/engine/api/mcp/controllers/mcp-core.controller';
+import { McpAuthGuard } from 'src/engine/api/mcp/guards/mcp-auth.guard';
+import { McpInstructionBuilderService } from 'src/engine/api/mcp/services/mcp-instruction-builder.service';
+import { McpProtocolService } from 'src/engine/api/mcp/services/mcp-protocol.service';
+import { McpToolExecutorService } from 'src/engine/api/mcp/services/mcp-tool-executor.service';
+import { ApiKeyModule } from 'src/engine/core-modules/api-key/api-key.module';
+import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
+import { TokenModule } from 'src/engine/core-modules/auth/token/token.module';
+import { SearmConfigModule } from 'src/engine/core-modules/searm-config/searm-config.module';
+import { ToolProviderModule } from 'src/engine/core-modules/tool-provider/tool-provider.module';
+import { JwtAuthGuard } from 'src/engine/guards/jwt-auth.guard';
+import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
+import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.module';
+import { SkillModule } from 'src/engine/metadata-modules/skill/skill.module';
+import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.module';
+import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/workspace-cache-storage.module';
+
+import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
+
+@Module({
+  imports: [
+    ApiKeyModule,
+    MetricsModule,
+    TokenModule,
+    WorkspaceCacheStorageModule,
+    WorkspaceManyOrAllFlatEntityMapsCacheModule,
+    UserRoleModule,
+    ToolProviderModule,
+    SkillModule,
+    SearmConfigModule,
+    WorkspaceCacheModule,
+  ],
+  controllers: [McpCoreController],
+  exports: [McpProtocolService],
+  providers: [
+    JwtAuthGuard,
+    McpAuthGuard,
+    WorkspaceAuthGuard,
+    McpInstructionBuilderService,
+    McpProtocolService,
+    McpToolExecutorService,
+  ],
+})
+export class McpModule {}

@@ -1,0 +1,112 @@
+{
+  "version": "0.2.0",
+  "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+  "configurations": [
+    {
+      "name": "searm-server - start debug",
+      "type": "node",
+      "runtimeVersion": "24.5",
+      "request": "launch",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["nx", "run", "searm-server:start"],
+      "outputCapture": "std",
+      "internalConsoleOptions": "openOnSessionStart",
+      "console": "internalConsole",
+      "cwd": "${workspaceFolder}/packages/searm-server/"
+    },
+    {
+      "name": "searm-server - worker debug",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["nx", "run", "searm-server:worker"],
+      "outputCapture": "std",
+      "internalConsoleOptions": "openOnSessionStart",
+      "console": "internalConsole",
+      "cwd": "${workspaceFolder}/packages/searm-server/"
+    },
+    {
+      "name": "searm-server - command debug example",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npx",
+      "runtimeVersion": "24.5",
+      "runtimeArgs": [
+        "nx",
+        "run",
+        "searm-server:command",
+        "my-command",
+        "--my-parameter value"
+      ],
+      "outputCapture": "std",
+      "internalConsoleOptions": "openOnSessionStart",
+      "console": "internalConsole",
+      "cwd": "${workspaceFolder}/packages/searm-server/"
+    },
+    {
+      "name": "Playwright Test current file",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["nx", "test", "searm-e2e-testing", "${file}"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "internalConsoleOptions": "neverOpen",
+      "envFile": "${workspaceFolder}/packages/searm-e2e-testing/.env"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "searm-server - debug integration test file (to launch with test file open)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "nx",
+        "run",
+        "searm-server:jest",
+        "--",
+        "--config",
+        "./jest-integration.config.ts",
+        "${relativeFile}",
+        "--silent=false",
+        "${input:updateSnapshot}"
+      ],
+      "cwd": "${workspaceFolder}/packages/searm-server",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "env": {
+        "NODE_ENV": "test",
+        "NODE_OPTIONS": "--max-old-space-size=12288 --import tsx/esm"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "searm-server - debug unit test file (to launch with test file open)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "nx",
+        "run",
+        "searm-server:jest",
+        "--",
+        "--config",
+        "./jest.config.mjs",
+        "${relativeFile}"
+      ],
+      "cwd": "${workspaceFolder}/packages/searm-server",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "env": {
+        "NODE_ENV": "test"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "updateSnapshot",
+      "type": "pickString",
+      "description": "Update snapshots?",
+      "options": ["", "--updateSnapshot"],
+      "default": ""
+    }
+  ]
+}

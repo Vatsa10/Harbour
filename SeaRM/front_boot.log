@@ -1,0 +1,507 @@
+
+[7m[1m[36m NX [39m[22m[27m  [36mRunning target [1mstart[22m for project searm-front and [1m11[22m tasks it depends on:[39m
+
+[2m[36m[39m[22m
+
+[2m> [22m[2mnx run[22m searm-ui:build  [2m[local cache][22m
+
+
+[2m> [22m[2mnx run[22m searm-shared:generateBarrels  [2m[existing outputs match the cache, left as is][22m
+
+
+[2m> [22m[2mnx run[22m searm-shared:build  [2m[existing outputs match the cache, left as is][22m
+
+
+[2m> [22m[2mnx run[22m searm-ui:"build:individual"  [2m[local cache][22m
+
+
+[2m> [22m[2mnx run[22m searm-shared:"build:individual"  [2m[existing outputs match the cache, left as is][22m
+
+
+[2m> [22m[2mnx run[22m searm-client-sdk:build
+
+[2m> [22mnpx rimraf dist && npx vite build && npx vite build -c vite.metadata.config.ts
+
+[2m> [22mtsgo -p tsconfig.lib.json --declaration --emitDeclarationOnly --noEmit false --outDir dist --rootDir src && npx tsc-alias -p tsconfig.lib.json --outDir dist
+
+
+[2m> [22m[2mnx run[22m searm-sdk:"build:sdk"
+
+[2m> [22mnpx vite build -c vite.config.define.ts && npx vite build -c vite.config.billing.ts && npx vite build -c vite.config.front-component.ts && npx vite build -c vite.config.logic-function.ts && npx vite build -c vite.config.utils.ts && npx rollup -c rollup.config.sdk-dts.mjs
+
+[36m
+[1msrc/sdk/define/index.ts[22m → [1mdist/define/index.d.ts[22m...[39m
+[32mcreated [1mdist/define/index.d.ts[22m in [1m2.1s[22m[39m
+[36m
+[1msrc/sdk/front-component/index.ts[22m → [1mdist/front-component/index.d.ts[22m...[39m
+[32mcreated [1mdist/front-component/index.d.ts[22m in [1m1.3s[22m[39m
+[36m
+[1msrc/sdk/billing/index.ts[22m → [1mdist/billing/index.d.ts[22m...[39m
+[32mcreated [1mdist/billing/index.d.ts[22m in [1m3.2s[22m[39m
+[36m
+[1msrc/sdk/logic-function/index.ts[22m → [1mdist/logic-function/index.d.ts[22m...[39m
+[32mcreated [1mdist/logic-function/index.d.ts[22m in [1m989ms[22m[39m
+[36m
+[1msrc/sdk/utils/index.ts[22m → [1mdist/utils/index.d.ts[22m...[39m
+[32mcreated [1mdist/utils/index.d.ts[22m in [1m972ms[22m[39m
+
+[2m> [22m[2mnx run[22m searm-sdk:build
+
+[2m> [22mnpx rimraf dist && npx vite build -c vite.config.node.ts && npx vite build -c vite.config.define.ts && npx vite build -c vite.config.billing.ts && npx vite build -c vite.config.front-component.ts && npx vite build -c vite.config.logic-function.ts && npx vite build -c vite.config.utils.ts && npx vite build -c vite.config.browser.ts
+
+[33m[plugin rolldown:vite-resolve] Module "perf_hooks" has been externalized for browser compatibility, imported by "D:/Files/Vatsa/Projects/AI-CRM/node_modules/@ts-morph/common/dist/typescript.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.[39m
+[33m[plugin rolldown:vite-resolve] Module "perf_hooks" has been externalized for browser compatibility, imported by "D:/Files/Vatsa/Projects/AI-CRM/node_modules/@ts-morph/common/dist/typescript.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.[39m
+[2m> [22mtsgo -p tsconfig.lib.json --declaration --emitDeclarationOnly --noEmit false --outDir dist --rootDir src && npx tsc-alias -p tsconfig.lib.json --outDir dist
+
+[2m> [22mnpx rimraf --glob "dist/define/**/*.d.ts" "dist/define/**/*.d.ts.map" "dist/billing/**/*.d.ts" "dist/billing/**/*.d.ts.map" "dist/front-component/**/*.d.ts" "dist/front-component/**/*.d.ts.map" "dist/logic-function/**/*.d.ts" "dist/logic-function/**/*.d.ts.map" "dist/utils/**/*.d.ts" "dist/utils/**/*.d.ts.map"
+
+
+[2m> [22m[2mnx run[22m searm-front-component-renderer:generate-remote-dom-elements  [2m[existing outputs match the cache, left as is][22m
+
+
+[2m> [22m[2mnx run[22m searm-front-component-renderer:"sandbox:prebuild"  [2m[existing outputs match the cache, left as is][22m
+
+
+[2m> [22m[2mnx run[22m searm-front-component-renderer:build
+
+[2m> [22mnpx rimraf dist && npx vite build -c vite.config.ts
+
+[2m> [22mtsgo -p tsconfig.lib.json --declaration --emitDeclarationOnly --noEmit false --outDir dist --rootDir src && npx tsc-alias -p tsconfig.lib.json --outDir dist
+
+
+[2m> [22m[2mnx run[22m searm-front:start
+
+[linaria/wyw] Starting CSS pre-build
+[linaria/wyw] Pre-warm: 17383ms ⚠️  slow
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m3001[22m/[39m
+[2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[2m6:09:51 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [optimizer] scanning dependencies...
+[2m6:10:02 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [optimizer] bundling dependencies...
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/error-handler/components/AppRootErrorFallback.tsx 1369ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/onboarding/components/OnboardingPageLoader.tsx 295ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/loading/components/UserOrMetadataLoader.tsx 301ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/loading/components/LeftPanelSkeletonLoader.tsx 249ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/error-handler/components/AppFullScreenErrorFallback.tsx 340ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/onboarding/components/OnboardingStepPageLoader.tsx 318ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/page/components/AuthFlowLayout.tsx 307ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-index/components/RecordIndexSkeletonLoader.tsx 291ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/page/components/BlankLayout.tsx 280ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/page/components/DefaultLayout.tsx 272ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/page/components/PageCardHeader.tsx 200ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/auth/components/SubTitle.tsx 1552ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/onboarding/components/OnboardingVerifyLayout.tsx 1513ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/onboarding/components/OnboardingLayout.tsx 1505ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/auth/sign-in-up/components/EmailVerificationSent.tsx 1545ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/settings/domains/components/SettingPublicDomain.tsx 1386ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/field/display/components/GlobalFilePreviewModal.tsx 1466ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/navigation/bread-crumb/components/Breadcrumb.tsx 1284ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/navigation/navigation-drawer/components/NavigationDrawerCollapseButton.tsx 1265ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/onboarding/components/WelcomeOverlay/WelcomeOverlay.tsx 1560ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/components/SidePanelForDesktop.tsx 1481ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/feedback/snack-bar-manager/components/SnackBarProvider.tsx 1507ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/layout-customization/components/LayoutCustomizationBar.tsx 1453ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/modal/components/ConfirmationModal.tsx 270ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/feedback/dialog-manager/components/Dialog.tsx 250ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/settings/components/SettingsPageContainer.tsx 342ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/TextInput.tsx 320ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/settings/components/SaveAndCancelButtons/SaveAndCancelButtons.tsx 268ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/navigation/bread-crumb/components/MobileBreadcrumb.tsx 258ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/auth/components/Title.tsx 233ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/onboarding/components/OnboardingModalCircularIcon.tsx 244ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/onboarding/components/OnboardingHeader.tsx 532ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/onboarding/components/WelcomeOverlay/WelcomePersonChip.tsx 925ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/onboarding/components/StyledOnboardingActivationMessageEmphasis.ts 736ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/layout-customization/components/LayoutCustomizationBarMenuDropdown.tsx 792ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/components/SidePanelTopBar.tsx 406ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/navigation/components/MainNavigationDrawerTabsRow.tsx 309ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/navigation/navigation-drawer/components/NavigationDrawer.tsx 279ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/settings/components/SettingsNavigationDrawerItems.tsx 253ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/navigation/navigation-drawer/components/NavigationDrawerSection.tsx 241ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/settings/components/layout/SettingsSecondaryBar.tsx 208ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/navigation/navigation-drawer/components/NavigationDrawerScrollableContent.tsx 367ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/settings/components/SettingsDnsRecordsTable.tsx 280ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/navigation-menu-item/edit/side-panel/components/SidePanelNavigationMenuItemEditPage.tsx 1037ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/command-menu-item/edit/components/SidePanelCommandMenuItemEditPage.tsx 1004ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/pages/rich-text-page/components/SidePanelEditRichTextPage.tsx 694ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/pages/search/components/SidePanelSearchRecordsPage.tsx 667ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/pages/send-campaign-test/components/SidePanelSendCampaignTestPage.tsx 648ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/pages/common/components/SidePanelSubPageNavigationHeader.tsx 632ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/keyboard-shortcut-menu/components/KeyboardShortcutMenuStyles.tsx 625ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/NavigationDrawerAiChatContent.tsx 569ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/navigation/components/MainNavigationDrawerScrollableItems.tsx 552ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/TitleInput.tsx 570ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/components/SidePanelPageInfo.tsx 554ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/components/SidePanelBackButton.tsx 522ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/components/SidePanelTopBarRightCornerIcon.tsx 537ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/navigation/navigation-drawer/components/NavigationDrawerBackButton.tsx 509ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/navigation/navigation-drawer/components/CollapsibleNavigationDrawerSection.tsx 444ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/table/components/Table.tsx 428ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/table/components/TableRow.tsx 410ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/table/components/TableHeader.tsx 401ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/resizable-panel/components/ResizablePanelEdge.tsx 503ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/navigation/navigation-drawer/components/NavigationDrawerHeader.tsx 523ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatThreadsList.tsx 1183ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/components/SidePanelGroup.tsx 1117ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatTab.tsx 1092ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/components/SidePanelSubViewWithSearch.tsx 1070ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-merge/components/MergeRecordsContainer.tsx 1013ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/side-panel/components/SidePanelFooter.tsx 995ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/emails/components/EmailComposerFields.tsx 989ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/components/SidePanelGroupFormContainer.tsx 974ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-show/components/PageLayoutRecordPageRenderer.tsx 973ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-update-multiple/components/UpdateMultipleRecordsContainer.tsx 953ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/pages/workflow/step/view-run/components/SidePanelWorkflowRunViewStepContent.tsx 862ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/pages/page-layout/components/SidePanelFieldRelationTableFieldsSubPage.tsx 837ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/pages/page-layout/components/SidePanelFieldsLayoutSubPage.tsx 825ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/components/SidePanelContextChipIconWrapper.tsx 814ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/components/SidePanelContextRecordChipAvatars.tsx 809ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/settings/components/AdvancedSettingsContentWrapperWithDot.tsx 801ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/navigation/navigation-drawer/components/NavigationDrawerItem.tsx 794ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/overlay/components/OverlayContainer.tsx 649ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/navigation-menu-item/edit/side-panel/components/SidePanelEditColorOption.tsx 610ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/command-menu-item/edit/components/CommandMenuItemEditRecordSelectionDropdown.tsx 594ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-metadata/components/NavigationDrawerWorkspaceSectionSkeletonLoader.tsx 555ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/NavigationDrawerAiChatThreadSection.tsx 533ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/internal/AiChatSkeletonLoader.tsx 548ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/components/SidePanelPageInfoLayout.tsx 515ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/navigation/navigation-drawer/components/NavigationDrawerSectionTitle.tsx 431ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/components/SidePanelAskAiInfo.tsx 523ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/pages/search/components/SidePanelSearchRecordPreviewCard.tsx 736ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/draggable-list/components/DraggableList.tsx 663ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/components/SidePanelList.tsx 1302ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/navigation-menu-item/display/view/components/ObjectIconWithViewOverlay.tsx 875ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/command-menu-item/display/components/CommandListItemLoader.tsx 867ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/command-menu/components/CommandMenuButton.tsx 857ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/pages/page-layout/components/ChartTypeSelectionSection.tsx 847ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/InputHint.tsx 806ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/FormFieldInputInnerContainer.tsx 800ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/dropdown/components/DropdownMenuSeparator.tsx 773ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/dropdown/components/DropdownMenuSearchInput.tsx 768ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/pages/page-layout/components/record-table-settings/RecordTableSettingsSorts.tsx 770ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/components/SidePanelWorkflowSelectStepContainer.tsx 749ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/components/SidePanelWorkflowSelectStepTitle.tsx 778ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/pages/page-layout/components/record-table-settings/RecordTableSettingsFilters.tsx 742ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/pages/page-layout/components/ChartFiltersSettings.tsx 724ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/navigation-menu-item/edit/components/NavigationMenuItemBackButton.tsx 703ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/pages/page-layout/components/dropdown-content/PageLayoutDropdownContentContainer.tsx 1378ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/navigation-menu-item/display/link/components/LinkIconWithLinkOverlay.tsx 1258ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/navigation/navigation-drawer/components/MultiWorkspaceDropdown/internal/MultiWorkspaceDropdownDefaultComponents.tsx 1199ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/applications/components/AppChip.tsx 1161ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatEditorSection.tsx 1148ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/files/components/DropZone.tsx 1105ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatThreadListItem.tsx 1066ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatTabMessageList.tsx 1046ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/IconPicker.tsx 1242ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/page/components/ShowPageContainer.tsx 1009ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatThreadGroup.tsx 1001ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-merge/components/MergeRecordsFooter.tsx 993ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatQueuedMessages.tsx 1021ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-merge/components/MergeSettingsTab.tsx 981ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/TextVariableEditor.tsx 1809ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/FormAdvancedTextFieldInput.tsx 874ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/Select.tsx 817ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/pages/page-layout/components/record-table-settings/RecordTableSettingsFieldVisibility.tsx 837ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/iterator-action/components/WorkflowIteratorSubStepSwitcher.tsx 763ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-update-multiple/components/UpdateMultipleRecordsFooter.tsx 786ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/navigation/navigation-drawer/components/NavigationDrawerItemBreadcrumb.tsx 722ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsDetail.tsx 748ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-update-multiple/components/UpdateMultipleRecordsForm.tsx 850ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/emails/components/EmailAttachmentsField.tsx 892ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/NavigationDrawerAiChatThreadItem.tsx 420ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/field/components/FieldWidgetShowMoreButton.tsx 204ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/emails/recipients/components/EmailRecipientsFieldInput.tsx 1070ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/tab-list/components/TabList.tsx 1245ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/ai-agent-action/components/WorkflowEditActionAiAgent.tsx 871ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowEditActionFormBuilder.tsx 836ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/logic-function-action/components/WorkflowEditActionLogicFunction.tsx 753ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/http-request-action/components/WorkflowEditActionHttpRequest.tsx 713ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerDatabaseEventForm.tsx 668ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/pick-record-action/components/WorkflowEditActionPickRecord.tsx 626ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerManual.tsx 593ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/dropdown/components/DropdownMenuHeader/DropdownMenuHeader.tsx 563ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/dropdown/components/DropdownMenuHeader/internal/DropdownMenuHeaderLeftComponent.tsx 548ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/find-records-action/components/WorkflowEditActionFindRecords.tsx 802ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/utilities/drag-and-drop/components/DragDropItemDropLine.tsx 1223ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/side-panel/pages/page-layout/components/record-table-settings/RecordTableSettingsSortsContent.tsx 1181ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/advanced-filter/side-panel/components/AdvancedFilterSidePanelContainer.tsx 1151ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/navigation/navigation-drawer/components/MultiWorkspaceDropdown/internal/MultiWorkspacesDropdownStyles.tsx 1212ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/meta-types/display/components/ForbiddenFieldDisplay.tsx 1102ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatErrorUnderMessageList.tsx 1028ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatScrollToBottomButton.tsx 1004ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatBanner.tsx 986ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatStandaloneError.tsx 972ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/internal/AgentChatFileUploadButton.tsx 856ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatQuestionCard.tsx 957ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/internal/AgentChatContextPreview.tsx 844ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/internal/AiChatContextUsageButton.tsx 831ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/SelectControl.tsx 798ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsAiAgentDetail.tsx 767ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsEmailDetail.tsx 733ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/file/components/AttachmentChip.tsx 618ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/meta-types/display/components/RelationFromManyFieldDisplay.tsx 1093ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/fields/components/FieldsConfigurationGroupEditor.tsx 1217ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsEntries.tsx 745ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/advanced-text-editor/components/AdvancedTextEditor.tsx 825ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsCodeDetail.tsx 730ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsHttpRequestDetail.tsx 702ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/loading/components/SidePanelSkeletonLoader.tsx 1117ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/components/WorkflowStepBody.tsx 1060ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-variables/components/WorkflowTextEditorVariableChip.tsx 1070ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/FormSingleRecordPicker.tsx 1048ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/filters/components/WorkflowStepFilterBuilder.tsx 901ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/FormArrayFieldInput.tsx 873ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/if-else-action/components/WorkflowEditActionIfElseBody.tsx 808ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/advanced-text-editor/components/WorkflowSendEmailAttachments.tsx 771ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/FormBooleanFieldToggleInput.tsx 1008ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-title-cell/components/RecordTitleFullNameFieldDisplay.tsx 735ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-title-cell/components/RecordTitleCellTextFieldDisplay.tsx 720ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-title-cell/components/RecordTitleCellUuidFieldDisplay.tsx 702ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/ai-agent-action/components/WorkflowAiAgentPermissionsTab.tsx 594ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/dropdown/components/StyledDropdownMenuSubheader.tsx 693ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/code-action/components/WorkflowEditActionCodeFields.tsx 993ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/http-request-action/components/KeyValuePairInput.tsx 1228ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/http-request-action/components/BodyInput.tsx 1272ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/http-request-action/components/HttpRequestTestVariableInput.tsx 1296ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/FormFieldPlaceholder.tsx 1197ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowEditActionFormFieldSettings.tsx 1188ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/find-records-action/components/WorkflowFindRecordsSorts.tsx 1157ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/FormMultiRecordPicker.tsx 1141ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/expandable-list/components/ExpandableList.tsx 955ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/field/display/components/DateTimeDisplay.tsx 934ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatMessage.tsx 897ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatInitialLoadingIndicator.tsx 858ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/suggested-prompts/AiChatSuggestedPrompts.tsx 841ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/FormMultiSelectFieldInput.tsx 707ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/FormMorphRelationToOneFieldInput.tsx 653ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/advanced-filter/side-panel/components/AdvancedFilterSidePanelRecordFilterColumn.tsx 628ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/advanced-filter/side-panel/components/AdvancedFilterSidePanelRecordFilterGroupColumn.tsx 600ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/expandable-list/components/ExpandedFieldDisplay.tsx 1311ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/fullscreen/components/FullScreenModal.tsx 1213ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/settings/usage/components/UsageLabelValueItem.tsx 638ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsToolCallRow.tsx 564ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/internal/ContextUsageProgressRing.tsx 704ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/fields/components/FieldsConfigurationGroupDraggableHeader.tsx 478ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/fields/components/FieldsConfigurationGroupRenameInput.tsx 506ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/advanced-text-editor/components/TextBubbleMenu.tsx 452ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/utilities/drag-and-drop/components/DragDropItemSortableHandle.tsx 417ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/BaseChip.tsx 376ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-run/observability/workflowRunStepLogsStyles.ts 753ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/tab-list/components/TabMoreButton.tsx 683ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/VariableChipStandalone.tsx 923ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/internal/date/components/DateTimePicker.tsx 913ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/internal/date/components/DateTimePickerInput.tsx 851ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/field/input/components/TextInput.tsx 812ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-title-cell/components/RecordTitleDoubleTextInput.tsx 796ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-variables/components/WorkflowVariablesDropdown.tsx 953ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/show-page/components/ShowPageSummaryCard.tsx 697ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/components/RecordPageAddWidgetSection.tsx 636ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/components/PageLayoutLeftPanel.tsx 582ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/components/StandaloneWidgetPlaceholder.tsx 660ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/ai-agent-action/components/WorkflowOutputSchemaBuilder.tsx 846ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/components/WorkflowStepExecutionResult.tsx 783ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/TextArea.tsx 766ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/SettingsAgentModelCapabilities.tsx 797ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/components/PageLayoutVerticalListEditor.tsx 1074ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/FormSingleRecordFieldChip.tsx 564ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/filters/components/WorkflowStepFilterAddRootStepFilterButton.tsx 522ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/filters/components/WorkflowStepFilterColumn.tsx 513ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/filters/components/WorkflowStepFilterGroupColumn.tsx 499ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/if-else-action/components/WorkflowIfElseBranchEditor.tsx 486ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/field/display/components/UploadFileChip.tsx 428ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/meta-types/input/components/MultiItemBaseInput.tsx 469ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/advanced-text-editor/extensions/resizable-image/ResizableImageView.tsx 406ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/FormNestedFieldInputContainer.tsx 392ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/internal/date/components/DatePicker.tsx 387ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/internal/date/components/DatePickerInput.tsx 345ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/components/PageLayoutTabList.tsx 1109ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/components/PageLayoutGridLayout.tsx 1297ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/expandable-list/components/ExpandedListDropdown.tsx 441ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatAssistantMessageRenderer.tsx 386ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/internal/date/components/TimeZoneAbbreviation.tsx 398ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/components/LightCopyIconButton.tsx 406ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/FormMultiRecordFieldChips.tsx 365ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/advanced-filter/side-panel/components/AdvancedFilterSidePanelColumn.tsx 350ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/advanced-filter/side-panel/components/AdvancedFilterSidePanelLogicalOperatorCell.tsx 343ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/advanced-filter/side-panel/components/AdvancedFilterSidePanelRecordFilterGroupChildren.tsx 276ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatErrorMessage.tsx 258ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/advanced-text-editor/components/BubbleMenuIconButton.tsx 238ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/layout/page/components/PageHeader.tsx 320ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/internal/date/components/DateTimePickerHeader.tsx 295ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/internal/date/components/StyledDatePickerContainer.tsx 253ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/internal/date/components/RelativeDatePickerHeader.tsx 231ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/internal/date/components/RelativeDateTimeRangeText.tsx 206ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/filters/components/WorkflowStepFilterLogicalOperatorCell.tsx 609ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/filters/components/WorkflowStepFilterGroupChildren.tsx 576ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/internal/date/components/DatePickerHeader.tsx 556ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/components/PageLayoutGridResizeHandle.tsx 651ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowFormFieldSettingsRecordPicker.tsx 585ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowFormFieldSettingsText.tsx 561ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowFormFieldSettingsSelect.tsx 543ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowFormFieldSettingsNumber.tsx 514ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/relation-picker/components/CreateNewButton.tsx 925ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/FormRelativeDatePicker.tsx 854ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/FormWorkspaceMemberFilterValueInput.tsx 838ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/components/PageLayoutGridOverlay.tsx 1125ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatQuestionStatusRenderer.tsx 523ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/RoutingStatusDisplay.tsx 384ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/CodeExecutionDisplay.tsx 351ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/ToolStepRenderer.tsx 314ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/AiChatCompactionIndicator.tsx 494ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/components/PageLayoutTabListReorderableOverflowDropdown.tsx 949ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/ThinkingStepsDisplay.tsx 528ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/components/PageLayoutTabListVisibleTabs.tsx 992ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/MarkdownCodeBlock.tsx 376ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/LazyMarkdownRendererStyledComponents.tsx 360ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/form-types/components/FormWorkspaceMemberFilterValueInputTrigger.tsx 299ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/components/PageLayoutTabMenuItemSelectAvatar.tsx 270ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/RoutingDebugDisplay.tsx 255ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/ShimmeringText.tsx 262ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ai/components/TerminalOutput.tsx 200ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/fields/components/FieldsWidget.tsx 273ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/email-thread/components/EmailThreadComposer.tsx 876ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/calendar/components/CalendarEventsCard.tsx 847ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/emails/components/EmailsCard.tsx 823ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/components/CustomResolverFetchMoreLoader.tsx 790ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/email-thread/components/EmailThreadIntermediaryMessages.tsx 855ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/emails/components/CampaignDetailsFields.tsx 769ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/field/components/FieldWidgetMorphRelationField.tsx 713ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/field/components/FieldWidgetMorphRelationCard.tsx 636ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/field/components/FieldWidgetRelationCard.tsx 610ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/field/components/FieldWidgetRelationField.tsx 566ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/field/components/FieldWidgetJunctionRelationCard.tsx 743ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/field/components/FieldWidgetRelationTable.tsx 580ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/field/components/FieldWidgetTextEditor.tsx 557ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/field/components/FieldWidgetRichTextEditor.tsx 463ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/field/components/FieldWidgetJunctionRelationField.tsx 784ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-diagram/components/WorkflowRunCard.tsx 448ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/fields/components/FieldsWidgetGroupContainer.tsx 392ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-diagram/components/WorkflowVersionCard.tsx 426ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/timeline-activities/components/TimelineCard.tsx 371ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/emails/components/EmailThreadMessageBody.tsx 599ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/emails/components/EmailThreadMessageBodyPreview.tsx 590ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/emails/components/EmailThreadMessageLayout.tsx 586ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/emails/components/EmailThreadMessageReceivers.tsx 579ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/emails/components/EmailThreadMessageSender.tsx 558ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table-widget/components/RecordTableWidget.tsx 546ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-calendar-widget/components/RecordCalendarWidget.tsx 530ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-board-widget/components/RecordBoardWidget.tsx 496ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/emails/components/EmailThreadNotShared.tsx 569ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/notes/components/NoteList.tsx 485ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/files/components/AttachmentList.tsx 477ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/components/ActivityList.tsx 395ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/emails/components/EmailThreadPreview.tsx 388ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/page-layout/widgets/field/components/FieldWidgetInlineCellContainer.tsx 492ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-diagram/components/WorkflowDiagramCanvasBase.tsx 475ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellHoveredPortalContent.tsx 417ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellDisplayMode.tsx 406ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/meta-types/input/components/PhonesFieldInput.tsx 631ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/meta-types/input/components/RawJsonFieldInput.tsx 573ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field/ui/meta-types/input/components/RichTextFieldInput.tsx 546ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/calendar/components/CalendarDayCardContent.tsx 502ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field-list/record-detail-section/components/RecordDetailRecordsListItemContainer.tsx 472ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/tasks/components/TaskList.tsx 518ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/notes/components/NoteTile.tsx 381ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-calendar/components/RecordCalendar.tsx 415ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/components/ParticipantChip.tsx 354ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/files/components/AttachmentRow.tsx 280ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-diagram/workflow-nodes/components/WorkflowNodeContainer.tsx 615ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-diagram/workflow-nodes/components/WorkflowNodeTitle.tsx 570ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-diagram/workflow-edges/components/WorkflowDiagramEdgeButtonGroup.tsx 548ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-diagram/workflow-edges/components/WorkflowDiagramEdgeLabel.tsx 541ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-diagram/workflow-nodes/components/WorkflowNodeIconContainer.tsx 524ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-diagram/workflow-edges/components/WorkflowDiagramEdgeV2Container.tsx 504ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellContainer.tsx 498ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/components/ActivityTargetChips.tsx 471ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/field/input/components/AddressInput.tsx 462ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/field/input/components/CurrencyInput.tsx 379ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/field/input/components/DoubleTextInput.tsx 424ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/field/input/components/TextAreaInput.tsx 355ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-diagram/workflow-nodes/components/WorkflowRunDiagramStepNode.tsx 333ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/tasks/components/TaskRow.tsx 290ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/input/components/internal/phone/components/PhoneCountryPickerDropdownButton.tsx 270ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/calendar/components/CalendarEventRow.tsx 253ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-calendar/components/RecordCalendarTopBar.tsx 228ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-field-list/record-detail-section/components/RecordDetailSectionContainer.tsx 294ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/workflow/workflow-diagram/workflow-nodes/components/WorkflowDiagramHandleSource.tsx 624ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-board/components/RecordBoardColumns.tsx 321ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-calendar/time-grid/components/RecordCalendarTimeGrid.tsx 396ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-header/components/RecordTableHeader.tsx 351ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-calendar/month/components/RecordCalendarMonthBodyWeek.tsx 410ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/timeline-activities/rows/activity/components/EventRowActivity.tsx 324ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/timeline-activities/rows/message/components/EventRowMessage.tsx 290ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/timeline-activities/rows/main-object/components/EventRowMainObject.tsx 267ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/timeline-activities/rows/calendar/components/EventRowCalendarEvent.tsx 345ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-board/record-board-column/components/RecordBoardColumn.tsx 682ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-calendar/time-grid/components/RecordCalendarTimeGridAllDayCell.tsx 244ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-calendar/week/components/RecordCalendarWeekEvent.tsx 219ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/components/RecordTableRecordGroupRows.tsx 578ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-section/components/RecordTableRecordGroupAddNewGroup.tsx 539ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-board/record-board-card/components/RecordBoardCard.tsx 316ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/ui/utilities/drag-and-drop/components/DragDropItemDropTarget.tsx 248ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-board/components/RecordBoardAddGroupColumn.tsx 217ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/timeline-activities/rows/components/EventRowStyles.tsx 278ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/timeline-activities/rows/components/EventRowItem.tsx 269ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-section/components/RecordTableRecordGroupSection.tsx 1101ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-header/components/RecordTableHeaderDragDropColumn.tsx 346ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-header/components/RecordTableHeaderCheckboxColumn.tsx 479ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-calendar/month/components/RecordCalendarMonthBodyDay.tsx 233ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-footer/components/RecordTableAggregateFooter.tsx 1316ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/timeline-activities/rows/calendar/components/EventCardCalendarEvent.tsx 201ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/components/RecordTableStyleWrapper.tsx 2937ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-board/record-board-column/components/RecordBoardColumnCardsContainer.tsx 506ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-card/components/RecordCard.tsx 419ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-calendar/record-calendar-card/components/RecordCalendarCard.tsx 451ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-cell/components/RecordTableCellLoading.tsx 396ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-cell/components/RecordTableCellDragAndDrop.tsx 562ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-cell/components/RecordTableCellCheckbox.tsx 589ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-board/record-board-column/components/RecordBoardColumnHeader.tsx 625ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-board/record-board-card/components/RecordBoardCardMultiDragStack.tsx 383ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-board/record-board-card/components/RecordBoardCardHeader.tsx 373ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-header/components/RecordTableHeaderLastEmptyColumn.tsx 507ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-header/components/RecordTableColumnHead.tsx 349ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-header/components/RecordTableHeaderLabelIdentifierCellPlusButton.tsx 304ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-row/components/RecordTableGroupSectionLastDynamicFillingCell.tsx 272ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-header/components/RecordTableHeaderEmptyLastColumn.tsx 704ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-header/components/RecordTableHeaderAddColumnButton.tsx 680ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-header/components/RecordTableHeaderCellContainer.tsx 483ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-row/components/RecordTableAddButtonPlaceholderCell.tsx 447ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/timeline-activities/rows/message/components/EventCardMessageForbidden.tsx 329ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/activities/timeline-activities/rows/message/components/EventCardMessageBodyNotShared.tsx 320ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-footer/components/RecordTableAggregateFooterCell.tsx 468ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-row/components/RecordTableRowDiv.tsx 250ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-cell/components/RecordTableCellFocusedPortalContent.tsx 532ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-cell/components/RecordTableCellHoveredPortalContent.tsx 552ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-board/record-board-column/components/RecordBoardColumnNewRecordButton.tsx 575ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-calendar/record-calendar-card/components/RecordCalendarCardHeader.tsx 496ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-board/record-board-column/components/RecordBoardColumnLoadingSkeletonCards.tsx 558ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-row/components/RecordTableActionRow.tsx 762ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-row/components/RecordTableRowDragOverlayContent.tsx 2169ms
+[linaria/wyw] slow: D:/Files/Vatsa/Projects/AI-CRM/packages/searm-front/src/modules/object-record/record-table/record-table-row/components/RecordTableDraggableTr.tsx 505ms
+[2m6:17:26 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/modules/ai/components/AiChatEditorSection.tsx, /src/modules/ai/components/AiChatMessage.tsx, /src/modules/workflow/workflow-steps/workflow-actions/ai-agent-action/components/WorkflowOutputSchemaBuilder.tsx, /src/modules/ai/components/AiChatAssistantMessageRenderer.tsx, /src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsToolCallRow.tsx, /src/modules/ai/components/ToolStepRenderer.tsx, /src/modules/ai/components/ThinkingStepsDisplay.tsx[22m
+[2m6:17:26 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mD:/Files/Vatsa/Projects/AI-CRM/packages/searm-shared/dist/AppLocales-CxfCC4eU.mjs[22m
+[2m6:17:26 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mD:/Files/Vatsa/Projects/AI-CRM/packages/searm-shared/dist/FieldMetadataType-PppCGM82.mjs[22m
+[2m6:17:26 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mD:/Files/Vatsa/Projects/AI-CRM/packages/searm-shared/dist/constants-BCTvFf0z.mjs[22m
+[2m6:17:26 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/modules/client-config/components/ClientConfigProviderEffect.tsx, /src/modules/information-banner/components/enterprise/InformationBannerNonProductionInstance.tsx, /src/modules/command-menu-item/confirmation-modal/components/CommandMenuConfirmationModalManager.tsx, /src/modules/metadata-store/effect-components/UserMetadataProviderInitialEffect.tsx, /src/modules/auth/components/VerifyEmailEffect.tsx, /src/modules/auth/effect-components/SignOutOnOtherTabSignOutEffect.tsx and 169 more[22m
+[2m6:17:26 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/modules/layout-customization/components/LayoutCustomizationBarResetConfirmationModal.tsx, /src/modules/layout-customization/components/LayoutCustomizationBar.tsx, /src/modules/command-menu-item/engine-command/record/single-record/dashboard/components/SaveDashboardSingleRecordCommand.tsx, /src/modules/command-menu-item/engine-command/record/components/ExportRecordsCommand.tsx, /src/modules/object-record/record-table/record-table-header/components/RecordTableHeader.tsx and 40 more[22m
+[2m6:17:26 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/modules/command-menu-item/display/components/CommandMenuItemRenderer.tsx, /src/modules/side-panel/components/SidePanelWorkflowStepInfo.tsx, /src/modules/workflow/workflow-steps/workflow-actions/logic-function-action/components/WorkflowEditActionLogicFunction.tsx, /src/modules/workflow/workflow-diagram/workflow-nodes/components/WorkflowDiagramStepNodeEditableContent.tsx, /src/modules/workflow/workflow-diagram/workflow-nodes/components/WorkflowDiagramStepNodeReadonly.tsx and 19 more[22m
+[2m6:17:26 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/modules/activities/timeline-activities/components/EventList.tsx, /src/modules/activities/timeline-activities/rows/components/EventIconDynamicComponent.tsx, /src/modules/activities/timeline-activities/rows/activity/components/EventRowActivity.tsx[22m
+[2m6:17:26 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mD:/Files/Vatsa/Projects/AI-CRM/packages/searm-shared/dist/isDefined-Dtu5EYqP.mjs[22m
+[2m6:17:26 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mD:/Files/Vatsa/Projects/AI-CRM/packages/searm-shared/dist/SourceLocale-CfovCqKy.mjs[22m
+[2m6:17:26 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/modules/app/components/App.tsx, /src/modules/metadata-store/effect-components/UserMetadataProviderInitialEffect.tsx, /src/modules/auth/components/VerifyEmailEffect.tsx, /src/modules/auth/effect-components/SignOutOnOtherTabSignOutEffect.tsx, /src/modules/auth/components/VerifyLoginTokenEffect.tsx, /src/modules/information-banner/components/impersonate/InformationBannerIsImpersonating.tsx, /src/modules/settings/components/SettingsNavigationDrawerItems.tsx and 6 more[22m
+[2m6:17:26 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/modules/layout-customization/components/LayoutCustomizationBarResetConfirmationModal.tsx, /src/modules/layout-customization/components/LayoutCustomizationBar.tsx, /src/modules/command-menu-item/engine-command/record/single-record/dashboard/components/SaveDashboardSingleRecordCommand.tsx, /src/modules/command-menu-item/engine-command/record/components/ExportRecordsCommand.tsx, /src/modules/object-record/record-table/record-table-header/components/RecordTableHeader.tsx and 16 more[22m
+[2m6:17:26 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/modules/command-menu-item/engine-command/record/single-record/workflow/components/TidyUpWorkflowSingleRecordCommand.tsx, /src/modules/workflow/workflow-steps/workflow-actions/if-else-action/components/WorkflowEditActionIfElseBody.tsx, /src/modules/workflow/workflow-diagram/components/WorkflowDiagramRightClickCommandMenu.tsx, /src/modules/side-panel/pages/workflow/trigger-type/components/SidePanelWorkflowSelectTriggerTypeContent.tsx and 93 more[22m
+[2m6:17:26 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mD:/Files/Vatsa/Projects/AI-CRM/packages/searm-shared/dist/types-rcDbwauA.mjs[22m
+[2m6:17:26 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/modules/app/components/I18nActivationGate.tsx, /src/modules/app/components/DomainShell.tsx, /src/modules/app/hooks/useCreateWorkspaceAppRouter.tsx, /src/modules/app/hooks/useCreateRootAppRouter.tsx, /src/modules/onboarding/components/OnboardingPageLoader.tsx, /src/modules/apollo/components/ApolloProvider.tsx, /src/modules/object-metadata/components/ApolloCoreProvider.tsx, /src/modules/settings/admin-panel/apollo/components/ApolloAdminProvider.tsx and 558 more[22m
+[2m6:17:26 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerWebhookForm.tsx, /src/modules/workflow/workflow-steps/workflow-actions/logic-function-action/components/WorkflowEditActionLogicFunction.tsx, /src/modules/side-panel/pages/workflow/step/edit/components/SidePanelWorkflowEditStepContent.tsx, /src/modules/side-panel/pages/workflow/trigger-type/components/SidePanelWorkflowSelectTriggerTypeContent.tsx, /src/modules/side-panel/components/SidePanelWorkflowStepInfo.tsx and 11 more[22m
+Task "searm-front:start" is continuous but exited with code 1073807364
+
+[2m[31m[39m[22m
+
+[7m[1m[31m NX [39m[22m[27m  [31mRunning target [1mstart[22m for project searm-front and [1m11[22m tasks it depends on failed[39m
+
+[2mFailed tasks:[22m
+
+[2m-[22m searm-front:start
+
+[2mHint: run the command with[22m --verbose [2mfor more details.[22m
+

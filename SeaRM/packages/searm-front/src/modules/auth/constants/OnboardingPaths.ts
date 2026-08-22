@@ -1,0 +1,10 @@
+import { AppPath } from 'searm-shared/types';
+
+export const ONBOARDING_PATHS = [
+  AppPath.WorkspaceActivation,
+  AppPath.CreateProfile,
+  AppPath.SyncEmails,
+  AppPath.InstallApps,
+  AppPath.InviteTeam,
+  AppPath.BookCall,
+];

@@ -1,0 +1,17 @@
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+
+import { EventLogEmitterModule } from 'src/engine/core-modules/event-logs/emit/event-log-emitter.module';
+import { CustomDomainManagerService } from 'src/engine/core-modules/domain/custom-domain-manager/services/custom-domain-manager.service';
+import { PublicDomainEntity } from 'src/engine/core-modules/public-domain/public-domain.entity';
+import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([WorkspaceEntity, PublicDomainEntity]),
+    EventLogEmitterModule,
+  ],
+  providers: [CustomDomainManagerService],
+  exports: [CustomDomainManagerService],
+})
+export class CustomDomainManagerModule {}

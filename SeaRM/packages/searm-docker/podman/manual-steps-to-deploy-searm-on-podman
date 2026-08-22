@@ -1,0 +1,71 @@
+#!/bin/bash
+set -e
+if [ ! -f "$(dirname "$0")/.env" ]; then
+    echo "Error: .env file not found"
+    exit 1
+fi
+source "$(dirname "$0")/.env"
+
+## steps to cleanup and start over from scratch - useful when testing
+#podman pod stop searm-pod
+#podman pod rm searm-pod
+#podman volume rm searm-db-data searm-server-data searm-redis-data
+# end of cleanup
+
+podman volume create searm-db-data
+podman volume create searm-server-data
+podman volume create searm-redis-data
+
+podman pod create --name searm-pod -p 127.0.0.1:8080:3000
+
+podman run -d --pod searm-pod --name searm-db \
+  -e POSTGRES_DB=searm \
+  -e POSTGRES_USER=searm \
+  -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+  -v searm-db-data:/var/lib/postgresql/data:Z \
+  docker.io/library/postgres:16
+
+podman run -d --pod searm-pod --name searm-redis \
+  -v searm-redis-data:/data:Z \
+  docker.io/library/redis:latest
+
+podman run -d --pod searm-pod --name searm-server \
+  -e NODE_PORT=3000 \
+  -e SERVER_URL="$SERVER_URL" \
+  -e PG_DATABASE_URL="postgresql://searm:$POSTGRES_PASSWORD@searm-db:5432/searm" \
+  -e REDIS_URL="redis://searm-redis:6379" \
+  -e APP_SECRET="$APP_SECRET" \
+  -e NODE_ENV=production \
+  -e LOG_LEVEL=info \
+  -v searm-server-data:/app/docker-data:Z \
+  docker.io/searmcrm/searm:latest
+
+podman run -d --pod searm-pod --name searm-worker \
+  --init \
+  -e SERVER_URL="$SERVER_URL" \
+  -e PG_DATABASE_URL="postgresql://searm:$POSTGRES_PASSWORD@searm-db:5432/searm" \
+  -e REDIS_URL="redis://searm-redis:6379" \
+  -e APP_SECRET="$APP_SECRET" \
+  -e DISABLE_DB_MIGRATIONS=true \
+  -e NODE_ENV=production \
+  -e LOG_LEVEL=info \
+  -v searm-server-data:/app/docker-data:Z \
+  docker.io/searmcrm/searm:latest \
+  yarn worker:prod
+
+# wait some time, check status
+sleep 30
+podman ps --pod -f name=searm-pod
+
+
+mkdir -p ~/.config/systemd/user
+if [ ! -f "searmcrm.service" ]; then
+    echo "Error: searmcrm.service file not found"
+    exit 1
+fi
+cp searmcrm.service ~/.config/systemd/user
+
+systemctl --user daemon-reload
+systemctl --user enable searmcrm.service
+systemctl --user start searmcrm.service
+
