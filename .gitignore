@@ -1,0 +1,12 @@
+# Reference CRM/ERP sources kept locally for feature extraction only.
+# Each carries its own .git and its own upstream license - never vendored,
+# never redistributed from this repo.
+/ref/
+
+# Local archival bundles of those reference repos
+*.bundle
+*.bundle.lock
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
