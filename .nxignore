@@ -1,3 +1,0 @@
-# The ERP is a separate Bun workspace with its own toolchain and licence.
-# Nx must never infer projects from it. See erp/README.md.
-erp

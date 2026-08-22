@@ -1,1 +1,0 @@
-export { WhySearmEditorials } from './WhySearmEditorials';

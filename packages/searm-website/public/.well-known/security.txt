@@ -1,5 +1,0 @@
-Contact: https://github.com/Vatsa10/Harbour/issues/new
-Contact: security@searm.com
-Preferred-Languages: en
-Canonical: https://searm.com/.well-known/security.txt
-Policy: https://github.com/Vatsa10/Harbour/security/policy

@@ -1,1 +1,0 @@
-export const DEFAULT_API_URL_NAME = 'SEARM_API_URL';
