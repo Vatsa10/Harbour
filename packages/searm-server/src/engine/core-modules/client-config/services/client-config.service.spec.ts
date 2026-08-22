@@ -72,11 +72,6 @@ describe('ClientConfigService', () => {
         .spyOn(searmConfigService, 'get')
         .mockImplementation((key: string) => {
           const mockValues: Record<string, any> = {
-            IS_BILLING_ENABLED: true,
-            BILLING_PLAN_REQUIRED_LINK: 'https://billing.example.com',
-            BILLING_FREE_TRIAL_WITH_CREDIT_CARD_DURATION_IN_DAYS: 30,
-            BILLING_FREE_TRIAL_WITHOUT_CREDIT_CARD_DURATION_IN_DAYS: 7,
-            BILLING_STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
             AUTH_GOOGLE_ENABLED: true,
             AUTH_PASSWORD_ENABLED: true,
             AUTH_MICROSOFT_ENABLED: false,
@@ -95,7 +90,6 @@ describe('ClientConfigService', () => {
             MUTATION_MAXIMUM_AFFECTED_RECORDS: 1000,
             ONBOARDING_IMPORT_CONTACTS_CREDITS_REWARD: 2_000_000,
             ONBOARDING_INVITE_TEAM_CREDITS_REWARD_PER_USER: 3_000_000,
-            BILLING_FREE_WORKFLOW_CREDITS_FOR_TRIAL_PERIOD_WITH_CREDIT_CARD: 5_000_000,
             ONBOARDING_INSTALL_APPS_CREDITS_REWARD_PER_APP: 1_000_000,
             IS_ATTACHMENT_PREVIEW_ENABLED: true,
             ANALYTICS_ENABLED: true,
@@ -127,19 +121,7 @@ describe('ClientConfigService', () => {
       expect(result).toEqual({
         appVersion: '1.0.0',
         billing: {
-          isBillingEnabled: true,
-          billingUrl: 'https://billing.example.com',
-          stripePublishableKey: 'pk_test_123',
-          trialPeriods: [
-            {
-              duration: 30,
-              isCreditCardRequired: true,
-            },
-            {
-              duration: 7,
-              isCreditCardRequired: false,
-            },
-          ],
+          isBillingEnabled: false,
         },
         aiModels: [],
         authProviders: {
