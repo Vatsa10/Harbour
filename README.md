@@ -75,7 +75,6 @@ Then ship it to your workspace:
 npx searm app:publish --private
 ```
 
-> Note: the CLI binary and SDK package names above (`searm`, `searm-sdk`) are inherited from the upstream Twenty toolchain and have not yet been renamed in this fork — see `docs/superpowers/rebrand-searm-workflow.js` for the rename plan. Product branding, docs, and UI have been rebranded to SeaRM.
 
 See the upstream [app development guide](https://docs.searm.com/developers/extend/apps/getting-started) for objects, views, agents, and logic functions (applies to this fork's toolchain as well).
 
