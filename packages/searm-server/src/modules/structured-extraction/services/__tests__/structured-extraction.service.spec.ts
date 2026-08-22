@@ -90,7 +90,12 @@ describe('StructuredExtractionService', () => {
     generateTextMock.mockResolvedValue({
       text: JSON.stringify({
         claims: [
-          { fieldName: 'jobTitle', value: 'Head of Sales', snippet: SNIPPET },
+          {
+            kind: 'FIELD',
+            fieldName: 'jobTitle',
+            value: 'Head of Sales',
+            snippet: SNIPPET,
+          },
         ],
       }),
     });
@@ -214,6 +219,7 @@ describe('StructuredExtractionService', () => {
       text: JSON.stringify({
         claims: [
           {
+            kind: 'FIELD',
             fieldName: 'jobTitle',
             value: 'Chief Executive Officer',
             snippet: 'I was promoted to CEO last week.',
@@ -233,8 +239,13 @@ describe('StructuredExtractionService', () => {
     generateTextMock.mockResolvedValue({
       text: JSON.stringify({
         claims: [
-          { fieldName: 'salary', value: '250000', snippet: SNIPPET },
-          { fieldName: 'jobTitle', value: 'Head of Sales', snippet: SNIPPET },
+          { kind: 'FIELD', fieldName: 'salary', value: '250000', snippet: SNIPPET },
+          {
+            kind: 'FIELD',
+            fieldName: 'jobTitle',
+            value: 'Head of Sales',
+            snippet: SNIPPET,
+          },
         ],
       }),
     });
@@ -323,5 +334,149 @@ describe('StructuredExtractionService', () => {
     expect(
       proposalCreationService.createFromExtraction.mock.calls[0][0].sourceKey,
     ).toBe('extraction:calendarEvent:event-1');
+  });
+
+  // GAP 1: the extraction pipeline previously only covered job-change (FIELD)
+  // claims. This proves the other three charter-named categories —
+  // commitments, risks, next actions — are extracted as NOTE claims, cited
+  // to evidence, and proposed rather than written.
+  describe('NOTE claims (commitments, risks, next actions)', () => {
+    const NOTE_SNIPPET = 'I will send over the updated MSA by Friday.';
+
+    // The outer fixture's message body only carries the FIELD-claim
+    // (job-title) sentence. NOTE claims are verified verbatim against the
+    // source too, so the source content here must actually contain the
+    // sentence being claimed — otherwise every case would be indistinguishable
+    // from the "snippet not verbatim in source" test below.
+    beforeEach(() => {
+      repositories.message.findOne.mockResolvedValue({
+        id: 'message-1',
+        subject: 'Update',
+        text: `${BODY} ${NOTE_SNIPPET}`,
+        receivedAt: new Date('2026-01-02T00:00:00.000Z'),
+      });
+    });
+
+    it.each([
+      ['COMMITMENT' as const],
+      ['RISK' as const],
+      ['NEXT_ACTION' as const],
+    ])(
+      'extracts a %s claim as a proposed Note record with evidence citing the source',
+      async (category) => {
+        generateTextMock.mockResolvedValue({
+          text: JSON.stringify({
+            claims: [
+              {
+                kind: 'NOTE',
+                category,
+                value: 'Send over the updated MSA by Friday.',
+                snippet: NOTE_SNIPPET,
+              },
+            ],
+          }),
+        });
+
+        const result = await extractMessage();
+
+        expect(result.status).toBe('PROPOSED');
+        expect(result.claimCount).toBe(1);
+
+        // Evidence is recorded, cited to the message, before the proposal —
+        // the Evidence contract applies identically to NOTE claims.
+        expect(evidenceRecordingService.recordEvidence).toHaveBeenCalledWith(
+          expect.objectContaining({
+            objectNameSingular: 'person',
+            recordId: 'person-1',
+            sourceType: 'EMAIL_MESSAGE',
+            sourceLocator: 'message:message-1',
+            // Freeform prose extracted by the model is inherently
+            // interpretive: it must never be asserted as SERVER-observed.
+            assertedBy: 'MODEL',
+            payload: {
+              fieldName: `note:${category}`,
+              value: 'Send over the updated MSA by Friday.',
+              snippet: NOTE_SNIPPET,
+            },
+          }),
+        );
+
+        // It proposes — never writes a Person field directly — and is
+        // explicitly a create, not an assertion of an authoritative fact.
+        expect(
+          proposalCreationService.createFromExtraction,
+        ).toHaveBeenCalledWith(
+          expect.objectContaining({
+            items: [
+              expect.objectContaining({
+                actionType: 'CREATE_RECORD',
+                objectNameSingular: 'note',
+              }),
+            ],
+          }),
+        );
+      },
+    );
+
+    it('never treats a NOTE claim as an authoritative fact eligible for AUTO strength', async () => {
+      generateTextMock.mockResolvedValue({
+        text: JSON.stringify({
+          claims: [
+            {
+              kind: 'NOTE',
+              category: 'RISK',
+              value: 'Budget approval is stalled.',
+              snippet: NOTE_SNIPPET,
+            },
+          ],
+        }),
+      });
+
+      await extractMessage();
+
+      const [call] = evidenceRecordingService.recordEvidence.mock.calls;
+
+      expect(call[0].assertedBy).toBe('MODEL');
+    });
+
+    it('drops a NOTE claim whose category is not allow-listed', async () => {
+      generateTextMock.mockResolvedValue({
+        text: JSON.stringify({
+          claims: [
+            {
+              kind: 'NOTE',
+              category: 'SALARY_GUESS',
+              value: 'They probably earn a lot.',
+              snippet: NOTE_SNIPPET,
+            },
+          ],
+        }),
+      });
+
+      const result = await extractMessage();
+
+      expect(result.status).toBe('NO_CLAIMS');
+      expect(proposalCreationService.createFromExtraction).not.toHaveBeenCalled();
+    });
+
+    it('drops a NOTE claim whose snippet is not verbatim in the source', async () => {
+      generateTextMock.mockResolvedValue({
+        text: JSON.stringify({
+          claims: [
+            {
+              kind: 'NOTE',
+              category: 'COMMITMENT',
+              value: 'Send the contract tomorrow.',
+              snippet: 'This sentence never appears in the body.',
+            },
+          ],
+        }),
+      });
+
+      const result = await extractMessage();
+
+      expect(result.status).toBe('NO_CLAIMS');
+      expect(evidenceRecordingService.recordEvidence).not.toHaveBeenCalled();
+    });
   });
 });

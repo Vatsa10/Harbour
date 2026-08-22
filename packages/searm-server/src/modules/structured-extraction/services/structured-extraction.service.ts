@@ -20,12 +20,22 @@ import { type PersonWorkspaceEntity } from 'src/modules/person/standard-objects/
 import { AiExtractionExclusionService } from 'src/modules/structured-extraction/services/ai-extraction-exclusion.service';
 import {
   EXTRACTABLE_PERSON_FIELDS,
+  NOTE_EXTRACTION_CATEGORIES,
   type ExtractablePersonField,
   type ExtractionClaim,
   type ExtractionRequest,
   type ExtractionResult,
   type ExtractionSourceKind,
+  type FieldExtractionClaim,
+  type NoteExtractionCategory,
+  type NoteExtractionClaim,
 } from 'src/modules/structured-extraction/types/structured-extraction.type';
+
+const NOTE_CATEGORY_LABEL: Record<NoteExtractionCategory, string> = {
+  COMMITMENT: 'Commitment',
+  RISK: 'Risk',
+  NEXT_ACTION: 'Next action',
+};
 
 const EXTRACTOR_NAME = 'structured-extraction/v1';
 
@@ -107,10 +117,14 @@ export class StructuredExtractionService {
       return { status: 'NO_MODEL', proposalId: null, claimCount: 0 };
     }
 
-    // A claim that restates what the record already says is not a change and
-    // must never reach a human's review queue.
+    // A FIELD claim that restates what the record already says is not a
+    // change and must never reach a human's review queue. A NOTE claim
+    // (commitment/risk/next action) is freeform prose with no current value
+    // to diff against, so every verbatim-verified one is a "change".
     const changes = claims.filter(
-      (claim) => claim.value !== (current[claim.fieldName] ?? null),
+      (claim) =>
+        claim.kind === 'NOTE' ||
+        claim.value !== (current[claim.fieldName] ?? null),
     );
 
     if (changes.length === 0) {
@@ -128,17 +142,28 @@ export class StructuredExtractionService {
         objectNameSingular: 'person',
         recordId: subject.personId,
         sourceType: SOURCE_EVIDENCE_TYPE[sourceKind],
-        // The server picked this source type from the ingested artefact it
-        // was handed; the model only extracted the claim inside it.
-        assertedBy: 'SERVER',
+        // FIELD claims (job title) come from a signature/intro-style
+        // statement about the author, which the server itself parsed out of
+        // an artefact it observed — the strongest posture ingestion can take.
+        // NOTE claims (commitments/risks/next actions) are the model's own
+        // interpretation of freeform prose: inherently low-confidence and
+        // never allowed to present as an authoritative, server-observed fact.
+        assertedBy: claim.kind === 'FIELD' ? 'SERVER' : 'MODEL',
         sourceLocator,
         extractor: EXTRACTOR_NAME,
         observedAt: subject.observedAt,
-        payload: {
-          fieldName: claim.fieldName,
-          value: claim.value,
-          snippet: claim.snippet,
-        },
+        payload:
+          claim.kind === 'FIELD'
+            ? {
+                fieldName: claim.fieldName,
+                value: claim.value,
+                snippet: claim.snippet,
+              }
+            : {
+                fieldName: `note:${claim.category}`,
+                value: claim.value,
+                snippet: claim.snippet,
+              },
       });
     }
 
@@ -159,14 +184,29 @@ export class StructuredExtractionService {
       },
       // One item per field, not one item carrying every field: the write
       // policy resolves per field, so a FORBID on person.jobTitle must
-      // suppress that field alone rather than the whole batch.
-      items: changes.map((claim) => ({
-        actionType: ProposalActionType.UPDATE_RECORD,
-        objectNameSingular: 'person',
-        recordId: subject.personId,
-        payload: { [claim.fieldName]: claim.value },
-        baseline: { [claim.fieldName]: current[claim.fieldName] ?? null },
-      })),
+      // suppress that field alone rather than the whole batch. NOTE claims
+      // never touch a Person field at all — each becomes its own Note
+      // record, proposed for human review rather than asserted.
+      items: changes.map((claim) =>
+        claim.kind === 'FIELD'
+          ? {
+              actionType: ProposalActionType.UPDATE_RECORD,
+              objectNameSingular: 'person',
+              recordId: subject.personId,
+              payload: { [claim.fieldName]: claim.value },
+              baseline: { [claim.fieldName]: current[claim.fieldName] ?? null },
+            }
+          : {
+              actionType: ProposalActionType.CREATE_RECORD,
+              objectNameSingular: 'note',
+              recordId: null,
+              payload: {
+                title: `${NOTE_CATEGORY_LABEL[claim.category]} (extracted, needs review)`,
+                bodyV2: { blocknote: null, markdown: claim.value },
+              },
+              baseline: {},
+            },
+      ),
     });
 
     if (!isDefined(proposal)) {
@@ -366,14 +406,23 @@ export class StructuredExtractionService {
 
     const prompt = `You are extracting CRM facts about the AUTHOR of the following content.
 
-Only report a field when the content states it about the author explicitly. Never infer, never guess, never use outside knowledge. If nothing is stated, return an empty list.
+Only report something the content states explicitly. Never infer, never guess, never use outside knowledge. If nothing is stated, return an empty list.
 
-Allowed fields: ${EXTRACTABLE_PERSON_FIELDS.join(', ')}.
+There are two kinds of claim:
 
-For each field you report, include the exact verbatim sentence from the content that states it.
+1. FIELD claims — the author states one of these Person fields about themselves: ${EXTRACTABLE_PERSON_FIELDS.join(', ')}. Typically a job-title change stated in a signature or intro line.
+2. NOTE claims — the author states a commitment, a risk, or a next action. Categories: ${NOTE_EXTRACTION_CATEGORIES.join(', ')}.
+   - COMMITMENT: something the author promised to do or deliver.
+   - RISK: something the author flagged as a concern, blocker, or threat to the deal/relationship.
+   - NEXT_ACTION: a concrete next step the author named.
+
+For each claim, include the exact verbatim sentence from the content that states it.
 
 Respond ONLY with valid JSON of the form:
-{"claims": [{"fieldName": "<field>", "value": "<string>", "snippet": "<verbatim sentence>"}]}
+{"claims": [
+  {"kind": "FIELD", "fieldName": "<field>", "value": "<string>", "snippet": "<verbatim sentence>"},
+  {"kind": "NOTE", "category": "<COMMITMENT|RISK|NEXT_ACTION>", "value": "<string>", "snippet": "<verbatim sentence>"}
+]}
 
 CONTENT:
 ${truncated}`;
@@ -416,15 +465,16 @@ ${truncated}`;
       return [];
     }
 
-    return rawClaims.flatMap((raw) => {
-      const candidate = raw as Partial<ExtractionClaim>;
-
-      const isAllowedField = EXTRACTABLE_PERSON_FIELDS.includes(
-        candidate.fieldName as ExtractablePersonField,
-      );
+    return rawClaims.flatMap((raw): ExtractionClaim[] => {
+      const candidate = raw as {
+        kind?: unknown;
+        fieldName?: unknown;
+        category?: unknown;
+        value?: unknown;
+        snippet?: unknown;
+      };
 
       if (
-        !isAllowedField ||
         typeof candidate.value !== 'string' ||
         candidate.value.trim() === '' ||
         typeof candidate.snippet !== 'string'
@@ -435,20 +485,56 @@ ${truncated}`;
       // A snippet the model composed rather than quoted is a fabricated
       // citation, which is worse than no citation: it makes an unsupported
       // claim look sourced. Drop the whole claim.
-      if (!content.includes(candidate.snippet)) {
-        this.logger.warn(
-          `Dropping ${candidate.fieldName} claim: its snippet is not present in the source content.`,
-        );
+      const isVerbatim = content.includes(candidate.snippet);
+
+      if (candidate.kind === 'NOTE') {
+        const isAllowedCategory = (
+          NOTE_EXTRACTION_CATEGORIES as readonly string[]
+        ).includes(candidate.category as string);
+
+        if (!isAllowedCategory || !isVerbatim) {
+          if (isAllowedCategory && !isVerbatim) {
+            this.logger.warn(
+              `Dropping ${String(candidate.category)} claim: its snippet is not present in the source content.`,
+            );
+          }
+
+          return [];
+        }
+
+        return [
+          {
+            kind: 'NOTE',
+            category: candidate.category as NoteExtractionCategory,
+            value: candidate.value.trim(),
+            snippet: candidate.snippet,
+          } satisfies NoteExtractionClaim,
+        ];
+      }
+
+      // Default to FIELD for backward compatibility with a model response
+      // that omits "kind" — every claim before this change was a field claim.
+      const isAllowedField = EXTRACTABLE_PERSON_FIELDS.includes(
+        candidate.fieldName as ExtractablePersonField,
+      );
+
+      if (!isAllowedField || !isVerbatim) {
+        if (isAllowedField && !isVerbatim) {
+          this.logger.warn(
+            `Dropping ${String(candidate.fieldName)} claim: its snippet is not present in the source content.`,
+          );
+        }
 
         return [];
       }
 
       return [
         {
+          kind: 'FIELD',
           fieldName: candidate.fieldName as ExtractablePersonField,
           value: candidate.value.trim(),
           snippet: candidate.snippet,
-        },
+        } satisfies FieldExtractionClaim,
       ];
     });
   }
