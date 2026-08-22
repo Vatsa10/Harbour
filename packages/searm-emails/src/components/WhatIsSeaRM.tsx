@@ -2,11 +2,11 @@ import { type I18n } from '@lingui/core';
 import { MainText } from 'src/components/MainText';
 import { SubTitle } from 'src/components/SubTitle';
 
-type WhatIsSearmProps = {
+type WhatIsSeaRMProps = {
   i18n: I18n;
 };
 
-export const WhatIsSeaRM = ({ i18n }: WhatIsSearmProps) => {
+export const WhatIsSeaRM = ({ i18n }: WhatIsSeaRMProps) => {
   return (
     <>
       <SubTitle value={i18n._('What is SeaRM?')} />
