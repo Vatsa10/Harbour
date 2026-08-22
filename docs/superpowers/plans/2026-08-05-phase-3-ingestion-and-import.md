@@ -4,13 +4,13 @@
 
 **Goal:** connected-account ingestion (email, calendar, call recordings) and guided CSV/spreadsheet import stop writing directly to Person/Company/custom-object records. Deterministic identity matching decides what is safe to write automatically; everything inferred, ambiguous, or AI-derived becomes a `Proposal`/`ProposalItem` batch through the Launch-1 gate. Custom-field-aware tool schemas let agents resolve tenant-defined field labels, option values, and relation targets instead of guessing.
 
-**Architecture:** extends, never parallels, what already ships on `ai-write-approval`: `ProposalEntity`/`ProposalItemEntity` (core-schema TypeORM), `ProposalGateService`, `ProposalExecutionService`, `AiWritePolicyService`. This phase adds one new capability to the gate — `ProposalGateService.createFromExtraction()`, an idempotent, non-tool-dispatch entry point for background jobs (ingestion, import) that have no `ToolProviderContext` to call `evaluate()` with. Everything else reuses existing machinery: `CreateRecordService`/`UpdateRecordService`/`FindRecordsService` for both direct writes and proposal application, `GlobalWorkspaceOrmManager` + `buildSystemAuthContext` for background-job workspace access, the existing `MatchParticipantService`/`contact-creation-manager` deterministic sync path (extended, not replaced), and the existing `twenty-front` spreadsheet-import wizard (extended with a server-side staging/execution backend it currently lacks).
+**Architecture:** extends, never parallels, what already ships on `ai-write-approval`: `ProposalEntity`/`ProposalItemEntity` (core-schema TypeORM), `ProposalGateService`, `ProposalExecutionService`, `AiWritePolicyService`. This phase adds one new capability to the gate — `ProposalGateService.createFromExtraction()`, an idempotent, non-tool-dispatch entry point for background jobs (ingestion, import) that have no `ToolProviderContext` to call `evaluate()` with. Everything else reuses existing machinery: `CreateRecordService`/`UpdateRecordService`/`FindRecordsService` for both direct writes and proposal application, `GlobalWorkspaceOrmManager` + `buildSystemAuthContext` for background-job workspace access, the existing `MatchParticipantService`/`contact-creation-manager` deterministic sync path (extended, not replaced), and the existing `searm-front` spreadsheet-import wizard (extended with a server-side staging/execution backend it currently lacks).
 
 **Tech Stack:** NestJS 10, TypeORM, PostgreSQL 16, BullMQ (`message-queue` module), GraphQL (code-first, metadata schema), Vercel AI SDK (`ai` package, already used by `ai-generate-text`), React 18 + Jotai/Recoil + Linaria, Nx, Jest.
 
-**Spec:** `docs/superpowers/PRODUCT-CHARTER.md` (Phase 3 row, "Data import and quality" and "Inbox and meeting intelligence" acceptance narratives), `docs/superpowers/scouting/twenty-anchors.md`, `docs/superpowers/scouting/relaticle-scout.md`, `docs/superpowers/scouting/crm-scout.md`.
+**Spec:** `docs/superpowers/PRODUCT-CHARTER.md` (Phase 3 row, "Data import and quality" and "Inbox and meeting intelligence" acceptance narratives), `docs/superpowers/scouting/searm-anchors.md`, `docs/superpowers/scouting/relaticle-scout.md`, `docs/superpowers/scouting/crm-scout.md`.
 
-**Working directory for all paths below:** `d:\Files\Vatsa\Projects\AI-CRM\twenty`
+**Working directory for all paths below:** `d:\Files\Vatsa\Projects\AI-CRM\searm`
 
 ## Which acceptance narratives this phase advances
 
@@ -42,22 +42,22 @@ Copied from the repo's `CLAUDE.md`, the Launch 1 plan, and this phase's brief. E
 - **No `any`.** Strict TypeScript enforced.
 - **Types over interfaces**, except when extending a third-party interface.
 - **String literal unions over enums**, except GraphQL enums (real TS enums registered with `registerEnumType`).
-- **Functional components only** in `twenty-front`.
+- **Functional components only** in `searm-front`.
 - **File naming:** kebab-case with suffix — `.service.ts`, `.entity.ts`, `.dto.ts`, `.module.ts`, `.resolver.ts`, `.job.ts`, `.listener.ts`. Front components are PascalCase `.tsx`.
 - **Comments:** short-form `//` only, no JSDoc blocks. Explain WHY, not WHAT.
 - **Import order:** external libraries, then internal `@/` or `src/`, then relative.
-- **Use `isDefined()` from `twenty-shared/utils`** rather than hand-rolled null checks.
+- **Use `isDefined()` from `searm-shared/utils`** rather than hand-rolled null checks.
 - **Services under 500 lines, components under 300 lines.**
 - **Entity registration is automatic** — `core.datasource.ts` globs `engine/metadata-modules/**/*.entity.{ts,js}`. Do not add entities to any registry list.
-- **Schema changes ship as instance commands**, not TypeORM migrations. Generate with `npx nx run twenty-server:database:migrate:generate --name <name> --type fast`. Real precedent on disk: `packages/twenty-server/src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1785950948000-add-ai-write-approval.ts` — a `@RegisteredInstanceCommand('2.28.0', <timestamp>)`-decorated class implementing `FastInstanceCommand` with raw-SQL `up`/`down`. Follow that exact shape.
+- **Schema changes ship as instance commands**, not TypeORM migrations. Generate with `npx nx run searm-server:database:migrate:generate --name <name> --type fast`. Real precedent on disk: `packages/searm-server/src/database/commands/upgrade-version-command/2-28/2-28-instance-command-fast-1785950948000-add-ai-write-approval.ts` — a `@RegisteredInstanceCommand('2.28.0', <timestamp>)`-decorated class implementing `FastInstanceCommand` with raw-SQL `up`/`down`. Follow that exact shape.
 - **Never gate reads.** `find_many`, `find_one`, `group_by` must pass through untouched.
-- **Ingestion-derived and import-derived record CHANGES to existing records go through `ProposalGateService`** — either `.evaluate()` (agent tool calls) or the new `.createFromExtraction()` (background jobs) added in Task 1. New-record creation from an unambiguous deterministic match is not "AI-derived" and keeps using the existing direct-write path (see Task 2/3's EXACT-vs-CANDIDATE split) — this mirrors what Twenty's `contact-creation-manager` already does today and the charter's phase-3 scope line ("Identity resolution ... so ingestion does not create duplicate people ... Ambiguous matches become proposals").
+- **Ingestion-derived and import-derived record CHANGES to existing records go through `ProposalGateService`** — either `.evaluate()` (agent tool calls) or the new `.createFromExtraction()` (background jobs) added in Task 1. New-record creation from an unambiguous deterministic match is not "AI-derived" and keeps using the existing direct-write path (see Task 2/3's EXACT-vs-CANDIDATE split) — this mirrors what SeaRM's `contact-creation-manager` already does today and the charter's phase-3 scope line ("Identity resolution ... so ingestion does not create duplicate people ... Ambiguous matches become proposals").
 - **Custom objects are the only extension mechanism for business-specific records.** Nothing in this phase adds an industry-specific object; `ImportBatchEntity`/`ImportRowEntity` (Task 6) are platform infrastructure (core-schema TypeORM entities), not workspace objects, following the exact precedent of `ProposalEntity`/`ProposalItemEntity`.
-- Lint and typecheck after each task: `npx nx lint:diff-with-main twenty-server` (and `twenty-front` for frontend tasks) and `npx nx typecheck twenty-server` / `twenty-front`.
+- Lint and typecheck after each task: `npx nx lint:diff-with-main searm-server` (and `searm-front` for frontend tasks) and `npx nx typecheck searm-server` / `searm-front`.
 
 ## File Structure
 
-**New — server**, identity resolution (`packages/twenty-server/src/modules/match-participant/`):
+**New — server**, identity resolution (`packages/searm-server/src/modules/match-participant/`):
 
 | File | Responsibility |
 | --- | --- |
@@ -67,7 +67,7 @@ Copied from the repo's `CLAUDE.md`, the Launch 1 plan, and this phase's brief. E
 | `services/__tests__/participant-identity-proposal.service.spec.ts` | Unit tests |
 | `utils/normalize-person-display-name.util.ts` | Name normalization for candidate comparison |
 
-**New — server**, structured extraction (`packages/twenty-server/src/modules/structured-extraction/`, new module):
+**New — server**, structured extraction (`packages/searm-server/src/modules/structured-extraction/`, new module):
 
 | File | Responsibility |
 | --- | --- |
@@ -80,14 +80,14 @@ Copied from the repo's `CLAUDE.md`, the Launch 1 plan, and this phase's brief. E
 | `listeners/message-structured-extraction.listener.ts` | `message.created` → enqueue |
 | `listeners/call-recording-structured-extraction.listener.ts` | `callRecording.updated` (COMPLETED transition) → enqueue |
 
-**New — server**, custom-field-aware tool schema (`packages/twenty-server/src/engine/core-modules/record-crud/`):
+**New — server**, custom-field-aware tool schema (`packages/searm-server/src/engine/core-modules/record-crud/`):
 
 | File | Responsibility |
 | --- | --- |
 | `utils/describe-custom-field-for-tool-schema.util.ts` | Builds the description string injected into a custom field's zod schema |
 | `utils/__tests__/describe-custom-field-for-tool-schema.util.spec.ts` | Unit tests |
 
-**New — server**, guided import (`packages/twenty-server/src/modules/guided-import/`, new module):
+**New — server**, guided import (`packages/searm-server/src/modules/guided-import/`, new module):
 
 | File | Responsibility |
 | --- | --- |
@@ -119,7 +119,7 @@ Copied from the repo's `CLAUDE.md`, the Launch 1 plan, and this phase's brief. E
 | `engine/core-modules/message-queue/message-queue.constants.ts` | Add `importQueue = 'import-queue'` |
 | `engine/metadata-modules/metadata-engine.module.ts` (or wherever `AiWriteApprovalModule` is imported — confirm at implementation time) | Register `StructuredExtractionModule`, `GuidedImportModule` |
 
-**New — front** (`packages/twenty-front/src/modules/object-record/spreadsheet-import/`):
+**New — front** (`packages/searm-front/src/modules/object-record/spreadsheet-import/`):
 
 | File | Responsibility |
 | --- | --- |
@@ -145,9 +145,9 @@ Every write gated so far originates from `ToolExecutorService.dispatch()`, which
 > **Review fix (I10) — `createFromExtraction` must consult `AiWritePolicyService`, the same as `evaluate()` does.** As originally written, this method created a proposal for every item unconditionally, so a workspace that set `person.jobTitle` (or `messageParticipant`/any object) to `FORBID` still got ingestion/import proposals for it — the write is gated by a human downstream, but the workspace's own "never touch this" instruction was silently ignored. `ProposalGateService` already injects `AiWritePolicyService` (used by `evaluate()` at `services/proposal-gate.service.ts:140-157`, verified on disk) and `AiWritePolicyTarget` (`types/ai-write-policy.type.ts`, verified) is `{ kind: 'record'; objectNameSingular: string; fieldNames: string[] }` for a record write, so no new constructor dependency is needed — just the same lookup `evaluate()` already does. Step 6 below resolves one policy per call and drops any item whose fields resolve to `FORBID`, and Step 1's tests cover both a full-suppression and a partial-suppression case.
 
 **Files:**
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-gate.service.spec.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-gate.service.spec.ts`
 - Create: an instance command (generated)
 
 **Interfaces:**
@@ -320,7 +320,7 @@ Add `const aiWritePolicyService = { getPolicy: jest.fn(), resolveMode: jest.fn()
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-gate.service.spec
+cd packages/searm-server && npx jest proposal-gate.service.spec
 ```
 
 Expected: FAIL — `service.createFromExtraction is not a function`.
@@ -348,7 +348,7 @@ In `entities/proposal.entity.ts`, add after the `threadId` column:
 - [ ] **Step 4: Generate and fill the instance command**
 
 ```bash
-npx nx run twenty-server:database:migrate:generate --name add-proposal-source-key-and-reason --type fast
+npx nx run searm-server:database:migrate:generate --name add-proposal-source-key-and-reason --type fast
 ```
 
 Open the generated file (follows the shape of `2-28-instance-command-fast-1785950948000-add-ai-write-approval.ts` — `@RegisteredInstanceCommand`, `FastInstanceCommand`, raw SQL). Fill `up`:
@@ -367,12 +367,12 @@ ALTER TABLE "core"."proposal" DROP COLUMN "reason";
 ALTER TABLE "core"."proposal" DROP COLUMN "sourceKey";
 ```
 
-Read `packages/twenty-server/docs/UPGRADE_COMMANDS.md` before editing. Never rewrite a committed command's `up`/`down`.
+Read `packages/searm-server/docs/UPGRADE_COMMANDS.md` before editing. Never rewrite a committed command's `up`/`down`.
 
 - [ ] **Step 5: Apply and verify**
 
 ```bash
-npx nx run twenty-server:database:migrate:prod
+npx nx run searm-server:database:migrate:prod
 psql "$PG_DATABASE_URL" -c '\d core."proposal"'
 ```
 
@@ -479,12 +479,12 @@ Add to `services/proposal-gate.service.ts`, after the existing `evaluate()` meth
   }
 ```
 
-Add `import { type ActorMetadata } from 'twenty-shared/types';` to the top of the file.
+Add `import { type ActorMetadata } from 'searm-shared/types';` to the top of the file.
 
 - [ ] **Step 7: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-gate.service.spec
+cd packages/searm-server && npx jest proposal-gate.service.spec
 ```
 
 Expected: PASS — all pre-existing tests plus the 5 new ones (I5: do not hard-code a baseline test count for a Launch-1 suite; verify the pre-existing count by running the suite before this step, not by trusting a number written during planning).
@@ -492,9 +492,9 @@ Expected: PASS — all pre-existing tests plus the 5 new ones (I5: do not hard-c
 - [ ] **Step 8: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval packages/twenty-server/src/database
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval packages/searm-server/src/database
 git commit -m "feat(ingestion): add non-agent proposal creation path"
 ```
 
@@ -502,14 +502,14 @@ git commit -m "feat(ingestion): add non-agent proposal creation path"
 
 ### Task 2: Deterministic identity resolution service
 
-The single reusable matcher for Tasks 3, 4, 7, and 9. Two-tier verdict, explainable at every tier: **EXACT** (safe to write automatically — already how Twenty's `contact-creation-manager` behaves today), **CANDIDATE** (a real but unconfirmed signal — always becomes a proposal), **NONE** (no basis to link — caller decides create-vs-skip). Company matching is domain-only (Twenty already treats `company.domainName` as a soft identity key — see `create-company.service.ts`). Person CANDIDATE matching requires **both** a company-domain match **and** a name match — never one alone — per the two-factor "guess the query, never the answer" principle documented in `docs/superpowers/scouting/crm-scout.md` §3.
+The single reusable matcher for Tasks 3, 4, 7, and 9. Two-tier verdict, explainable at every tier: **EXACT** (safe to write automatically — already how SeaRM's `contact-creation-manager` behaves today), **CANDIDATE** (a real but unconfirmed signal — always becomes a proposal), **NONE** (no basis to link — caller decides create-vs-skip). Company matching is domain-only (SeaRM already treats `company.domainName` as a soft identity key — see `create-company.service.ts`). Person CANDIDATE matching requires **both** a company-domain match **and** a name match — never one alone — per the two-factor "guess the query, never the answer" principle documented in `docs/superpowers/scouting/crm-scout.md` §3.
 
 **Files:**
-- Create: `packages/twenty-server/src/modules/match-participant/utils/normalize-person-display-name.util.ts`
-- Create: `packages/twenty-server/src/modules/match-participant/utils/__tests__/normalize-person-display-name.util.spec.ts`
-- Create: `packages/twenty-server/src/modules/match-participant/services/identity-resolution.service.ts`
-- Create: `packages/twenty-server/src/modules/match-participant/services/__tests__/identity-resolution.service.spec.ts`
-- Modify: `packages/twenty-server/src/modules/match-participant/match-participant.module.ts`
+- Create: `packages/searm-server/src/modules/match-participant/utils/normalize-person-display-name.util.ts`
+- Create: `packages/searm-server/src/modules/match-participant/utils/__tests__/normalize-person-display-name.util.spec.ts`
+- Create: `packages/searm-server/src/modules/match-participant/services/identity-resolution.service.ts`
+- Create: `packages/searm-server/src/modules/match-participant/services/__tests__/identity-resolution.service.spec.ts`
+- Modify: `packages/searm-server/src/modules/match-participant/match-participant.module.ts`
 
 **Interfaces:**
 - Consumes: `findPersonByPrimaryOrAdditionalEmail` (`utils/find-person-by-primary-or-additional-email.ts`, on disk), `addPersonEmailFiltersToQueryBuilder` (`utils/add-person-email-filters-to-query-builder.ts`, on disk), `getDomainNameFromHandle` (`src/modules/contact-creation-manager/utils/get-domain-name-from-handle.util.ts`, on disk), `extractDomainFromLink` (`src/modules/contact-creation-manager/utils/extract-domain-from-link.util.ts`, on disk), `GlobalWorkspaceOrmManager.getRepository`, `PersonWorkspaceEntity`, `CompanyWorkspaceEntity`.
@@ -544,7 +544,7 @@ describe('normalizePersonDisplayName', () => {
 - [ ] **Step 2: Run it, see it fail**
 
 ```bash
-cd packages/twenty-server && npx jest normalize-person-display-name.util.spec
+cd packages/searm-server && npx jest normalize-person-display-name.util.spec
 ```
 
 Expected: FAIL — module not found.
@@ -568,7 +568,7 @@ export const normalizePersonDisplayName = (
 - [ ] **Step 4: Run it, see it pass**
 
 ```bash
-cd packages/twenty-server && npx jest normalize-person-display-name.util.spec
+cd packages/searm-server && npx jest normalize-person-display-name.util.spec
 ```
 
 Expected: PASS, 3 `it` blocks (the null/undefined block makes 2 assertions in one `it`, so `npx jest` reports 3 passing tests, not 4).
@@ -580,7 +580,7 @@ Create `services/__tests__/identity-resolution.service.spec.ts`:
 ```ts
 import { Test, type TestingModule } from '@nestjs/testing';
 
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { GlobalWorkspaceOrmManager } from 'src/engine/searm-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { IdentityResolutionService } from 'src/modules/match-participant/services/identity-resolution.service';
 
 describe('IdentityResolutionService', () => {
@@ -746,7 +746,7 @@ describe('IdentityResolutionService', () => {
 - [ ] **Step 6: Run it, see it fail**
 
 ```bash
-cd packages/twenty-server && npx jest identity-resolution.service.spec
+cd packages/searm-server && npx jest identity-resolution.service.spec
 ```
 
 Expected: FAIL — module not found.
@@ -758,10 +758,10 @@ Create `services/identity-resolution.service.ts`:
 ```ts
 import { Injectable } from '@nestjs/common';
 
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'searm-shared/utils';
 import { ILike } from 'typeorm';
 
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { GlobalWorkspaceOrmManager } from 'src/engine/searm-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { extractDomainFromLink } from 'src/modules/contact-creation-manager/utils/extract-domain-from-link.util';
 import { getDomainNameFromHandle } from 'src/modules/contact-creation-manager/utils/get-domain-name-from-handle.util';
 import { addPersonEmailFiltersToQueryBuilder } from 'src/modules/match-participant/utils/add-person-email-filters-to-query-builder';
@@ -781,7 +781,7 @@ export class IdentityResolutionService {
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
   ) {}
 
-  // EXACT is Twenty's existing deterministic rule (see
+  // EXACT is SeaRM's existing deterministic rule (see
   // find-person-by-primary-or-additional-email.ts, used today by
   // MatchParticipantService and contact-creation-manager). CANDIDATE requires
   // BOTH a company-domain match AND a name match — one signal alone is a
@@ -919,7 +919,7 @@ export class IdentityResolutionService {
 - [ ] **Step 8: Run it, see it pass**
 
 ```bash
-cd packages/twenty-server && npx jest identity-resolution.service.spec
+cd packages/searm-server && npx jest identity-resolution.service.spec
 ```
 
 Expected: PASS, 7 tests.
@@ -949,9 +949,9 @@ export class MatchParticipantModule {}
 - [ ] **Step 10: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/modules/match-participant
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/modules/match-participant
 git commit -m "feat(identity): add deterministic person and company identity resolution"
 ```
 
@@ -962,12 +962,12 @@ git commit -m "feat(identity): add deterministic person and company identity res
 `MatchParticipantService` already runs EXACT matching for every new message/calendar participant and leaves `personId` null when nothing matches. This task adds a second pass: for participants still unmatched after that, ask `IdentityResolutionService` for a CANDIDATE, and if found, propose linking `personId` — a plain `UPDATE_RECORD` on the `messageParticipant`/`calendarEventParticipant` object, which already works generically through `UpdateRecordService`. No new `ProposalActionType` is needed.
 
 **Files:**
-- Create: `packages/twenty-server/src/modules/match-participant/services/participant-identity-proposal.service.ts`
-- Create: `packages/twenty-server/src/modules/match-participant/services/__tests__/participant-identity-proposal.service.spec.ts`
-- Modify: `packages/twenty-server/src/modules/messaging/message-participant-manager/services/messaging-message-participant.service.ts`
-- Modify: `packages/twenty-server/src/modules/calendar/calendar-event-participant-manager/services/calendar-event-participant.service.ts`
-- Modify: `packages/twenty-server/src/modules/match-participant/match-participant.module.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/ai-write-approval.module.ts` (export `ProposalGateService` already happens — confirm `MatchParticipantModule` can import it without a cycle; see Step 6)
+- Create: `packages/searm-server/src/modules/match-participant/services/participant-identity-proposal.service.ts`
+- Create: `packages/searm-server/src/modules/match-participant/services/__tests__/participant-identity-proposal.service.spec.ts`
+- Modify: `packages/searm-server/src/modules/messaging/message-participant-manager/services/messaging-message-participant.service.ts`
+- Modify: `packages/searm-server/src/modules/calendar/calendar-event-participant-manager/services/calendar-event-participant.service.ts`
+- Modify: `packages/searm-server/src/modules/match-participant/match-participant.module.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/ai-write-approval.module.ts` (export `ProposalGateService` already happens — confirm `MatchParticipantModule` can import it without a cycle; see Step 6)
 
 **Interfaces:**
 - Consumes: `IdentityResolutionService.resolvePerson` (Task 2), `ProposalGateService.createFromExtraction` (Task 1).
@@ -1084,7 +1084,7 @@ describe('ParticipantIdentityProposalService', () => {
 - [ ] **Step 2: Run it, see it fail**
 
 ```bash
-cd packages/twenty-server && npx jest participant-identity-proposal.service.spec
+cd packages/searm-server && npx jest participant-identity-proposal.service.spec
 ```
 
 Expected: FAIL — module not found.
@@ -1096,8 +1096,8 @@ Create `services/participant-identity-proposal.service.ts`:
 ```ts
 import { Injectable } from '@nestjs/common';
 
-import { FieldActorSource } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
+import { FieldActorSource } from 'searm-shared/types';
+import { isDefined } from 'searm-shared/utils';
 
 import { ProposalActionType } from 'src/engine/metadata-modules/ai/ai-write-approval/types/proposal-status.type';
 import { ProposalGateService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service';
@@ -1169,7 +1169,7 @@ export class ParticipantIdentityProposalService {
 - [ ] **Step 4: Run it, see it pass**
 
 ```bash
-cd packages/twenty-server && npx jest participant-identity-proposal.service.spec
+cd packages/searm-server && npx jest participant-identity-proposal.service.spec
 ```
 
 Expected: PASS, 4 tests.
@@ -1289,8 +1289,8 @@ If Nest reports a circular dependency at boot (`AiWriteApprovalModule` → `Reco
 - [ ] **Step 8: Run the surrounding suites for regressions**
 
 ```bash
-cd packages/twenty-server && npx jest messaging-message-participant.service
-cd packages/twenty-server && npx jest calendar-event-participant.service
+cd packages/searm-server && npx jest messaging-message-participant.service
+cd packages/searm-server && npx jest calendar-event-participant.service
 ```
 
 Expected: PASS. If either existing spec constructs its service directly (not through Nest's `Test.createTestingModule`), add a `ParticipantIdentityProposalService` mock with `reviewUnmatchedParticipants: jest.fn()`.
@@ -1298,9 +1298,9 @@ Expected: PASS. If either existing spec constructs its service directly (not thr
 - [ ] **Step 9: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/modules/match-participant packages/twenty-server/src/modules/messaging packages/twenty-server/src/modules/calendar
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/modules/match-participant packages/searm-server/src/modules/messaging packages/searm-server/src/modules/calendar
 git commit -m "feat(identity): propose linking ambiguous participant matches"
 ```
 
@@ -1313,15 +1313,15 @@ git commit -m "feat(identity): propose linking ambiguous participant matches"
 Scoped to one fact type — a person's job title changing — because it is low-risk (single field, single `ProposalActionType.UPDATE_RECORD`, targets only records `IdentityResolutionService` already confirms EXACT), and it proves the whole pipeline end to end: LLM extraction → identity resolution → **evidence recording → fact derivation** → non-agent proposal creation → existing approval UI. Broader extraction (commitments, risks, next actions as `Task` records) is deliberately cut — see the cut table.
 
 **Files:**
-- Create: `packages/twenty-server/src/modules/structured-extraction/structured-extraction.module.ts`
-- Create: `packages/twenty-server/src/modules/structured-extraction/types/extracted-job-title-fact.type.ts`
-- Create: `packages/twenty-server/src/modules/structured-extraction/services/structured-person-fact-extraction.service.ts`
-- Create: `packages/twenty-server/src/modules/structured-extraction/services/__tests__/structured-person-fact-extraction.service.spec.ts`
-- Create: `packages/twenty-server/src/modules/structured-extraction/jobs/message-structured-extraction.job.ts`
-- Create: `packages/twenty-server/src/modules/structured-extraction/jobs/call-recording-structured-extraction.job.ts`
-- Create: `packages/twenty-server/src/modules/structured-extraction/listeners/message-structured-extraction.listener.ts`
-- Create: `packages/twenty-server/src/modules/structured-extraction/listeners/call-recording-structured-extraction.listener.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/connected-account/entities/connected-account.entity.ts` (Owner Decision 3 — add `excludeFromAiExtraction`)
+- Create: `packages/searm-server/src/modules/structured-extraction/structured-extraction.module.ts`
+- Create: `packages/searm-server/src/modules/structured-extraction/types/extracted-job-title-fact.type.ts`
+- Create: `packages/searm-server/src/modules/structured-extraction/services/structured-person-fact-extraction.service.ts`
+- Create: `packages/searm-server/src/modules/structured-extraction/services/__tests__/structured-person-fact-extraction.service.spec.ts`
+- Create: `packages/searm-server/src/modules/structured-extraction/jobs/message-structured-extraction.job.ts`
+- Create: `packages/searm-server/src/modules/structured-extraction/jobs/call-recording-structured-extraction.job.ts`
+- Create: `packages/searm-server/src/modules/structured-extraction/listeners/message-structured-extraction.listener.ts`
+- Create: `packages/searm-server/src/modules/structured-extraction/listeners/call-recording-structured-extraction.listener.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/connected-account/entities/connected-account.entity.ts` (Owner Decision 3 — add `excludeFromAiExtraction`)
 - Create: an instance command (generated) for the `excludeFromAiExtraction` column
 
 **Interfaces:**
@@ -1701,7 +1701,7 @@ describe('StructuredPersonFactExtractionService', () => {
 - [ ] **Step 3: Run it, see it fail**
 
 ```bash
-cd packages/twenty-server && npx jest structured-person-fact-extraction.service.spec
+cd packages/searm-server && npx jest structured-person-fact-extraction.service.spec
 ```
 
 Expected: FAIL — module not found.
@@ -1717,15 +1717,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { generateObject } from 'ai';
-import { FieldActorSource } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
+import { FieldActorSource } from 'searm-shared/types';
+import { isDefined } from 'searm-shared/utils';
 import { type Repository } from 'typeorm';
 import { z } from 'zod';
 
 import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
 import { FindRecordsService } from 'src/engine/core-modules/record-crud/services/find-records.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { buildSystemAuthContext } from 'src/engine/searm-orm/utils/build-system-auth-context.util';
 import { AiBillingService } from 'src/engine/metadata-modules/ai/ai-billing/services/ai-billing.service';
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
 import { EvidenceRecordingService } from 'src/engine/metadata-modules/ai/ai-research/services/evidence-recording.service';
@@ -1931,7 +1931,7 @@ export class StructuredPersonFactExtractionService {
 - [ ] **Step 5: Run it, see it pass**
 
 ```bash
-cd packages/twenty-server && npx jest structured-person-fact-extraction.service.spec
+cd packages/searm-server && npx jest structured-person-fact-extraction.service.spec
 ```
 
 Expected: PASS — all 8 `it` blocks (the 5 original plus C8's 3 evidence-recording tests).
@@ -1946,8 +1946,8 @@ import { Scope } from '@nestjs/common';
 import { Process } from 'src/engine/core-modules/message-queue/decorators/process.decorator';
 import { Processor } from 'src/engine/core-modules/message-queue/decorators/processor.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { GlobalWorkspaceOrmManager } from 'src/engine/searm-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { buildSystemAuthContext } from 'src/engine/searm-orm/utils/build-system-auth-context.util';
 import { StructuredPersonFactExtractionService } from 'src/modules/structured-extraction/services/structured-person-fact-extraction.service';
 import { type MessageWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message.workspace-entity';
 
@@ -2008,7 +2008,7 @@ import { Injectable } from '@nestjs/common';
 
 import {
   type ObjectRecordCreateEvent,
-} from 'twenty-shared/database-events';
+} from 'searm-shared/database-events';
 
 import { OnDatabaseBatchEvent } from 'src/engine/api/graphql/graphql-query-runner/decorators/on-database-batch-event.decorator';
 import { DatabaseEventAction } from 'src/engine/api/graphql/graphql-query-runner/enums/database-event-action';
@@ -2054,13 +2054,13 @@ Create `jobs/call-recording-structured-extraction.job.ts`:
 ```ts
 import { Scope } from '@nestjs/common';
 
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'searm-shared/utils';
 
 import { Process } from 'src/engine/core-modules/message-queue/decorators/process.decorator';
 import { Processor } from 'src/engine/core-modules/message-queue/decorators/processor.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { GlobalWorkspaceOrmManager } from 'src/engine/searm-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { buildSystemAuthContext } from 'src/engine/searm-orm/utils/build-system-auth-context.util';
 import { StructuredPersonFactExtractionService } from 'src/modules/structured-extraction/services/structured-person-fact-extraction.service';
 import { type CallRecordingWorkspaceEntity } from 'src/modules/call-recording/standard-objects/call-recording.workspace-entity';
 import { type CalendarEventParticipantWorkspaceEntity } from 'src/modules/calendar/common/standard-objects/calendar-event-participant.workspace-entity';
@@ -2123,7 +2123,7 @@ Create `listeners/call-recording-structured-extraction.listener.ts`:
 ```ts
 import { Injectable } from '@nestjs/common';
 
-import { type ObjectRecordUpdateEvent } from 'twenty-shared/database-events';
+import { type ObjectRecordUpdateEvent } from 'searm-shared/database-events';
 
 import { OnDatabaseBatchEvent } from 'src/engine/api/graphql/graphql-query-runner/decorators/on-database-batch-event.decorator';
 import { DatabaseEventAction } from 'src/engine/api/graphql/graphql-query-runner/enums/database-event-action';
@@ -2220,7 +2220,7 @@ Confirm the exact module names `AiBillingModule`/`AiModelsModule` and their expo
 - [ ] **Step 9: Add the exclusion column**
 
 ```bash
-npx nx run twenty-server:database:migrate:generate --name add-connected-account-exclude-from-ai-extraction --type fast
+npx nx run searm-server:database:migrate:generate --name add-connected-account-exclude-from-ai-extraction --type fast
 ```
 
 In `entities/connected-account.entity.ts`, add after `visibility`:
@@ -2257,13 +2257,13 @@ Add to `listeners/message-structured-extraction.listener.ts`:
   constructor(
     @InjectMessageQueue(MessageQueue.aiQueue)
     private readonly messageQueueService: MessageQueueService,
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(MessageChannelMessageAssociationEntity)
     private readonly messageChannelMessageAssociationRepository: Repository<MessageChannelMessageAssociationEntity>,
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(MessageChannelEntity)
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(ConnectedAccountEntity)
     private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
   ) {}
@@ -2323,7 +2323,7 @@ Add to `listeners/message-structured-extraction.listener.ts`:
   }
 ```
 
-Add the corresponding imports (`InjectRepository` from `@nestjs/typeorm`, `Repository` from `typeorm`, `isDefined` from `twenty-shared/utils`, `MessageChannelMessageAssociationEntity`/`MessageChannelEntity`/`ConnectedAccountEntity` from their entity files). Note `MessageChannelMessageAssociation` here is the **workspace**-schema entity (`modules/messaging/common/standard-objects/message-channel-message-association.workspace-entity.ts`) queried through `GlobalWorkspaceOrmManager`, not `@InjectRepository` — confirm which repository-access pattern the surrounding listener code already uses for workspace-schema reads (this file's `message` queries elsewhere in this task use `GlobalWorkspaceOrmManager.getRepository`, so match that, not a core `@InjectRepository`) and adjust the association lookup to that pattern; `messageChannelRepository`/`connectedAccountRepository` stay `@InjectRepository` because those two are core-schema.
+Add the corresponding imports (`InjectRepository` from `@nestjs/typeorm`, `Repository` from `typeorm`, `isDefined` from `searm-shared/utils`, `MessageChannelMessageAssociationEntity`/`MessageChannelEntity`/`ConnectedAccountEntity` from their entity files). Note `MessageChannelMessageAssociation` here is the **workspace**-schema entity (`modules/messaging/common/standard-objects/message-channel-message-association.workspace-entity.ts`) queried through `GlobalWorkspaceOrmManager`, not `@InjectRepository` — confirm which repository-access pattern the surrounding listener code already uses for workspace-schema reads (this file's `message` queries elsewhere in this task use `GlobalWorkspaceOrmManager.getRepository`, so match that, not a core `@InjectRepository`) and adjust the association lookup to that pattern; `messageChannelRepository`/`connectedAccountRepository` stay `@InjectRepository` because those two are core-schema.
 
 Add the mirror check to `listeners/call-recording-structured-extraction.listener.ts`, resolving through `CalendarChannelEventAssociationWorkspaceEntity.calendarChannelId` → `CalendarChannelEntity.connectedAccountId` → `ConnectedAccountEntity.excludeFromAiExtraction` the same way, keyed off the call recording's `calendarEventId`.
 
@@ -2332,7 +2332,7 @@ Add to both spec files: *"should skip enqueueing when the connected account has 
 - [ ] **Step 11: Run the full new suite plus regressions**
 
 ```bash
-cd packages/twenty-server && npx jest structured-extraction
+cd packages/searm-server && npx jest structured-extraction
 ```
 
 Expected: PASS.
@@ -2340,9 +2340,9 @@ Expected: PASS.
 - [ ] **Step 12: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/modules/structured-extraction packages/twenty-server/src/engine/metadata-modules/connected-account packages/twenty-server/src/database
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/modules/structured-extraction packages/searm-server/src/engine/metadata-modules/connected-account packages/searm-server/src/database
 git commit -m "feat(ingestion): extract job-title changes from messages and call recordings as proposals, with a per-connected-account exclusion toggle"
 ```
 
@@ -2350,12 +2350,12 @@ git commit -m "feat(ingestion): extract job-title changes from messages and call
 
 ### Task 5: Custom-field-aware AI tool schema
 
-Twenty's `generateRecordPropertiesZodSchema` (`engine/core-modules/record-crud/zod-schemas/record-properties.zod-schema.ts`, on disk) already turns `SELECT`/`MULTI_SELECT` options into a `z.enum()` of option **values** and already validates at the same edge every write goes through (a bad enum value hard-fails Zod parsing before the tool executes) — this already substantially satisfies the "resolve option values" half of the charter's metadata-aware tool requirement, and it is reused, not rebuilt. Two real gaps remain: (1) custom fields with no `field.description` give the model no context beyond a camelCase key, and select/relation fields don't tell the model the human-readable **label** for a value or which object a relation targets; (2) there is no lightweight, read-permission-gated (not `DATA_MODEL`-permission-gated, unlike `MetadataToolProvider`) way for an agent to ask "what custom fields does this object have" before it opens a create/update tool's full schema.
+SeaRM's `generateRecordPropertiesZodSchema` (`engine/core-modules/record-crud/zod-schemas/record-properties.zod-schema.ts`, on disk) already turns `SELECT`/`MULTI_SELECT` options into a `z.enum()` of option **values** and already validates at the same edge every write goes through (a bad enum value hard-fails Zod parsing before the tool executes) — this already substantially satisfies the "resolve option values" half of the charter's metadata-aware tool requirement, and it is reused, not rebuilt. Two real gaps remain: (1) custom fields with no `field.description` give the model no context beyond a camelCase key, and select/relation fields don't tell the model the human-readable **label** for a value or which object a relation targets; (2) there is no lightweight, read-permission-gated (not `DATA_MODEL`-permission-gated, unlike `MetadataToolProvider`) way for an agent to ask "what custom fields does this object have" before it opens a create/update tool's full schema.
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/core-modules/record-crud/utils/describe-custom-field-for-tool-schema.util.ts`
-- Create: `packages/twenty-server/src/engine/core-modules/record-crud/utils/__tests__/describe-custom-field-for-tool-schema.util.spec.ts`
-- Modify: `packages/twenty-server/src/engine/core-modules/record-crud/zod-schemas/record-properties.zod-schema.ts`
+- Create: `packages/searm-server/src/engine/core-modules/record-crud/utils/describe-custom-field-for-tool-schema.util.ts`
+- Create: `packages/searm-server/src/engine/core-modules/record-crud/utils/__tests__/describe-custom-field-for-tool-schema.util.spec.ts`
+- Modify: `packages/searm-server/src/engine/core-modules/record-crud/zod-schemas/record-properties.zod-schema.ts`
 
 **Interfaces:**
 - Consumes: `FlatFieldMetadata` (on disk), `FieldMetadataType` (on disk), `WorkspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps` (on disk, used identically by `database-tool.provider.ts`), `getFlatFieldsFromFlatObjectMetadata` (on disk).
@@ -2367,7 +2367,7 @@ Twenty's `generateRecordPropertiesZodSchema` (`engine/core-modules/record-crud/z
 Create `utils/__tests__/describe-custom-field-for-tool-schema.util.spec.ts`:
 
 ```ts
-import { FieldMetadataType } from 'twenty-shared/types';
+import { FieldMetadataType } from 'searm-shared/types';
 
 import { describeCustomFieldForToolSchema } from 'src/engine/core-modules/record-crud/utils/describe-custom-field-for-tool-schema.util';
 
@@ -2444,7 +2444,7 @@ describe('describeCustomFieldForToolSchema', () => {
 - [ ] **Step 2: Run it, see it fail**
 
 ```bash
-cd packages/twenty-server && npx jest describe-custom-field-for-tool-schema.util.spec
+cd packages/searm-server && npx jest describe-custom-field-for-tool-schema.util.spec
 ```
 
 Expected: FAIL — module not found.
@@ -2454,12 +2454,12 @@ Expected: FAIL — module not found.
 Create `utils/describe-custom-field-for-tool-schema.util.ts`:
 
 ```ts
-import { FieldMetadataType } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
+import { FieldMetadataType } from 'searm-shared/types';
+import { isDefined } from 'searm-shared/utils';
 
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 
-// Twenty already turns SELECT/MULTI_SELECT options into a zod enum of VALUES
+// SeaRM already turns SELECT/MULTI_SELECT options into a zod enum of VALUES
 // and validates against it at the same edge every write goes through — that
 // half of the charter's "resolve option values" requirement is already
 // solved and is not rebuilt here. This only fills what a field.description-less
@@ -2520,7 +2520,7 @@ export const describeCustomFieldForToolSchema = (
 - [ ] **Step 4: Run it, see it pass**
 
 ```bash
-cd packages/twenty-server && npx jest describe-custom-field-for-tool-schema.util.spec
+cd packages/searm-server && npx jest describe-custom-field-for-tool-schema.util.spec
 ```
 
 Expected: PASS, 5 tests.
@@ -2560,9 +2560,9 @@ This only changes behavior for `field.isCustom === true` fields — every standa
 - [ ] **Step 6: Run the existing schema-generation regression suite**
 
 ```bash
-cd packages/twenty-server && npx jest record-properties.zod-schema
-cd packages/twenty-server && npx jest generate-update-record-input-schema
-cd packages/twenty-server && npx jest generate-create-record-input-schema
+cd packages/searm-server && npx jest record-properties.zod-schema
+cd packages/searm-server && npx jest generate-update-record-input-schema
+cd packages/searm-server && npx jest generate-create-record-input-schema
 ```
 
 Expected: PASS — these suites exercise standard fields (`field.isCustom` false), which take the unchanged `else if (field.description)` branch.
@@ -2583,9 +2583,9 @@ Expected: PASS — these suites exercise standard fields (`field.isCustom` false
 - [ ] **Step 8: Lint, typecheck, commit** (I12: steps were numbered 1–7 then jumped to a stale "Step 12" — the cut Step 7 above absorbed the original Steps 7–11, so this is Step 8, not 12)
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/core-modules/record-crud
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/core-modules/record-crud
 git commit -m "feat(tools): describe custom fields for agent tool schemas"
 ```
 
@@ -2593,18 +2593,18 @@ git commit -m "feat(tools): describe custom fields for agent tool schemas"
 
 ### Task 6: Guided import staging entities and batch creation
 
-Per `docs/superpowers/scouting/relaticle-scout.md` §2.1: stage the whole import in a disposable store; only touch production tables at execute time. Twenty's stack is Postgres-only (no per-import SQLite file, unlike the scouted reference) — the staging store is two new core-schema tables, following the exact `ProposalEntity`/`ProposalItemEntity` precedent (plain TypeORM entities, not workspace objects — this is platform infrastructure, never customer-visible as a CRM record).
+Per `docs/superpowers/scouting/relaticle-scout.md` §2.1: stage the whole import in a disposable store; only touch production tables at execute time. SeaRM's stack is Postgres-only (no per-import SQLite file, unlike the scouted reference) — the staging store is two new core-schema tables, following the exact `ProposalEntity`/`ProposalItemEntity` precedent (plain TypeORM entities, not workspace objects — this is platform infrastructure, never customer-visible as a CRM record).
 
 **Files:**
-- Create: `packages/twenty-server/src/modules/guided-import/types/import-batch-status.type.ts`
-- Create: `packages/twenty-server/src/modules/guided-import/entities/import-batch.entity.ts`
-- Create: `packages/twenty-server/src/modules/guided-import/entities/import-row.entity.ts`
+- Create: `packages/searm-server/src/modules/guided-import/types/import-batch-status.type.ts`
+- Create: `packages/searm-server/src/modules/guided-import/entities/import-batch.entity.ts`
+- Create: `packages/searm-server/src/modules/guided-import/entities/import-row.entity.ts`
 - Create: an instance command (generated)
-- Create: `packages/twenty-server/src/modules/guided-import/dtos/import-batch.dto.ts`
-- Create: `packages/twenty-server/src/modules/guided-import/dtos/create-import-batch.input.ts`
-- Create: `packages/twenty-server/src/modules/guided-import/resolvers/import-batch.resolver.ts`
-- Create: `packages/twenty-server/src/modules/guided-import/resolvers/__tests__/import-batch.resolver.spec.ts`
-- Create: `packages/twenty-server/src/modules/guided-import/guided-import.module.ts`
+- Create: `packages/searm-server/src/modules/guided-import/dtos/import-batch.dto.ts`
+- Create: `packages/searm-server/src/modules/guided-import/dtos/create-import-batch.input.ts`
+- Create: `packages/searm-server/src/modules/guided-import/resolvers/import-batch.resolver.ts`
+- Create: `packages/searm-server/src/modules/guided-import/resolvers/__tests__/import-batch.resolver.spec.ts`
+- Create: `packages/searm-server/src/modules/guided-import/guided-import.module.ts`
 
 **Interfaces:**
 - Produces: `ImportBatchEntity`, `ImportRowEntity`, `ImportBatchStatus`, `ImportRowStatus`, `ImportRowMatchAction` — consumed by Tasks 7, 8, 9, 10. GraphQL `createImportBatch(input: CreateImportBatchInput!): ImportBatchDTO!`.
@@ -2801,7 +2801,7 @@ export class ImportRowEntity {
 - [ ] **Step 3: Generate and fill the instance command**
 
 ```bash
-npx nx run twenty-server:database:migrate:generate --name add-guided-import --type fast
+npx nx run searm-server:database:migrate:generate --name add-guided-import --type fast
 ```
 
 Fill `up`:
@@ -2863,7 +2863,7 @@ DROP TABLE "core"."importBatch";
 - [ ] **Step 4: Apply and verify**
 
 ```bash
-npx nx run twenty-server:database:migrate:prod
+npx nx run searm-server:database:migrate:prod
 psql "$PG_DATABASE_URL" -c '\d core."importBatch"' -c '\d core."importRow"'
 ```
 
@@ -2888,7 +2888,7 @@ export class CreateImportBatchInput {
   @Field(() => [GraphQLJSON])
   rawRows: Record<string, unknown>[];
 
-  // Same rows, index-aligned with rawRows, already translated into Twenty
+  // Same rows, index-aligned with rawRows, already translated into SeaRM
   // object-field shape by the existing frontend mapping wizard
   // (buildRecordFromImportedStructuredRow — on disk today, already handles
   // composite fields: emails, address, fullName, links, currency, phones).
@@ -3078,7 +3078,7 @@ describe('ImportBatchResolver', () => {
 - [ ] **Step 7: Run it, see it fail**
 
 ```bash
-cd packages/twenty-server && npx jest import-batch.resolver.spec
+cd packages/searm-server && npx jest import-batch.resolver.spec
 ```
 
 Expected: FAIL — module not found.
@@ -3109,10 +3109,10 @@ import { ImportBatchStatus } from 'src/modules/guided-import/types/import-batch-
 @MetadataResolver()
 export class ImportBatchResolver {
   constructor(
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(ImportBatchEntity, 'core')
     private readonly importBatchRepository: Repository<ImportBatchEntity>,
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(ImportRowEntity, 'core')
     private readonly importRowRepository: Repository<ImportRowEntity>,
   ) {}
@@ -3160,7 +3160,7 @@ export class ImportBatchResolver {
 - [ ] **Step 9: Run it, see it pass**
 
 ```bash
-cd packages/twenty-server && npx jest import-batch.resolver.spec
+cd packages/searm-server && npx jest import-batch.resolver.spec
 ```
 
 Expected: PASS, 2 tests.
@@ -3191,9 +3191,9 @@ Register `GuidedImportModule` in whichever module aggregates other core-schema f
 - [ ] **Step 11: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/modules/guided-import packages/twenty-server/src/database
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/modules/guided-import packages/searm-server/src/database
 git commit -m "feat(import): add guided import staging entities and batch creation"
 ```
 
@@ -3204,9 +3204,9 @@ git commit -m "feat(import): add guided import staging entities and batch creati
 Mapping inference is already solved client-side (see Task 6's rationale) — the backend capability genuinely missing is duplicate detection: deciding, per staged row, whether it matches an existing record. This reuses `IdentityResolutionService` from Task 2 exactly as Tasks 3/4 do — same EXACT/CANDIDATE/NONE verdict, same explainability, same rule (a CANDIDATE never writes silently).
 
 **Files:**
-- Create: `packages/twenty-server/src/modules/guided-import/services/import-match-resolution.service.ts`
-- Create: `packages/twenty-server/src/modules/guided-import/services/__tests__/import-match-resolution.service.spec.ts`
-- Modify: `packages/twenty-server/src/modules/guided-import/guided-import.module.ts`
+- Create: `packages/searm-server/src/modules/guided-import/services/import-match-resolution.service.ts`
+- Create: `packages/searm-server/src/modules/guided-import/services/__tests__/import-match-resolution.service.spec.ts`
+- Modify: `packages/searm-server/src/modules/guided-import/guided-import.module.ts`
 
 **Interfaces:**
 - Consumes: `IdentityResolutionService.resolvePerson` / `.resolveCompany` (Task 2), `ImportRowEntity`/`ImportBatchEntity` (Task 6).
@@ -3374,7 +3374,7 @@ describe('ImportMatchResolutionService', () => {
 - [ ] **Step 2: Run it, see it fail**
 
 ```bash
-cd packages/twenty-server && npx jest import-match-resolution.service.spec
+cd packages/searm-server && npx jest import-match-resolution.service.spec
 ```
 
 Expected: FAIL — module not found.
@@ -3387,7 +3387,7 @@ Create `services/import-match-resolution.service.ts`:
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'searm-shared/utils';
 import { Repository } from 'typeorm';
 
 import { IdentityResolutionService } from 'src/modules/match-participant/services/identity-resolution.service';
@@ -3400,10 +3400,10 @@ import { ImportRowMatchAction } from 'src/modules/guided-import/types/import-bat
 export class ImportMatchResolutionService {
   constructor(
     private readonly identityResolutionService: IdentityResolutionService,
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(ImportBatchEntity, 'core')
     private readonly importBatchRepository: Repository<ImportBatchEntity>,
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(ImportRowEntity, 'core')
     private readonly importRowRepository: Repository<ImportRowEntity>,
   ) {}
@@ -3544,7 +3544,7 @@ export class ImportMatchResolutionService {
 - [ ] **Step 4: Run it, see it pass**
 
 ```bash
-cd packages/twenty-server && npx jest import-match-resolution.service.spec
+cd packages/searm-server && npx jest import-match-resolution.service.spec
 ```
 
 Expected: PASS, 5 tests.
@@ -3576,9 +3576,9 @@ export class GuidedImportModule {}
 - [ ] **Step 6: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/modules/guided-import
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/modules/guided-import
 git commit -m "feat(import): resolve per-row identity match action"
 ```
 
@@ -3589,12 +3589,12 @@ git commit -m "feat(import): resolve per-row identity match action"
 Reuses the exact same field-level rules every other write path validates against — `generateRecordPropertiesZodSchema` (on disk, already reused unmodified by Task 5) — rather than a second, import-specific validator that could drift. Adds one required-field completeness check the generic schema's `.partial()` shape doesn't cover for CREATE rows.
 
 **Files:**
-- Create: `packages/twenty-server/src/modules/guided-import/services/import-validation.service.ts`
-- Create: `packages/twenty-server/src/modules/guided-import/services/__tests__/import-validation.service.spec.ts`
-- Create: `packages/twenty-server/src/modules/guided-import/dtos/import-batch-preview.dto.ts`
-- Modify: `packages/twenty-server/src/modules/guided-import/resolvers/import-batch.resolver.ts` (add `prepareImportBatch` mutation, `importBatchPreview` query)
-- Modify: `packages/twenty-server/src/modules/guided-import/resolvers/__tests__/import-batch.resolver.spec.ts`
-- Modify: `packages/twenty-server/src/modules/guided-import/guided-import.module.ts`
+- Create: `packages/searm-server/src/modules/guided-import/services/import-validation.service.ts`
+- Create: `packages/searm-server/src/modules/guided-import/services/__tests__/import-validation.service.spec.ts`
+- Create: `packages/searm-server/src/modules/guided-import/dtos/import-batch-preview.dto.ts`
+- Modify: `packages/searm-server/src/modules/guided-import/resolvers/import-batch.resolver.ts` (add `prepareImportBatch` mutation, `importBatchPreview` query)
+- Modify: `packages/searm-server/src/modules/guided-import/resolvers/__tests__/import-batch.resolver.spec.ts`
+- Modify: `packages/searm-server/src/modules/guided-import/guided-import.module.ts`
 
 **Interfaces:**
 - Consumes: `generateRecordPropertiesZodSchema`, `ObjectMetadataForToolSchema` type (both on disk), `WorkspaceManyOrAllFlatEntityMapsCacheService` (on disk), `getFlatFieldsFromFlatObjectMetadata` (on disk), `ImportMatchResolutionService.resolveBatch` (Task 7).
@@ -3750,7 +3750,7 @@ describe('ImportValidationService', () => {
 - [ ] **Step 2: Run it, see it fail**
 
 ```bash
-cd packages/twenty-server && npx jest import-validation.service.spec
+cd packages/searm-server && npx jest import-validation.service.spec
 ```
 
 Expected: FAIL — module not found.
@@ -3763,7 +3763,7 @@ Create `services/import-validation.service.ts`:
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'searm-shared/utils';
 import { Repository } from 'typeorm';
 
 import { generateRecordPropertiesZodSchema } from 'src/engine/core-modules/record-crud/zod-schemas/record-properties.zod-schema';
@@ -3777,10 +3777,10 @@ import { ImportRowMatchAction } from 'src/modules/guided-import/types/import-bat
 export class ImportValidationService {
   constructor(
     private readonly flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(ImportBatchEntity, 'core')
     private readonly importBatchRepository: Repository<ImportBatchEntity>,
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(ImportRowEntity, 'core')
     private readonly importRowRepository: Repository<ImportRowEntity>,
   ) {}
@@ -3869,7 +3869,7 @@ export class ImportValidationService {
 - [ ] **Step 4: Run it, see it pass**
 
 ```bash
-cd packages/twenty-server && npx jest import-validation.service.spec
+cd packages/searm-server && npx jest import-validation.service.spec
 ```
 
 Expected: PASS, 4 tests.
@@ -3968,7 +3968,7 @@ Add the two new mocks (`matchResolutionService`, `validationService`) to the `Te
 - [ ] **Step 7: Run it, see it fail**
 
 ```bash
-cd packages/twenty-server && npx jest import-batch.resolver.spec
+cd packages/searm-server && npx jest import-batch.resolver.spec
 ```
 
 Expected: FAIL — `resolver.prepareImportBatch is not a function`.
@@ -3979,10 +3979,10 @@ Add to `resolvers/import-batch.resolver.ts` — constructor gains two dependenci
 
 ```ts
   constructor(
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(ImportBatchEntity, 'core')
     private readonly importBatchRepository: Repository<ImportBatchEntity>,
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(ImportRowEntity, 'core')
     private readonly importRowRepository: Repository<ImportRowEntity>,
     private readonly importMatchResolutionService: ImportMatchResolutionService,
@@ -4065,7 +4065,7 @@ Add imports: `Query` alongside the existing `Mutation` import, `ImportBatchPrevi
 - [ ] **Step 9: Run it, see it pass**
 
 ```bash
-cd packages/twenty-server && npx jest import-batch.resolver.spec
+cd packages/searm-server && npx jest import-batch.resolver.spec
 ```
 
 Expected: PASS, 6 tests (4 existing + 2 new).
@@ -4077,9 +4077,9 @@ Add `ImportValidationService` and `ImportBatchPreviewDTO`'s owning imports to `g
 - [ ] **Step 11: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/modules/guided-import
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/modules/guided-import
 git commit -m "feat(import): validate rows before write and expose a preview summary"
 ```
 
@@ -4087,20 +4087,20 @@ git commit -m "feat(import): validate rows before write and expose a preview sum
 
 ### Task 9: Resumable, idempotent execution
 
-CREATE and NONE-match rows are not "AI-derived" — they write directly through the same `CreateRecordService`/`UpdateRecordService` path a human's manual record creation uses, exactly like Twenty's existing `contact-creation-manager` does today. PROPOSE rows (CANDIDATE identity matches) go through `ProposalGateService.createFromExtraction` — this is the concrete mechanism behind the charter's "Imports may create research tasks but never bypass approval for AI-derived changes" line. Resumability comes from querying only `ImportRowStatus.PENDING` rows on every run — a row already marked `PROCESSED` or `FAILED` is never touched again, so a retried BullMQ job after a crash picks up exactly where it left off.
+CREATE and NONE-match rows are not "AI-derived" — they write directly through the same `CreateRecordService`/`UpdateRecordService` path a human's manual record creation uses, exactly like SeaRM's existing `contact-creation-manager` does today. PROPOSE rows (CANDIDATE identity matches) go through `ProposalGateService.createFromExtraction` — this is the concrete mechanism behind the charter's "Imports may create research tasks but never bypass approval for AI-derived changes" line. Resumability comes from querying only `ImportRowStatus.PENDING` rows on every run — a row already marked `PROCESSED` or `FAILED` is never touched again, so a retried BullMQ job after a crash picks up exactly where it left off.
 
-> **Review fix (C7) — the importer must write with a real role and a real principal, not `{ shouldBypassPermissionChecks: false }`.** `RolePermissionConfig` (`engine/twenty-orm/types/role-permission-config.ts`, verified on disk) is the closed union `{ shouldBypassPermissionChecks: true } | { unionOf: RoleId[] } | { intersectionOf: RoleId[] }` — `{ shouldBypassPermissionChecks: false }` is not a member and does not compile. The deeper problem the type error was masking: the importer ran under `buildSystemAuthContext` with no role and no `createdBy`/`updatedBy` actor, so every imported record was attributed to SYSTEM and the uploader's own field permissions were never enforced — a user who cannot write `person.jobTitle` could import a column into it. That breaks the charter's Record and Principal contracts.
+> **Review fix (C7) — the importer must write with a real role and a real principal, not `{ shouldBypassPermissionChecks: false }`.** `RolePermissionConfig` (`engine/searm-orm/types/role-permission-config.ts`, verified on disk) is the closed union `{ shouldBypassPermissionChecks: true } | { unionOf: RoleId[] } | { intersectionOf: RoleId[] }` — `{ shouldBypassPermissionChecks: false }` is not a member and does not compile. The deeper problem the type error was masking: the importer ran under `buildSystemAuthContext` with no role and no `createdBy`/`updatedBy` actor, so every imported record was attributed to SYSTEM and the uploader's own field permissions were never enforced — a user who cannot write `person.jobTitle` could import a column into it. That breaks the charter's Record and Principal contracts.
 >
 > The fix is the same shape `ProposalExecutionService.buildApproverContext` already produces on disk (`services/proposal-execution.service.ts:355-418`, verified): look up the importing user's workspace member, resolve their role with `UserRoleService.getRoleIdForUserWorkspace`, build a real `authContext` with `buildUserAuthContext`, and pass `rolePermissionConfig: { unionOf: [roleId] }` plus `createdBy`/`updatedBy: actorMetadata` on every write. `ImportBatchEntity.createdByUserWorkspaceId` (Task 6) already carries the importing user's identity — this task is what finally reads it. Steps 1, 3, and 5 below are rewritten accordingly; `readBaseline`'s `{ shouldBypassPermissionChecks: true }` stays as-is (Launch 1's own `hasBaselineConflict` reads the baseline the same privileged way — the conflict check compares state, it does not attribute a write).
 
 **Files:**
-- Create: `packages/twenty-server/src/modules/guided-import/services/import-execution.service.ts`
-- Create: `packages/twenty-server/src/modules/guided-import/services/__tests__/import-execution.service.spec.ts`
-- Create: `packages/twenty-server/src/modules/guided-import/jobs/import-execution.job.ts`
-- Modify: `packages/twenty-server/src/modules/guided-import/resolvers/import-batch.resolver.ts` (add `startImportBatch`)
-- Modify: `packages/twenty-server/src/modules/guided-import/resolvers/__tests__/import-batch.resolver.spec.ts`
-- Modify: `packages/twenty-server/src/engine/core-modules/message-queue/message-queue.constants.ts`
-- Modify: `packages/twenty-server/src/modules/guided-import/guided-import.module.ts`
+- Create: `packages/searm-server/src/modules/guided-import/services/import-execution.service.ts`
+- Create: `packages/searm-server/src/modules/guided-import/services/__tests__/import-execution.service.spec.ts`
+- Create: `packages/searm-server/src/modules/guided-import/jobs/import-execution.job.ts`
+- Modify: `packages/searm-server/src/modules/guided-import/resolvers/import-batch.resolver.ts` (add `startImportBatch`)
+- Modify: `packages/searm-server/src/modules/guided-import/resolvers/__tests__/import-batch.resolver.spec.ts`
+- Modify: `packages/searm-server/src/engine/core-modules/message-queue/message-queue.constants.ts`
+- Modify: `packages/searm-server/src/modules/guided-import/guided-import.module.ts`
 
 **Interfaces:**
 - Consumes: `CreateRecordService.execute` / `UpdateRecordService.execute` / `FindRecordsService.execute` (on disk, same signatures verified in Launch 1's `proposal-execution.service.ts`), `ProposalGateService.createFromExtraction` (Task 1), `ImportRowEntity`/`ImportBatchEntity` (Task 6), `UserRoleService.getRoleIdForUserWorkspace` (`engine/metadata-modules/user-role/user-role.service.ts:138`, verified), `buildUserAuthContext` and `fromUserEntityToFlat` (same utilities `ProposalExecutionService.buildApproverContext` uses, on disk), `WorkspaceCacheService.getOrRecompute` (on disk, used by `buildApproverContext` for `flatWorkspaceMemberMaps`).
@@ -4453,7 +4453,7 @@ describe('ImportExecutionService', () => {
 - [ ] **Step 2: Run it, see it fail**
 
 ```bash
-cd packages/twenty-server && npx jest import-execution.service.spec
+cd packages/searm-server && npx jest import-execution.service.spec
 ```
 
 Expected: FAIL — module not found.
@@ -4466,8 +4466,8 @@ Create `services/import-execution.service.ts`:
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { FieldActorSource, type ActorMetadata } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
+import { FieldActorSource, type ActorMetadata } from 'searm-shared/types';
+import { isDefined } from 'searm-shared/utils';
 import { Repository } from 'typeorm';
 
 import { CreateRecordService } from 'src/engine/core-modules/record-crud/services/create-record.service';
@@ -4480,8 +4480,8 @@ import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user
 import { fromUserEntityToFlat } from 'src/engine/core-modules/user/utils/from-user-entity-to-flat.util';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { buildUserAuthContext } from 'src/engine/core-modules/auth/utils/build-user-auth-context.util';
-import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
-import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
+import { buildSystemAuthContext } from 'src/engine/searm-orm/utils/build-system-auth-context.util';
+import { type RolePermissionConfig } from 'src/engine/searm-orm/types/role-permission-config';
 import { type FlatWorkspace } from 'src/engine/workspace-manager/types/flat-workspace.type';
 import { ProposalActionType } from 'src/engine/metadata-modules/ai/ai-write-approval/types/proposal-status.type';
 import { ProposalGateService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service';
@@ -4516,16 +4516,16 @@ export class ImportExecutionService {
     private readonly proposalGateService: ProposalGateService,
     private readonly userRoleService: UserRoleService,
     private readonly workspaceCacheService: WorkspaceCacheService,
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(UserWorkspaceEntity)
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(ImportBatchEntity, 'core')
     private readonly importBatchRepository: Repository<ImportBatchEntity>,
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(ImportRowEntity, 'core')
     private readonly importRowRepository: Repository<ImportRowEntity>,
   ) {}
@@ -4850,7 +4850,7 @@ export class ImportExecutionService {
 - [ ] **Step 4: Run it, see it pass**
 
 ```bash
-cd packages/twenty-server && npx jest import-execution.service.spec
+cd packages/searm-server && npx jest import-execution.service.spec
 ```
 
 Expected: PASS — all 10 `it` blocks (the original 8 plus C7's role-attribution and permission-refusal tests).
@@ -4865,8 +4865,8 @@ import { Scope } from '@nestjs/common';
 import { Process } from 'src/engine/core-modules/message-queue/decorators/process.decorator';
 import { Processor } from 'src/engine/core-modules/message-queue/decorators/processor.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { GlobalWorkspaceOrmManager } from 'src/engine/searm-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { buildSystemAuthContext } from 'src/engine/searm-orm/utils/build-system-auth-context.util';
 import { ImportExecutionService } from 'src/modules/guided-import/services/import-execution.service';
 
 export type ImportExecutionJobData = {
@@ -4948,7 +4948,7 @@ Add `const messageQueueService = { add: jest.fn() };` to the existing mock decla
 - [ ] **Step 8: Run it, see it fail**
 
 ```bash
-cd packages/twenty-server && npx jest import-batch.resolver.spec
+cd packages/searm-server && npx jest import-batch.resolver.spec
 ```
 
 Expected: FAIL — `resolver.startImportBatch is not a function`.
@@ -4999,7 +4999,7 @@ Add the corresponding imports (`InjectMessageQueue`, `MessageQueue`, `MessageQue
 - [ ] **Step 10: Run it, see it pass**
 
 ```bash
-cd packages/twenty-server && npx jest import-batch.resolver.spec
+cd packages/searm-server && npx jest import-batch.resolver.spec
 ```
 
 Expected: PASS, 8 tests (6 existing + 2 new).
@@ -5013,9 +5013,9 @@ C7's `ImportExecutionService` constructor also needs `UserRoleService` (module: 
 - [ ] **Step 12: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/modules/guided-import packages/twenty-server/src/engine/core-modules/message-queue
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/modules/guided-import packages/searm-server/src/engine/core-modules/message-queue
 git commit -m "feat(import): add resumable idempotent import execution"
 ```
 
@@ -5024,16 +5024,16 @@ git commit -m "feat(import): add resumable idempotent import execution"
 ### Task 10: Failed rows stay downloadable and retryable, and the frontend wizard drives the new backend
 
 **Files:**
-- Create: `packages/twenty-server/src/modules/guided-import/controllers/import-failed-rows.controller.ts`
-- Create: `packages/twenty-server/src/modules/guided-import/controllers/__tests__/import-failed-rows.controller.spec.ts`
-- Modify: `packages/twenty-server/src/modules/guided-import/resolvers/import-batch.resolver.ts` (add `retryFailedImportRows`)
-- Modify: `packages/twenty-server/src/modules/guided-import/resolvers/__tests__/import-batch.resolver.spec.ts`
-- Modify: `packages/twenty-server/src/modules/guided-import/guided-import.module.ts`
-- Create: `packages/twenty-front/src/modules/object-record/spreadsheet-import/graphql/mutations/createImportBatch.ts`, `prepareImportBatch.ts`, `startImportBatch.ts`, `retryFailedImportRows.ts`
-- Create: `packages/twenty-front/src/modules/object-record/spreadsheet-import/graphql/queries/importBatch.ts`
-- Create: `packages/twenty-front/src/modules/object-record/spreadsheet-import/hooks/useCreateImportBatch.ts`
-- Create: `packages/twenty-front/src/modules/object-record/spreadsheet-import/components/SpreadsheetImportFailedRowsBanner.tsx`
-- Modify: `packages/twenty-front/src/modules/object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog.ts`
+- Create: `packages/searm-server/src/modules/guided-import/controllers/import-failed-rows.controller.ts`
+- Create: `packages/searm-server/src/modules/guided-import/controllers/__tests__/import-failed-rows.controller.spec.ts`
+- Modify: `packages/searm-server/src/modules/guided-import/resolvers/import-batch.resolver.ts` (add `retryFailedImportRows`)
+- Modify: `packages/searm-server/src/modules/guided-import/resolvers/__tests__/import-batch.resolver.spec.ts`
+- Modify: `packages/searm-server/src/modules/guided-import/guided-import.module.ts`
+- Create: `packages/searm-front/src/modules/object-record/spreadsheet-import/graphql/mutations/createImportBatch.ts`, `prepareImportBatch.ts`, `startImportBatch.ts`, `retryFailedImportRows.ts`
+- Create: `packages/searm-front/src/modules/object-record/spreadsheet-import/graphql/queries/importBatch.ts`
+- Create: `packages/searm-front/src/modules/object-record/spreadsheet-import/hooks/useCreateImportBatch.ts`
+- Create: `packages/searm-front/src/modules/object-record/spreadsheet-import/components/SpreadsheetImportFailedRowsBanner.tsx`
+- Modify: `packages/searm-front/src/modules/object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog.ts`
 
 **Interfaces:**
 - Consumes: `ImportRowEntity`/`ImportBatchEntity` (Task 6), `createImportBatch`/`prepareImportBatch`/`startImportBatch` (Tasks 6, 8, 9).
@@ -5124,7 +5124,7 @@ describe('ImportFailedRowsController', () => {
 - [ ] **Step 2: Run it, see it fail**
 
 ```bash
-cd packages/twenty-server && npx jest import-failed-rows.controller.spec
+cd packages/searm-server && npx jest import-failed-rows.controller.spec
 ```
 
 Expected: FAIL — module not found.
@@ -5152,10 +5152,10 @@ import { ImportRowStatus } from 'src/modules/guided-import/types/import-batch-st
 @UseGuards(JwtAuthGuard, WorkspaceAuthGuard)
 export class ImportFailedRowsController {
   constructor(
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(ImportBatchEntity, 'core')
     private readonly importBatchRepository: Repository<ImportBatchEntity>,
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(ImportRowEntity, 'core')
     private readonly importRowRepository: Repository<ImportRowEntity>,
   ) {}
@@ -5222,7 +5222,7 @@ export class ImportFailedRowsController {
 - [ ] **Step 4: Run it, see it pass**
 
 ```bash
-cd packages/twenty-server && npx jest import-failed-rows.controller.spec
+cd packages/searm-server && npx jest import-failed-rows.controller.spec
 ```
 
 Expected: PASS, 1 test.
@@ -5269,7 +5269,7 @@ describe('retryFailedImportRows', () => {
 - [ ] **Step 6: Run it, see it fail**
 
 ```bash
-cd packages/twenty-server && npx jest import-batch.resolver.spec
+cd packages/searm-server && npx jest import-batch.resolver.spec
 ```
 
 Expected: FAIL — `resolver.retryFailedImportRows is not a function`.
@@ -5323,7 +5323,7 @@ Add `ImportRowStatus` to the existing type imports.
 - [ ] **Step 8: Run it, see it pass**
 
 ```bash
-cd packages/twenty-server && npx jest import-batch.resolver.spec
+cd packages/searm-server && npx jest import-batch.resolver.spec
 ```
 
 Expected: PASS, 9 tests (8 existing + 1 new).
@@ -5374,7 +5374,7 @@ export const IMPORT_BATCH_PREVIEW = gql`
 Run the front codegen so these documents get typed hooks:
 
 ```bash
-cd packages/twenty-front && npx nx run twenty-front:graphql:generate
+cd packages/searm-front && npx nx run searm-front:graphql:generate
 ```
 
 (Exact codegen command name confirmed by grepping `package.json`'s `scripts` for `graphql` before running — Launch 1's plan did not need this step since its GraphQL types were metadata-schema, not core-schema-through-front; confirm whether this repo's codegen covers core-schema operations like `pendingProposals` already does, since `ProposalDTO` is core-schema too and the front already queries it successfully per Launch 1 Task 7.)
@@ -5539,16 +5539,16 @@ export const SpreadsheetImportFailedRowsBanner = ({
 };
 ```
 
-This is a functional-not-styled first pass — the component's design (Linaria styling, placement in the import dialog's result step) is left for a follow-up polish task; the plan's KISS budget for Phase 3 is the data path, not visual design. Confirm `REACT_APP_SERVER_BASE_URL` is the correct existing constant for building a REST URL client-side by grepping for its use in another `twenty-front` REST-calling component before citing it.
+This is a functional-not-styled first pass — the component's design (Linaria styling, placement in the import dialog's result step) is left for a follow-up polish task; the plan's KISS budget for Phase 3 is the data path, not visual design. Confirm `REACT_APP_SERVER_BASE_URL` is the correct existing constant for building a REST URL client-side by grepping for its use in another `searm-front` REST-calling component before citing it.
 
 - [ ] **Step 14: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx lint:diff-with-main twenty-front
-npx nx typecheck twenty-server
-npx nx typecheck twenty-front
-git add packages/twenty-server/src/modules/guided-import packages/twenty-front/src/modules/object-record/spreadsheet-import
+npx nx lint:diff-with-main searm-server
+npx nx lint:diff-with-main searm-front
+npx nx typecheck searm-server
+npx nx typecheck searm-front
+git add packages/searm-server/src/modules/guided-import packages/searm-front/src/modules/object-record/spreadsheet-import
 git commit -m "feat(import): failed rows downloadable and retryable; wire the frontend wizard"
 ```
 
@@ -5559,8 +5559,8 @@ git commit -m "feat(import): failed rows downloadable and retryable; wire the fr
 Proves the guided-import path and the ingestion-extraction path against a real database, exercising exactly the charter's Phase 3 exit gate: "Imports and connected-account events create traceable proposals with no duplicate writes and no cross-workspace leaks."
 
 **Files:**
-- Create: `packages/twenty-server/test/integration/graphql/suites/guided-import/import-batch.integration-spec.ts`
-- Create: `packages/twenty-server/test/integration/graphql/suites/structured-extraction/participant-identity-proposal.integration-spec.ts`
+- Create: `packages/searm-server/test/integration/graphql/suites/guided-import/import-batch.integration-spec.ts`
+- Create: `packages/searm-server/test/integration/graphql/suites/structured-extraction/participant-identity-proposal.integration-spec.ts`
 
 **Interfaces:**
 - Consumes: everything from Tasks 1–10.
@@ -5629,7 +5629,7 @@ Assertions:
 - [ ] **Step 3: Run both suites**
 
 ```bash
-npx nx run twenty-server:test:integration:with-db-reset
+npx nx run searm-server:test:integration:with-db-reset
 ```
 
 Expected: both new suites pass and no existing suite regresses.
@@ -5637,12 +5637,12 @@ Expected: both new suites pass and no existing suite regresses.
 - [ ] **Step 4: Full regression check**
 
 ```bash
-npx nx test twenty-server
-npx nx test twenty-front
-npx nx lint:diff-with-main twenty-server
-npx nx lint:diff-with-main twenty-front
-npx nx typecheck twenty-server
-npx nx typecheck twenty-front
+npx nx test searm-server
+npx nx test searm-front
+npx nx lint:diff-with-main searm-server
+npx nx lint:diff-with-main searm-front
+npx nx typecheck searm-server
+npx nx typecheck searm-front
 ```
 
 Expected: all green.
@@ -5650,7 +5650,7 @@ Expected: all green.
 - [ ] **Step 5: Manual end-to-end verification**
 
 ```bash
-npx nx database:reset twenty-server
+npx nx database:reset searm-server
 yarn start
 ```
 
@@ -5659,7 +5659,7 @@ Sign in with "Continue with Email" and the prefilled credentials. Import a CSV o
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/twenty-server/test
+git add packages/searm-server/test
 git commit -m "feat(phase-3): add end-to-end ingestion and import integration coverage"
 ```
 
@@ -5672,7 +5672,7 @@ git commit -m "feat(phase-3): add end-to-end ingestion and import integration co
 | Connected-account ingestion (email, calendar events, participants, call recordings) becomes proposals, not direct writes | Task 4 (message + call-recording content), Task 3 (participants), Task 11 integration step 2 |
 | Deterministic email/domain/relationship matching prevents duplicate people and companies | Task 2 (EXACT/CANDIDATE/NONE), Task 3, Task 7, Task 9 |
 | Ambiguous matches become proposals | Task 3 (participants), Task 4 (CANDIDATE facts dropped, never proposed against a guess), Task 9 (PROPOSE rows), Task 11 integration steps 5–6 |
-| Import scans before writing and infers field and relationship mappings | Reused, not rebuilt — existing `twenty-front` spreadsheet-import wizard (see Task 6/7 rationale); server-side staging in Task 6 |
+| Import scans before writing and infers field and relationship mappings | Reused, not rebuilt — existing `searm-front` spreadsheet-import wizard (see Task 6/7 rationale); server-side staging in Task 6 |
 | Users review validation errors, duplicates, mappings, and merge/skip/create rules before any write | Task 7 (match action), Task 8 (validation + preview), Task 10 (frontend wiring shows the preview before `startImportBatch`) |
 | A resumable idempotent job imports rows | Task 9 — PENDING-only query is the resumability mechanism, tested explicitly |
 | Failed rows stay downloadable and retryable | Task 10 |
@@ -5686,7 +5686,7 @@ git commit -m "feat(phase-3): add end-to-end ingestion and import integration co
 
 | Cut | Trigger to build |
 | --- | --- |
-| Sample-value type voting for mapping inference (relaticle §2.2's confidence-floor voting layer) | The existing header-name-only mapping (already in `twenty-front`) proves insufficient in practice — many columns stay unmapped despite recognizable data patterns |
+| Sample-value type voting for mapping inference (relaticle §2.2's confidence-floor voting layer) | The existing header-name-only mapping (already in `searm-front`) proves insufficient in practice — many columns stay unmapped despite recognizable data patterns |
 | Per-value correction UI with row-count grouping, async per-column validation with progress polling (relaticle §2.4–2.5) | Import files large enough (10k+ rows) that the synchronous validation pass in Task 8 becomes noticeably slow, or users report wanting to fix a systemic bad value once instead of per-row |
 | In-place "retry just this row" UI (vs. re-upload the failed-rows CSV) | Failed-row volume/frequency from real usage makes re-upload noticeably painful |
 | Cross-object entity-link resolution (relaticle §2.3(b) — "what Company does this Person row belong to" as its own relationship-matching pass, independent from Task 7's own-record identity matching) | A workspace's import volume shows person-to-company linking errors are common; Task 7 already creates the Company via the existing `contact-creation-manager` domain-matching path when a Person's email domain is a work domain, which covers the common case |
@@ -5712,7 +5712,7 @@ git commit -m "feat(phase-3): add end-to-end ingestion and import integration co
 - **Launch 1 (Phase 1, `ai-write-approval`)** — hard dependency, already shipped on disk. Every proposal this phase creates uses `ProposalEntity`/`ProposalItemEntity`/`ProposalGateService`/`ProposalExecutionService` unmodified except for Task 1's additive `sourceKey` column and `createFromExtraction` method.
 - **Phase 2 (`Evidence`/`Fact`/`AgentTask`/`AgentRun`)** — **hard dependency, ships first** (program review decision; see the superseded note at the top of this plan). Task 4 calls `EvidenceRecordingService.recordEvidence(...)`; Task 1's `createFromExtraction` calls `FactLookupService.findCurrentFactIdsForFields(...)`; `ProposalItemEntity.factIds` is a Phase 2 column. Tasks 2, 5, 6, 7, 8, 9, 10 have **no** Phase 2 dependency and can be built in parallel with Phase 2.
 - **Phase 4 (agent API semantics)** — soft dependency, either order. Task 5's custom-field description enrichment is consumed by Phase 4 Task 8's permission-scoped `get_object_metadata`; neither blocks the other's tests.
-- **Twenty's existing, unmodified infrastructure** this phase extends rather than replaces: `contact-creation-manager` (deterministic Person/Company auto-creation from message/calendar sync — untouched), `MatchParticipantService` (exact-match participant linking — untouched, only extended with a second pass), `record-crud` services (`CreateRecordService`/`UpdateRecordService`/`FindRecordsService` — untouched, reused as-is by both direct writes and proposal application), the `twenty-front` spreadsheet-import wizard (mapping/validation UI — untouched, its output is now routed to a new backend instead of `useBatchCreateManyRecords`), `ai-generate-text`/`ai-models`/`ai-billing` (LLM invocation and cost accounting — untouched, reused for structured extraction).
+- **SeaRM's existing, unmodified infrastructure** this phase extends rather than replaces: `contact-creation-manager` (deterministic Person/Company auto-creation from message/calendar sync — untouched), `MatchParticipantService` (exact-match participant linking — untouched, only extended with a second pass), `record-crud` services (`CreateRecordService`/`UpdateRecordService`/`FindRecordsService` — untouched, reused as-is by both direct writes and proposal application), the `searm-front` spreadsheet-import wizard (mapping/validation UI — untouched, its output is now routed to a new backend instead of `useBatchCreateManyRecords`), `ai-generate-text`/`ai-models`/`ai-billing` (LLM invocation and cost accounting — untouched, reused for structured extraction).
 
 ## Risks and unknowns
 

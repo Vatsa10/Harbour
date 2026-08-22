@@ -40,10 +40,10 @@ jobs:
           script: |
             const name = context.payload.workflow_run.name;
             const projectByWorkflow = {
-              'CI UI': 'twenty-ui',
-              'CI Front': 'twenty-front',
+              'CI UI': 'searm-ui',
+              'CI Front': 'searm-front',
             };
-            const project = projectByWorkflow[name] ?? 'twenty-front';
+            const project = projectByWorkflow[name] ?? 'searm-front';
             const artifactName = `argos-screenshots-${project}`;
             core.setOutput('workflow_name', name);
             core.setOutput('project', project);
@@ -166,9 +166,9 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          client-id: ${{ vars.TWENTY_WORKFLOW_DISPATCHER_CLIENT_ID }}
-          private-key: ${{ secrets.TWENTY_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
-          owner: twentyhq
+          client-id: ${{ vars.SEARM_WORKFLOW_DISPATCHER_CLIENT_ID }}
+          private-key: ${{ secrets.SEARM_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
+          owner: Vatsa10
           repositories: ci-privileged
           permission-actions: write
 
@@ -204,4 +204,4 @@ jobs:
             ARGS+=(-f parent_commits="$PARENT_COMMITS")
           fi
 
-          gh workflow run post-visual-regression-comment.yaml --repo twentyhq/ci-privileged --ref main "${ARGS[@]}"
+          gh workflow run post-visual-regression-comment.yaml --repo Vatsa10/ci-privileged --ref main "${ARGS[@]}"

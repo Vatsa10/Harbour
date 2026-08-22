@@ -1,0 +1,3 @@
+#!/bin/sh
+cd /app/packages/searm-server
+exec yarn worker:prod

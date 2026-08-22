@@ -1,5 +1,5 @@
 ---
-description: Testing guidelines for Twenty CRM
+description: Testing guidelines for SeaRM CRM
 alwaysApply: false
 ---
 # Testing Guidelines
@@ -83,29 +83,29 @@ npx jest path/to/test.test.ts --config=packages/PROJECT/jest.config.mjs
 
 # ✅ Examples:
 # Frontend tests (use .test.ts extension)
-npx jest packages/twenty-front/src/modules/localization/utils/detection/detectNumberFormat.test.ts --config=packages/twenty-front/jest.config.mjs
+npx jest packages/searm-front/src/modules/localization/utils/detection/detectNumberFormat.test.ts --config=packages/searm-front/jest.config.mjs
 
 # Server tests (use .spec.ts extension)
-npx jest packages/twenty-server/src/utils/__test__/is-work-email.spec.ts --config=packages/twenty-server/jest.config.mjs
+npx jest packages/searm-server/src/utils/__test__/is-work-email.spec.ts --config=packages/searm-server/jest.config.mjs
 
 # ❌ AVOID - This runs ALL tests (slow):
-npx nx test twenty-front --testPathPattern=detectNumberFormat.test.ts
+npx nx test searm-front --testPathPattern=detectNumberFormat.test.ts
 
 # ✅ Run tests in watch mode for development:
-npx jest path/to/test.test.ts --config=packages/twenty-front/jest.config.mjs --watch
+npx jest path/to/test.test.ts --config=packages/searm-front/jest.config.mjs --watch
 
 # ✅ Run with coverage for single file:
-npx jest path/to/test.test.ts --config=packages/twenty-front/jest.config.mjs --coverage
+npx jest path/to/test.test.ts --config=packages/searm-front/jest.config.mjs --coverage
 ```
 
 ### Test Suite Execution
 ```bash
 # Run all tests for a project (use sparingly)
-npx nx test twenty-front
-npx nx test twenty-server
+npx nx test searm-front
+npx nx test searm-server
 
 # Run tests matching a pattern
-npx jest --testNamePattern="UserService" --config=packages/twenty-front/jest.config.mjs
+npx jest --testNamePattern="UserService" --config=packages/searm-front/jest.config.mjs
 ```
 
 ## Common Patterns

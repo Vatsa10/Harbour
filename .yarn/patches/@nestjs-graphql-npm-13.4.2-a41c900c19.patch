@@ -207,7 +207,7 @@ index 7fb2438d75794a0bb258fbfd99325f0646499723..db768e86d7bfb2b4427d0d5f50dca368
          this.typeDefinitionsStorage.clear();
 -        if (includeModules?.length) {
 +        if (reachableTypes) {
-+            // Twenty: scope the schema to types reachable from the scoped resolvers
++            // SeaRM: scope the schema to types reachable from the scoped resolvers
 +            const TMS = type_metadata_storage_1.TypeMetadataStorage;
 +            const unionMetadata = TMS.getUnionsMetadata().filter((unionMetadata) => {
 +                if (reachableTypes.has(unionMetadata.id)) {

@@ -2,7 +2,7 @@
 
 **Plan repaired:** `docs/superpowers/plans/2026-08-05-phase-4-agent-api-semantics.md`
 **Review answered:** `docs/superpowers/plans/2026-08-05-phases-2-5-plan-review.md` §Phase 4 (C9–C13, I15–I20, N5–N6)
-**Verified against commit:** `dba03d0907` — *style(ai-write-approval): apply oxfmt to the fix-wave changes* (`git log --oneline -1`, repo `d:/Files/Vatsa/Projects/AI-CRM/twenty`)
+**Verified against commit:** `dba03d0907` — *style(ai-write-approval): apply oxfmt to the fix-wave changes* (`git log --oneline -1`, repo `d:/Files/Vatsa/Projects/AI-CRM/searm`)
 **Date:** 2026-08-06
 **Method:** every code reference in Tasks 2, 5, 8, 10 and 13 was re-read from the live file. No source file under `packages/` was modified.
 
@@ -10,7 +10,7 @@
 
 ## C9 — Task 5 Step 8 inverted the gate from denylist to allowlist — **FIXED**
 
-**Verified against:** `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts` — `GateInput` L29-40, `UNGATED_CRUD_OPERATIONS` L44, `UNGATED_STATIC_TOOL_IDS` L50-85, `UNGATED_HTTP_METHODS` L88, `DELETE_BASELINE_FIELD_NAMES` L107, `evaluate()` L127-193, `buildGateInput` L195-239, `isGatedStaticTool` L241-257, `buildCrudGateInput` L262-380 (unclassified-operation fallback L372-379).
+**Verified against:** `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts` — `GateInput` L29-40, `UNGATED_CRUD_OPERATIONS` L44, `UNGATED_STATIC_TOOL_IDS` L50-85, `UNGATED_HTTP_METHODS` L88, `DELETE_BASELINE_FIELD_NAMES` L107, `evaluate()` L127-193, `buildGateInput` L195-239, `isGatedStaticTool` L241-257, `buildCrudGateInput` L262-380 (unclassified-operation fallback L372-379).
 
 **What was wrong:** Step 8 replaced `buildGateInput` wholesale with a version taking `(executionRef, args)`, returning `{keys, actionType, objectNameSingular, recordId, payload, confirm, confirmationBasis}`, gating by `GATED_CRUD_OPERATIONS` / `GATED_STATIC_TOOL_IDS` (neither exists) and calling `this.extractPayload` (does not exist). Transcribed literally it (a) converts the classification into an allowlist so any unenumerated write tool passes ungated, (b) deletes `target`, breaking `resolveMode`, (c) deletes `toolId`/`toolCategory`, so no approved static tool can be replayed, (d) deletes `baselineFieldNames`, killing delete staleness detection.
 
@@ -35,7 +35,7 @@
 
 ## C10 — wrong argument shape *and* return shape in metadata-discovery availability — **FIXED**
 
-**Verified against:** `src/engine/twenty-orm/utils/get-objects-permissions-from-role-permission-config.util.ts:10-16` (object argument `{rolesPermissions, rolePermissionConfig}`, returns `ObjectsPermissions`), L17-19 (returns `{}` for `shouldBypassPermissionChecks`); `twenty-shared/src/types/ObjectsPermissions.ts:5` (`Record<ObjectMetadataId, ObjectPermissions>`); canonical call site `tool-provider/providers/database-tool.provider.ts:73-83`; `workspace-cache.service.ts:122-125` and `workspace-cache-key.type.ts:34,71`; `permissions.service.ts:386-398`.
+**Verified against:** `src/engine/searm-orm/utils/get-objects-permissions-from-role-permission-config.util.ts:10-16` (object argument `{rolesPermissions, rolePermissionConfig}`, returns `ObjectsPermissions`), L17-19 (returns `{}` for `shouldBypassPermissionChecks`); `searm-shared/src/types/ObjectsPermissions.ts:5` (`Record<ObjectMetadataId, ObjectPermissions>`); canonical call site `tool-provider/providers/database-tool.provider.ts:73-83`; `workspace-cache.service.ts:122-125` and `workspace-cache-key.type.ts:34,71`; `permissions.service.ts:386-398`.
 
 **What changed:** Step 2b's single-positional-argument call and `.some()` on a Record are gone. Task 8 now states one **scope rule** used by all three call sites — a caller is *unscoped* when the config is a bypass config **or** the role holds `DATA_MODEL`; otherwise output is filtered by `objectPermissions[objectMetadataId]?.canReadObjectRecords`. It is implemented once as a `resolveDiscoveryScope(context)` private method (bypass short-circuit first, then `getOrRecompute(workspaceId, ['rolesPermissions'])`, then the object-form util call), copied into both factories, and mirrored in `MetadataToolProvider.isAvailable` with `Object.values(objectPermissions).some(...)`. The semantic bug is closed: a bypass or DATA_MODEL caller sees everything with `permittedOperations` defaulting to `true`, instead of discovering nothing.
 
@@ -49,17 +49,17 @@ Verified no module edit is needed: `object-metadata.module.ts:61,70` and `field-
 
 ## C11 — `installWorkflowDefinition` on the wrong GraphQL schema — **FIXED**
 
-**Verified against:** `graphql-config/decorators/metadata-resolver.decorator.ts:1-11` and `core-resolver.decorator.ts:7-11` (both are `@Resolver()` plus a `RESOLVER_SCHEMA_SCOPE` tag); `graphql-config.service.ts:83-86` (`include: [CoreEngineModule]`, `resolverSchemaScope: 'core'`); `metadata.module-factory.ts:36-38` (`include: [MetadataGraphQLApiModule]`, `'metadata'`); `twenty-client-sdk/package.json:8-31` and `src/core/index.ts:1` (`CoreApiClient` at `twenty-client-sdk/core`); `core-engine.module.ts` already imports `src/modules/**` modules (`EmailingModule`, `DashboardModule`, `MessagingWebhooksModule`).
+**Verified against:** `graphql-config/decorators/metadata-resolver.decorator.ts:1-11` and `core-resolver.decorator.ts:7-11` (both are `@Resolver()` plus a `RESOLVER_SCHEMA_SCOPE` tag); `graphql-config.service.ts:83-86` (`include: [CoreEngineModule]`, `resolverSchemaScope: 'core'`); `metadata.module-factory.ts:36-38` (`include: [MetadataGraphQLApiModule]`, `'metadata'`); `searm-client-sdk/package.json:8-31` and `src/core/index.ts:1` (`CoreApiClient` at `searm-client-sdk/core`); `core-engine.module.ts` already imports `src/modules/**` modules (`EmailingModule`, `DashboardModule`, `MessagingWebhooksModule`).
 
 **Decision: the mutation moves to the core schema.** `workflowTemplates` / `installWorkflowTemplate` stay on metadata for the settings UI (Task 11's codegen is unaffected); a second resolver class, `WorkflowDefinitionInstallResolver`, carries `installWorkflowDefinition` with `@CoreResolver()`. `WorkflowTemplatesModule` is imported by **both** `CoreEngineModule` and `MetadataEngineModule`; the scope tag, not the include-root, decides which schema each resolver lands in. Step 8 now requires checking both playgrounds, and a new risk bullet says: if the tag does not filter cleanly, split the module — never move the mutation, because Phase 5's transport depends on it.
 
-**Phase 5 needs no change here:** `seedWorkflow(client: CoreApiClient, …)` and `import { type CoreApiClient } from 'twenty-client-sdk/core'` are correct as originally written.
+**Phase 5 needs no change here:** `seedWorkflow(client: CoreApiClient, …)` and `import { type CoreApiClient } from 'searm-client-sdk/core'` are correct as originally written.
 
 ---
 
 ## C12 — app service role lacks the `WORKFLOWS` permission flag — **FIXED (Phase 4 half)**
 
-**Verified against:** `twenty-shared/src/constants/PermissionFlagType.ts:9` (`WORKFLOWS`); `SystemPermissionFlag.ts:10` (`'6189e7bd-4051-5752-b6b1-5f31358fbaf1'`); `twenty-shared/src/application/roleManifestType.ts:59` (`permissionFlagUniversalIdentifiers?: string[]`, and `canBeAssignedToAgents` at L53); `twenty-sdk/src/sdk/define/roles/role-config.ts:7-13`; `from-role-config-to-role-manifest.ts:35-36`; server-side application at `compute-application-manifest-all-universal-flat-entity-maps.service.ts:304-316`; precedent `twenty-apps/public/people-data-labs/src/roles/default-function.role.ts:40` grants `[SystemPermissionFlag.WORKFLOWS]`.
+**Verified against:** `searm-shared/src/constants/PermissionFlagType.ts:9` (`WORKFLOWS`); `SystemPermissionFlag.ts:10` (`'6189e7bd-4051-5752-b6b1-5f31358fbaf1'`); `searm-shared/src/application/roleManifestType.ts:59` (`permissionFlagUniversalIdentifiers?: string[]`, and `canBeAssignedToAgents` at L53); `searm-sdk/src/sdk/define/roles/role-config.ts:7-13`; `from-role-config-to-role-manifest.ts:35-36`; server-side application at `compute-application-manifest-all-universal-flat-entity-maps.service.ts:304-316`; precedent `searm-apps/public/people-data-labs/src/roles/default-function.role.ts:40` grants `[SystemPermissionFlag.WORKFLOWS]`.
 
 **What changed:** the guard `SettingsPermissionGuard(PermissionFlagType.WORKFLOWS)` is kept deliberately, and the requirement it imposes on the caller is now written into the contract table and restated at the resolver: an installing application's role manifest **must** declare `permissionFlagUniversalIdentifiers: [SystemPermissionFlag.WORKFLOWS]`. The false reassurance ("an app's post-install hook runs with the application's own credentials, so no new authorization path is introduced") is replaced with the statement that those credentials hold only what the manifest declares. The `app-default.role.ts` edit itself is Phase 5's half.
 
@@ -85,7 +85,7 @@ Written into the plan as a table under Task 10 ("Contract exposed to Phase 5"). 
 | --- | --- |
 | Operation | `installWorkflowDefinition(input: InstallWorkflowDefinitionInput!): InstalledWorkflowTemplate!` |
 | Schema / endpoint | **core** (`/graphql`), declared `@CoreResolver()` on `WorkflowDefinitionInstallResolver` |
-| Client | `import { type CoreApiClient } from 'twenty-client-sdk/core'` — Phase 5's `seedWorkflow(client: CoreApiClient, …)` is correct unchanged |
+| Client | `import { type CoreApiClient } from 'searm-client-sdk/core'` — Phase 5's `seedWorkflow(client: CoreApiClient, …)` is correct unchanged |
 | Input | `{ name: String!, description: String, trigger: JSON!, steps: JSON!, activate: Boolean! = true }` |
 | Step shape accepted | `{ type, name, settings }` — `id`, `valid`, `nextStepIds` are **optional** and generated server-side |
 | Normalisation guarantee | `id: uuidv4()` where absent; `valid: true`; `nextStepIds` chained in array order, last step `[]` |

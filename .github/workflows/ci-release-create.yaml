@@ -51,8 +51,8 @@ jobs:
         with:
           branch: release/${{ steps.sanitize.outputs.version }}
           commit-message: "chore: release v${{ steps.sanitize.outputs.version }}"
-          committer: Github Action Deploy <github-action-deploy@twenty.com>
-          author: Github Action Deploy <github-action-deploy@twenty.com>
+          committer: Github Action Deploy <github-action-deploy@searm.com>
+          author: Github Action Deploy <github-action-deploy@searm.com>
           title: Release v${{ steps.sanitize.outputs.version }}
           labels: |
             release

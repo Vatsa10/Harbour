@@ -1,12 +1,12 @@
 # Contributor Code of Conduct
 
-## Twenty's Pledge
+## SeaRM's Pledge
 
 The contributors and maintainers of this project pledge to ensure a harassment-free experience for everyone in the community.
 
 The focus of both contributors and maintainers is on acting and interacting in ways that promote an open, welcoming, friendly, diverse, inclusive, and healthy community.
 
-## Twenty's Standards
+## SeaRM's Standards
 
 Examples of behavior that contributes to a positive environment for this
 community include:
@@ -31,7 +31,7 @@ Examples of unacceptable behavior include:
 
 ## Enforcement Responsibilities
 
-Community leaders and maintainers of this repository are responsible for clarifying and enforcing Twenty's standards of acceptable behavior. They will take appropriate and fair corrective action in response to any behavior that they deem inappropriate, threatening, offensive, or harmful.
+Community leaders and maintainers of this repository are responsible for clarifying and enforcing SeaRM's standards of acceptable behavior. They will take appropriate and fair corrective action in response to any behavior that they deem inappropriate, threatening, offensive, or harmful.
 
 Community leaders and maintainers of this repository have the right and responsibility to remove, edit, or reject comments, commits, code, issues, and other contributions that aren't aligned with this Code of Conduct. They will also communicate reasons for moderation decisions when appropriate.
 

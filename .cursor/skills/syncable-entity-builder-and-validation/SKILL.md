@@ -1,6 +1,6 @@
 ---
 name: syncable-entity-builder-and-validation
-description: Create validation logic and migration action builders for syncable entities in Twenty. Use when implementing business rule validation, uniqueness checks, foreign key validation, or building workspace migration actions for syncable entities. Validators never throw and never mutate.
+description: Create validation logic and migration action builders for syncable entities in SeaRM. Use when implementing business rule validation, uniqueness checks, foreign key validation, or building workspace migration actions for syncable entities. Validators never throw and never mutate.
 ---
 
 # Syncable Entity: Builder & Validation (Step 3/6)
@@ -32,7 +32,7 @@ This step creates:
 ```typescript
 import { Injectable } from '@nestjs/common';
 import { t, msg } from '@lingui/macro';
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'searm-shared/utils';
 
 import { type FlatMyEntity } from 'src/engine/metadata-modules/flat-my-entity/types/flat-my-entity.type';
 import { type FlatMyEntityMaps } from 'src/engine/metadata-modules/flat-my-entity/types/flat-my-entity-maps.type';

@@ -23,7 +23,7 @@ Every code reference below was re-read on disk at the named file:line before the
 
 **Changed:** the prose Step 8 is deleted. Two new tasks replace it.
 
-- **Task 5b** implements Owner Decision 4 as real code: adds `researcher` to `STANDARD_AGENT` + its builder, adds an `aiResearcher` standard role with `canBeAssignedToAgents: true`, and a `ResearchAgentService` that resolves the agent by `universalIdentifier` and idempotently binds the role via `AiAgentRoleService.assignRoleToAgent` — because **`roleTarget` is not in `TWENTY_STANDARD_ALL_METADATA_NAME`**, so the declarative pipeline structurally cannot emit the binding. 5 unit tests plus a `database:reset` + `psql` real-seam check.
+- **Task 5b** implements Owner Decision 4 as real code: adds `researcher` to `STANDARD_AGENT` + its builder, adds an `aiResearcher` standard role with `canBeAssignedToAgents: true`, and a `ResearchAgentService` that resolves the agent by `universalIdentifier` and idempotently binds the role via `AiAgentRoleService.assignRoleToAgent` — because **`roleTarget` is not in `SEARM_STANDARD_ALL_METADATA_NAME`**, so the declarative pipeline structurally cannot emit the binding. 5 unit tests plus a `database:reset` + `psql` real-seam check.
 - **Task 5c** writes the tool's full `.ts`, `.schema.ts`, and `__tests__/` with 4 tests. `agentId` comes from `resolveResearchAgentId(context.workspaceId)` and is deliberately *not* on the model's input schema. `context.actorContext` is replaced with a literal `{ source: FieldActorSource.AGENT, workspaceMemberId: null, name: 'AI agent', context: {} }`.
 
 ### C3 — Task 9's find-and-replace blocks do not exist — FIXED
@@ -92,7 +92,7 @@ Each of these was a plan claim that the checkout contradicted. Listed separately
 5. `ToolExecutionContext` has five fields and no `actorContext`; `ActionToolProvider.executeStaticTool` cannot supply one.
 6. `AgentEntity` is a **core-schema** entity. The plan's Task 4 comment asserted it "lives in the workspace schema (metadata-managed, per-workspace), not core" — the opposite of the truth. Corrected.
 7. `AgentEntity` has no `roleId`; the agent→role edge is `RoleTargetEntity`.
-8. There is **no** declarative standard-role-target mechanism — `roleTarget` is absent from `TWENTY_STANDARD_ALL_METADATA_NAME`, and `createStandardRoleFlatMetadata` hard-codes `roleTargetIds: []`. The seeded `helper` agent is role-less today.
+8. There is **no** declarative standard-role-target mechanism — `roleTarget` is absent from `SEARM_STANDARD_ALL_METADATA_NAME`, and `createStandardRoleFlatMetadata` hard-codes `roleTargetIds: []`. The seeded `helper` agent is role-less today.
 9. Every shipped role (`admin`, member, guest) sets `canBeAssignedToAgents: false`, so `assignRoleToAgent` would throw against all of them. A new role was required.
 10. `ProposalDiffTable.tsx` uses Linaria + `themeCssVariables`; the plan's `${({ theme }) => …}` idiom appears nowhere and does not build.
 11. The component's render is two-tier with a `colSpan={3}` item row and an empty leading spacer cell; the plan quoted a flat one-row-per-field map.
@@ -146,7 +146,7 @@ Follow-up investigation, same checkout. Every claim below was read on disk at th
 
 No shipped role sets it true: `create-standard-flat-role-metadata.util.ts:25` (`admin`), `role.service.ts:472` (`createMemberRole`), `:499` (`createGuestRole`). The **column default is `true`** (`1700140427984-setupMetadataTables.ts:117`) and both `createRoleInput` (`from-create-role-input-to-flat-role-to-create.util.ts:45`) and the app-manifest converter (`from-role-manifest-to-universal-flat-role.util.ts:30`) default to `true` — so a user-created or application-supplied role *can* be agent-assignable. Only the three hard-coded seeds opt out.
 
-**Can `roleTarget` be created at seeding time?** The *role* can (declaratively — `'role'` is in `TWENTY_STANDARD_ALL_METADATA_NAME`, and adding a `STANDARD_ROLE` key forces the matching builder via the `satisfies` constraint). The *roleTarget* cannot: `'roleTarget'` is absent from that list and `createStandardRoleFlatMetadata` hard-codes `roleTargetIds: []`. Note the migration engine itself *does* understand `roleTarget` — `RoleTargetService.createMany` passes it as a metadata name — so the gap is purely in the standard-application seed list. Adding it there would mean inventing standard-roleTarget constants and builders and is a larger change than Task 5b's runtime binding. Task 5b's approach is correct.
+**Can `roleTarget` be created at seeding time?** The *role* can (declaratively — `'role'` is in `SEARM_STANDARD_ALL_METADATA_NAME`, and adding a `STANDARD_ROLE` key forces the matching builder via the `satisfies` constraint). The *roleTarget* cannot: `'roleTarget'` is absent from that list and `createStandardRoleFlatMetadata` hard-codes `roleTargetIds: []`. Note the migration engine itself *does* understand `roleTarget` — `RoleTargetService.createMany` passes it as a metadata name — so the gap is purely in the standard-application seed list. Adding it there would mean inventing standard-roleTarget constants and builders and is a larger change than Task 5b's runtime binding. Task 5b's approach is correct.
 
 **The decisive test — what does a role-less agent resolve to? Nothing.** `agent-async-executor.service.ts:295-325`:
 
@@ -195,7 +195,7 @@ The CAS still holds: the first tick sets `status = LEASED` with `leasedUntil` in
 
 That exposed a second hole: a row that burns through `maxAttempts` while leased is neither claimable nor terminal, so it sits `LEASED` forever with no operator surface. Added `AgentTaskService.reapAbandonedTasks()` (`status = LEASED AND "leasedUntil" < now() AND attempts >= "maxAttempts"` → `FAILED` with an outcome string), called at the top of the dispatch tick.
 
-**Should Phase 2 reuse existing machinery instead?** Partly, and it now does. Twenty's queue is BullMQ over Redis; `buildJobsOptions` (`bullmq.driver.ts:330-352`) exposes only `attempts`, `priority`, `delay` and retention. Jobs are not SQL-queryable and are dropped by `removeOnComplete`/`removeOnFail`, so they cannot hold the `budget`/`attempts`/`outcome` state the approvals UI and Task 13 read — the durable record has to stay in `core."agentTask"`. But the *recovery pattern* is already in the repo and is now cited as the model: `getStaledRunsFindOptions()` matches `status = ENQUEUED AND enqueuedAt < now() - STALED_RUNS_THRESHOLD_MS` (1 hour) and `WorkflowHandleStaledRunsWorkspaceService` re-enqueues, driven by the `cron:workflow:handle-staled-runs` cron. The corrected `claimDueTasks` plus `reapAbandonedTasks` is that same pattern with a per-row deadline instead of a global threshold. No second scheduler.
+**Should Phase 2 reuse existing machinery instead?** Partly, and it now does. SeaRM's queue is BullMQ over Redis; `buildJobsOptions` (`bullmq.driver.ts:330-352`) exposes only `attempts`, `priority`, `delay` and retention. Jobs are not SQL-queryable and are dropped by `removeOnComplete`/`removeOnFail`, so they cannot hold the `budget`/`attempts`/`outcome` state the approvals UI and Task 13 read — the durable record has to stay in `core."agentTask"`. But the *recovery pattern* is already in the repo and is now cited as the model: `getStaledRunsFindOptions()` matches `status = ENQUEUED AND enqueuedAt < now() - STALED_RUNS_THRESHOLD_MS` (1 hour) and `WorkflowHandleStaledRunsWorkspaceService` re-enqueues, driven by the `cron:workflow:handle-staled-runs` cron. The corrected `claimDueTasks` plus `reapAbandonedTasks` is that same pattern with a per-row deadline instead of a global threshold. No second scheduler.
 
 ## Q3 — `threadId` through the lazy `execute_tool` path: **reaches the tool, once the source object carries it**
 
@@ -211,9 +211,9 @@ The one real gap is upstream and the plan already fixes it: `buildLazyRegistryTo
 
 `themeCssVariables.font.size.xs` → `themeCssVariables.ts:204` (`font.size` = `xxs, xs, sm, md, lg, xl, xxl`). `themeCssVariables.spacing[1]` → `:60` (`spacing` has string integer keys `'0'`–`'32'` plus half-steps). Task 12's fallback instruction was deleted; the "missing token is a silent empty string" caveat was kept as the reason for verifying.
 
-## Q6 — single-cron CLI: **`npx nx run twenty-server:command cron:<name>`**
+## Q6 — single-cron CLI: **`npx nx run searm-server:command cron:<name>`**
 
-`packages/twenty-server/project.json`'s `command` target is `{"cwd": "packages/twenty-server", "command": "node dist/command/command.js"}`; Nx appends the trailing args, and `cron:register:all` is just one registered nest-commander name among many (`cron:workflow:handle-staled-runs`, `cron:billing:reminder`, …) — nothing privileges the bulk registrar. Two caveats now in Task 13 Step 4: the target runs `dist/`, so build first or use `npx ts-node -r tsconfig-paths/register src/command/command.ts <name>`; and a `cron:*` command *registers* the recurring job rather than executing one tick.
+`packages/searm-server/project.json`'s `command` target is `{"cwd": "packages/searm-server", "command": "node dist/command/command.js"}`; Nx appends the trailing args, and `cron:register:all` is just one registered nest-commander name among many (`cron:workflow:handle-staled-runs`, `cron:billing:reminder`, …) — nothing privileges the bulk registrar. Two caveats now in Task 13 Step 4: the target runs `dist/`, so build first or use `npx ts-node -r tsconfig-paths/register src/command/command.ts <name>`; and a `cron:*` command *registers* the recurring job rather than executing one tick.
 
 ## What this invalidated in the plan
 

@@ -18,10 +18,10 @@ jobs:
     uses: ./.github/workflows/changed-files.yaml
     with:
       files: |
-        packages/twenty-zapier/**
-        packages/twenty-server/**
-        !packages/twenty-zapier/package.json
-        !packages/twenty-zapier/CHANGELOG.md
+        packages/searm-zapier/**
+        packages/searm-server/**
+        !packages/searm-zapier/package.json
+        !packages/searm-zapier/CHANGELOG.md
   server-setup:
     needs: changed-files-check
     if: needs.changed-files-check.outputs.any_changed == 'true'
@@ -52,35 +52,35 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/yarn-install
 
-      - name: Build twenty-shared
-        run: npx nx build twenty-shared
+      - name: Build searm-shared
+        run: npx nx build searm-shared
 
       - name: Server / Write .env
-        run: npx nx reset:env:e2e-testing-server twenty-server
+        run: npx nx reset:env:e2e-testing-server searm-server
 
       - name: Server / Build
-        run: npx nx build twenty-server
+        run: npx nx build searm-server
 
       - name: Create and setup database
         run: |
           PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -d postgres -c 'CREATE DATABASE "default";'
           PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -d postgres -c 'CREATE DATABASE "test";'
-          npx nx run twenty-server:database:reset
+          npx nx run searm-server:database:reset
 
       - name: Server / Start
         run: |
-          npx nx run twenty-server:start:ci &
+          npx nx run searm-server:start:ci &
           echo "Waiting for server to be ready..."
           timeout 60 bash -c 'until curl -sf http://localhost:3000/healthz; do sleep 2; done'
 
       - name: Start worker
-        working-directory: packages/twenty-server
+        working-directory: packages/searm-server
         run: |
           NODE_ENV=development node dist/queue-worker/queue-worker.js &
           echo "Worker started"
 
       - name: Zapier / Build
-        run: npx nx build twenty-zapier
+        run: npx nx build searm-zapier
 
       - name: Zapier / Run Tests
         uses: ./.github/actions/nx-affected
@@ -104,7 +104,7 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/yarn-install
       - name: Build
-        run: npx nx build twenty-zapier
+        run: npx nx build searm-zapier
       - name: Run ${{ matrix.task }} task
         uses: ./.github/actions/nx-affected
         with:

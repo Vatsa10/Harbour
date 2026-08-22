@@ -4,7 +4,7 @@
 
 **Goal:** An agent can research a record, persist what it observed as immutable `Evidence`, derive `Fact` rows from that evidence, and turn strong or conflicting facts into `ProposalItem`s that a reviewer can approve — with the evidence and facts visible in the approval UI so the reviewer sees *why* a change was proposed, dated, and sourced. Work is scheduled durably via `AgentTask` (leased, retried with backoff, cancellable, budgeted) and executed via `AgentRun`, both new core-schema entities. Every record mutation still flows through the Launch 1 `ProposalGateService` — this phase adds evidence upstream of proposals, it does not add a second write path.
 
-**Architecture:** Two new sibling entity groups under `engine/metadata-modules/ai/`: `ai-research` (Evidence, Fact, AgentTask, AgentRun, and the services/jobs that create and derive them) and an extension of the existing `ai-write-approval` module (Launch 1) to attach `factIds` to a `ProposalItem` at proposal-creation time, and to permanently dismiss a `Fact` when the reviewer rejects the item it produced. A durable `AgentTask` is claimed by a cron+queue-worker pair modeled directly on Twenty's own `messaging-message-list-fetch` cron/job pattern (compare-and-swap claim, no new locking primitive). The worker invokes Twenty's existing `AgentAsyncExecutorService.executeAgent()` — extended with one new optional `threadId` parameter so every tool call from one research run batches into one `Proposal`, exactly like one chat turn does today.
+**Architecture:** Two new sibling entity groups under `engine/metadata-modules/ai/`: `ai-research` (Evidence, Fact, AgentTask, AgentRun, and the services/jobs that create and derive them) and an extension of the existing `ai-write-approval` module (Launch 1) to attach `factIds` to a `ProposalItem` at proposal-creation time, and to permanently dismiss a `Fact` when the reviewer rejects the item it produced. A durable `AgentTask` is claimed by a cron+queue-worker pair modeled directly on SeaRM's own `messaging-message-list-fetch` cron/job pattern (compare-and-swap claim, no new locking primitive). The worker invokes SeaRM's existing `AgentAsyncExecutorService.executeAgent()` — extended with one new optional `threadId` parameter so every tool call from one research run batches into one `Proposal`, exactly like one chat turn does today.
 
 **Tech Stack:** NestJS 10, TypeORM, PostgreSQL 16, GraphQL (code-first, metadata schema), BullMQ (`message-queue` module), React 18 + Jotai + Linaria, Nx, Jest.
 
@@ -12,7 +12,7 @@
 
 **Verified against commit `dba03d0907`** (`style(ai-write-approval): apply oxfmt to the fix-wave changes`), the head of the five-commit fix wave `c6e057906b..HEAD` that repaired Launch 1's DI wiring, policy resolution, and bulk payload replay. Every find-and-replace block, type, signature, import path, GraphQL operation, permission flag, decorator, and line number quoted below was re-read against that checkout, not carried over from an earlier revision of this plan. Where this plan quotes live code it quotes it verbatim with line numbers; where a quoted block does not match what you find on disk, **the disk wins** — stop and re-derive the edit rather than forcing the match.
 
-**Working directory for all paths below:** `d:\Files\Vatsa\Projects\AI-CRM\twenty`
+**Working directory for all paths below:** `d:\Files\Vatsa\Projects\AI-CRM\searm`
 
 ## Global Constraints
 
@@ -22,24 +22,24 @@ Copied from the repo's `CLAUDE.md`, the product charter, and Launch 1's own cons
 - **No `any`.** Strict TypeScript enforced.
 - **Types over interfaces**, except when extending a third-party interface.
 - **String literal unions over enums**, except GraphQL enums (real TS enums registered with `registerEnumType`) — every status/kind type that crosses GraphQL in this plan is a real enum for that reason, matching `ProposalStatus`/`ProposalItemStatus`/`ProposalActionType` in Launch 1.
-- **Functional components only** in `twenty-front`.
+- **Functional components only** in `searm-front`.
 - **File naming:** kebab-case with suffix — `.service.ts`, `.entity.ts`, `.dto.ts`, `.module.ts`, `.resolver.ts`, `.job.ts`. Front components are PascalCase `.tsx`.
 - **Comments:** short-form `//` only, no JSDoc blocks. Explain WHY, not WHAT.
-- **Use `isDefined()` from `twenty-shared/utils`** rather than hand-rolled null checks.
+- **Use `isDefined()` from `searm-shared/utils`** rather than hand-rolled null checks.
 - **Services under 500 lines, components under 300 lines.**
 - **Entity registration is automatic** — `core.datasource.ts` globs `engine/metadata-modules/**/*.entity.{ts,js}`. Do not add entities to any registry list.
-- **Schema changes ship as instance commands**, not TypeORM migrations. Generate with `npx nx run twenty-server:database:migrate:generate --name <name> --type fast`. Never rewrite a committed command's `up`/`down` — read `packages/twenty-server/docs/UPGRADE_COMMANDS.md` first.
+- **Schema changes ship as instance commands**, not TypeORM migrations. Generate with `npx nx run searm-server:database:migrate:generate --name <name> --type fast`. Never rewrite a committed command's `up`/`down` — read `packages/searm-server/docs/UPGRADE_COMMANDS.md` first.
 - **Every AI-derived record mutation goes through `ProposalGateService`/`ProposalExecutionService`.** This phase never writes to a workspace object table directly from agent-derived data — `Evidence` and `Fact` are new *platform* tables (core schema), not a second path to CRM records.
 - **Custom objects are the only extension mechanism for business-specific records.** Nothing in this plan is business-specific — `Evidence`/`Fact`/`AgentTask`/`AgentRun` are platform trust-layer entities, exactly the class of thing `Proposal`/`ProposalItem` already are, so they follow the same core-schema TypeORM entity pattern (§7 of the anchors report: core-schema entity is the correct, cheaper mechanism here — not a standard object, which the charter reserves for workspace-visible business records).
 - **Agents report observations, never confidence.** `Evidence.strength` is computed server-side from a fixed `sourceType → strength` table (`ai-research/types/evidence.type.ts`), never supplied by the model. This is the single most important design decision ported from the `crm` scouting report — it is what makes strength auditable and ungameable.
 - **`Fact` is reachable only through `FactService`** (program §0 Owner Decision 1). `FactEntity`'s repository is registered in `AiResearchModule`'s `TypeOrmModule.forFeature` and `TypeOrmModule` is **not** re-exported from that module, so no code in Phase 3/4/5 can inject `Repository<FactEntity>`. `FactDerivationService` is a provider of `AiResearchModule` and is **not exported** — it is derivation internals. The only exported fact surface is `FactService`. If `Fact` is later promoted to a standard object (the Decision 1 fork), one module changes, not the program.
 - **Every task carries at least one test that exercises a real seam, not a doubled one.** Launch 1 shipped three Criticals behind a green suite because its specs mocked the exact seam that was broken (see `proposal-gate.service.spec.ts:53-55`, which uses the *real* `AiWritePolicyService` for precisely this reason). Follow that precedent: double the TypeORM repository, and use the real collaborating service. Where a task's only seam is the database, the real-seam coverage lives in Task 13's integration suite and the task names which step covers it.
-- Lint and typecheck after each task: `npx nx lint:diff-with-main twenty-server` and `npx nx typecheck twenty-server`.
+- Lint and typecheck after each task: `npx nx lint:diff-with-main searm-server` and `npx nx typecheck searm-server`.
 - **Test-count expectations are written as "all pre-existing tests plus the N new ones"** for any suite this plan extends. Launch 1's suites are larger than any absolute count a plan could hard-code (`proposal-gate.service.spec.ts` has 20 test declarations; `proposal-execution.service.spec.ts` has 22), and a hard-coded number invites an executor to "repair" a suite that was never broken.
 
 ## File Structure
 
-**New — server, `ai-research` module** (all under `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/`):
+**New — server, `ai-research` module** (all under `packages/searm-server/src/engine/metadata-modules/ai/ai-research/`):
 
 | File | Responsibility |
 | --- | --- |
@@ -68,7 +68,7 @@ Copied from the repo's `CLAUDE.md`, the product charter, and Launch 1's own cons
 | `resolvers/agent-task.resolver.ts` | `agentTasks`, `createAgentTask`, `cancelAgentTask` |
 | `ai-research.module.ts` | Nest module wiring |
 
-**New — server, tool files** (under `packages/twenty-server/src/engine/core-modules/tool/tools/`):
+**New — server, tool files** (under `packages/searm-server/src/engine/core-modules/tool/tools/`):
 
 | File | Responsibility |
 | --- | --- |
@@ -81,10 +81,10 @@ Copied from the repo's `CLAUDE.md`, the product charter, and Launch 1's own cons
 
 | File | Change |
 | --- | --- |
-| `engine/workspace-manager/twenty-standard-application/constants/standard-agent.constant.ts` | Add the `researcher` entry |
-| `engine/workspace-manager/twenty-standard-application/utils/agent-metadata/create-standard-flat-agent-metadata.util.ts` | Add the `researcher` builder |
-| `engine/workspace-manager/twenty-standard-application/constants/standard-role.constant.ts` | Add the `aiResearcher` entry |
-| `engine/workspace-manager/twenty-standard-application/utils/role-metadata/create-standard-flat-role-metadata.util.ts` | Add the `aiResearcher` builder (`canBeAssignedToAgents: true`) |
+| `engine/workspace-manager/searm-standard-application/constants/standard-agent.constant.ts` | Add the `researcher` entry |
+| `engine/workspace-manager/searm-standard-application/utils/agent-metadata/create-standard-flat-agent-metadata.util.ts` | Add the `researcher` builder |
+| `engine/workspace-manager/searm-standard-application/constants/standard-role.constant.ts` | Add the `aiResearcher` entry |
+| `engine/workspace-manager/searm-standard-application/utils/role-metadata/create-standard-flat-role-metadata.util.ts` | Add the `aiResearcher` builder (`canBeAssignedToAgents: true`) |
 
 **Modified — server, existing Launch 1 files:**
 
@@ -101,8 +101,8 @@ Copied from the repo's `CLAUDE.md`, the product charter, and Launch 1's own cons
 | `engine/core-modules/tool-provider/tool-provider.module.ts` | Import `AiResearchModule` |
 | `engine/core-modules/message-queue/message-queue.constants.ts` | Add `agentTaskQueue` |
 | `database/commands/cron-register-all.command.ts` | Register the new cron command |
-| `packages/twenty-front/src/modules/settings/ai-approvals/graphql/queries/pendingProposals.ts` | Select `factIds` and nested `facts { ... evidence { ... } }` |
-| `packages/twenty-front/src/modules/settings/ai-approvals/components/ProposalDiffTable.tsx` | Render a "Why" citation line per diff row |
+| `packages/searm-front/src/modules/settings/ai-approvals/graphql/queries/pendingProposals.ts` | Select `factIds` and nested `facts { ... evidence { ... } }` |
+| `packages/searm-front/src/modules/settings/ai-approvals/components/ProposalDiffTable.tsx` | Render a "Why" citation line per diff row |
 
 ---
 
@@ -111,12 +111,12 @@ Copied from the repo's `CLAUDE.md`, the product charter, and Launch 1's own cons
 `Evidence` is an immutable observation. `Fact` is a sourced, supersedable assertion derived from one or more `Evidence` rows. Neither writes to a CRM record — that only ever happens later, through `ProposalGateService`.
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/types/evidence.type.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/types/fact-status.type.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/entities/evidence.entity.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/entities/fact.entity.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/utils/hash-evidence-payload.util.ts`
-- Test: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/utils/__tests__/hash-evidence-payload.util.spec.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/types/evidence.type.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/types/fact-status.type.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/entities/evidence.entity.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/entities/fact.entity.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/utils/hash-evidence-payload.util.ts`
+- Test: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/utils/__tests__/hash-evidence-payload.util.spec.ts`
 - Create: an instance command (generated — exact path produced by the generator)
 
 **Interfaces:**
@@ -215,7 +215,7 @@ describe('hashEvidencePayload', () => {
 - [ ] **Step 4: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest hash-evidence-payload.util.spec
+cd packages/searm-server && npx jest hash-evidence-payload.util.spec
 ```
 
 Expected: FAIL — `Cannot find module '.../hash-evidence-payload.util'`.
@@ -236,7 +236,7 @@ export const hashEvidencePayload = (payload: EvidencePayload): string =>
 - [ ] **Step 6: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest hash-evidence-payload.util.spec
+cd packages/searm-server && npx jest hash-evidence-payload.util.spec
 ```
 
 Expected: PASS, 3 tests.
@@ -434,7 +434,7 @@ export class FactEntity {
 - [ ] **Step 9: Generate the instance command**
 
 ```bash
-npx nx run twenty-server:database:migrate:generate --name add-ai-research-evidence-and-fact --type fast
+npx nx run searm-server:database:migrate:generate --name add-ai-research-evidence-and-fact --type fast
 ```
 
 Open the generated file and fill `up`:
@@ -498,7 +498,7 @@ DROP TABLE "core"."evidence";
 - [ ] **Step 10: Apply and verify**
 
 ```bash
-npx nx run twenty-server:database:migrate:prod
+npx nx run searm-server:database:migrate:prod
 psql "$PG_DATABASE_URL" -c '\d core."evidence"' -c '\d core."fact"'
 ```
 
@@ -507,8 +507,8 @@ Expected: both tables present with the columns above.
 - [ ] **Step 11: Typecheck and commit**
 
 ```bash
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-research packages/twenty-server/src/database
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-research packages/searm-server/src/database
 git commit -m "feat(ai-research): add evidence and fact entities"
 ```
 
@@ -519,10 +519,10 @@ git commit -m "feat(ai-research): add evidence and fact entities"
 The core deterministic logic: given one new `Evidence` row, decide whether it corroborates the current fact, supersedes it, conflicts with it, or is suppressed because a human already dismissed this exact value. This is the smallest version of the `crm` repo's evidence-scoring pipeline that still makes strength, conflict, and supersession real — no noisy-OR combination, no weight table with a dozen tuned constants, no confidence bands. Two strength tiers, one comparison, one conflict rule, one dismissal check.
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/services/fact-derivation.service.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/services/evidence-recording.service.ts`
-- Test: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/services/__tests__/fact-derivation.service.spec.ts`
-- Test: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/services/__tests__/evidence-recording.service.spec.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/services/fact-derivation.service.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/services/evidence-recording.service.ts`
+- Test: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/services/__tests__/fact-derivation.service.spec.ts`
+- Test: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/services/__tests__/evidence-recording.service.spec.ts`
 
 **Interfaces:**
 - Consumes: `EvidenceEntity`, `FactEntity`, `FactStatus`, `EVIDENCE_SOURCE_STRENGTH`, `hashEvidencePayload` (Task 1).
@@ -757,7 +757,7 @@ describe('FactDerivationService', () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest fact-derivation.service.spec
+cd packages/searm-server && npx jest fact-derivation.service.spec
 ```
 
 Expected: FAIL — module not found.
@@ -770,7 +770,7 @@ Create `services/fact-derivation.service.ts`:
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'searm-shared/utils';
 import { Repository } from 'typeorm';
 
 import { type EvidenceEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/evidence.entity';
@@ -924,7 +924,7 @@ export class FactDerivationService {
 - [ ] **Step 4: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest fact-derivation.service.spec
+cd packages/searm-server && npx jest fact-derivation.service.spec
 ```
 
 Expected: PASS, 9 tests.
@@ -1074,7 +1074,7 @@ describe('EvidenceRecordingService', () => {
 - [ ] **Step 6: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest evidence-recording.service.spec
+cd packages/searm-server && npx jest evidence-recording.service.spec
 ```
 
 Expected: FAIL — module not found.
@@ -1145,7 +1145,7 @@ export class EvidenceRecordingService {
 - [ ] **Step 8: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest evidence-recording.service.spec
+cd packages/searm-server && npx jest evidence-recording.service.spec
 ```
 
 Expected: PASS, 4 tests.
@@ -1153,9 +1153,9 @@ Expected: PASS, 4 tests.
 - [ ] **Step 9: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-research
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-research
 git commit -m "feat(ai-research): add evidence recording and fact derivation"
 ```
 
@@ -1168,13 +1168,13 @@ Registers a new static tool through the existing `ActionToolProvider`/`ToolExecu
 > **The tool must be explicitly ungated, and that is Step 5b — do not skip it.** The live gate is a **denylist**: `proposal-gate.service.ts:46-48` says *"A static tool is gated unless it appears here, so a newly registered tool is gated until someone classifies it."* `isGatedStaticTool()` (`proposal-gate.service.ts:241-257`) returns `true` for any `toolId` absent from `UNGATED_STATIC_TOOL_IDS` (`proposal-gate.service.ts:50-85`, 24 entries, `record_evidence` is not one of them). Under the shipped default policy `{ default: 'PROPOSE' }` an unungated `record_evidence` call is diverted into a `ProposalItem` with `actionType: STATIC_TOOL` and the tool returns *"Change proposed and awaiting human approval."* No `EvidenceEntity` row is ever written, `FactDerivationService.deriveFact` never runs, and — worst — a human is asked to approve the act of writing down an observation, which on approval `ProposalExecutionService.applyStaticTool` (`proposal-execution.service.ts:592-645`) replays through the provider. **The entire evidence pipeline is inert until Step 5b lands.**
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/core-modules/tool/tools/record-evidence-tool/record-evidence-tool.schema.ts`
-- Create: `packages/twenty-server/src/engine/core-modules/tool/tools/record-evidence-tool/record-evidence-tool.ts`
-- Test: `packages/twenty-server/src/engine/core-modules/tool/tools/record-evidence-tool/__tests__/record-evidence-tool.spec.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-gate.service.spec.ts`
-- Modify: `packages/twenty-server/src/engine/core-modules/tool-provider/providers/action-tool.provider.ts`
-- Modify: `packages/twenty-server/src/engine/core-modules/tool-provider/tool-provider.module.ts`
+- Create: `packages/searm-server/src/engine/core-modules/tool/tools/record-evidence-tool/record-evidence-tool.schema.ts`
+- Create: `packages/searm-server/src/engine/core-modules/tool/tools/record-evidence-tool/record-evidence-tool.ts`
+- Test: `packages/searm-server/src/engine/core-modules/tool/tools/record-evidence-tool/__tests__/record-evidence-tool.spec.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-gate.service.spec.ts`
+- Modify: `packages/searm-server/src/engine/core-modules/tool-provider/providers/action-tool.provider.ts`
+- Modify: `packages/searm-server/src/engine/core-modules/tool-provider/tool-provider.module.ts`
 
 **Interfaces:**
 - Consumes: `EvidenceRecordingService.recordEvidence` (Task 2), `AgentRunEntity` (Task 4 — forward reference resolved by writing this task's test against a mocked repository; the entity itself is defined in Task 4, so **run this task's `npx jest` step only after Task 4 is complete**, or stub `AgentRunEntity` locally in the test as `as never` the way other tasks do).
@@ -1386,7 +1386,7 @@ import { FactDerivationService } from 'src/engine/metadata-modules/ai/ai-researc
 - [ ] **Step 3: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest record-evidence-tool.spec
+cd packages/searm-server && npx jest record-evidence-tool.spec
 ```
 
 Expected: FAIL — module not found.
@@ -1399,7 +1399,7 @@ Create `record-evidence-tool.ts`:
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'searm-shared/utils';
 import { Repository } from 'typeorm';
 
 import { RecordEvidenceInputZodSchema } from 'src/engine/core-modules/tool/tools/record-evidence-tool/record-evidence-tool.schema';
@@ -1490,7 +1490,7 @@ export class RecordEvidenceTool implements Tool {
 - [ ] **Step 5: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest record-evidence-tool.spec
+cd packages/searm-server && npx jest record-evidence-tool.spec
 ```
 
 Expected: PASS, 4 tests.
@@ -1537,7 +1537,7 @@ Note the assertion is deliberately `expect(...).not.toHaveBeenCalled()` on the i
 - [ ] **Step 5c: Run the gate test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-gate.service.spec
+cd packages/searm-server && npx jest proposal-gate.service.spec
 ```
 
 Expected: FAIL — both new tests report `Received: "PROPOSED"`, and `proposalItemRepository.save` was called. This is the C1 defect reproduced.
@@ -1575,7 +1575,7 @@ Replace with:
 - [ ] **Step 5e: Run the gate test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-gate.service.spec
+cd packages/searm-server && npx jest proposal-gate.service.spec
 ```
 
 Expected: PASS — all pre-existing tests plus the 2 new ones. In particular `'should gate an unknown static tool'` (line 320) and `'should gate a CRUD operation nobody has classified'` (line 312) must still be green: this edit adds two names to a denylist exemption list, it does not change the denylist's shape.
@@ -1632,8 +1632,8 @@ This task cannot fully typecheck until Task 5 (`AiResearchModule`) exists and ex
 - [ ] **Step 8: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-git add packages/twenty-server/src/engine/core-modules/tool/tools packages/twenty-server/src/engine/core-modules/tool-provider packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval
+npx nx lint:diff-with-main searm-server
+git add packages/searm-server/src/engine/core-modules/tool/tools packages/searm-server/src/engine/core-modules/tool-provider packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval
 git commit -m "feat(ai-research): add and ungate the record_evidence tool"
 ```
 
@@ -1646,10 +1646,10 @@ The `create_agent_task` sibling tool is **Task 5c**, not a step here. It cannot 
 `AgentTask` is durable scheduled work: priority, record target, reason, lease, retry count, budget, idempotency key, cancellation — the charter's exact field list. `AgentRun` is one execution of a task. Neither reuses `AgentTurnEntity`/`AgentChatThreadEntity` (Launch 1's anchors report flagged why: `AgentChatThreadEntity.userWorkspaceId` is a required FK to a human user, and `AgentTurnEntity.threadId` is a required, non-nullable FK to that thread — there is no clean way to represent a system-scheduled run with no acting user without changing entities the live chat system depends on). `AgentRun` is a genuinely new sibling entity, following the anchors report's own recommendation; it reuses `AiBillingService` for actual billing (Task 7) and reuses the `threadId` correlation field for proposal batching (Task 6) rather than inventing new machinery for either.
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/types/agent-task-status.type.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/types/agent-run-status.type.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/entities/agent-task.entity.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/entities/agent-run.entity.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/types/agent-task-status.type.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/types/agent-run-status.type.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/entities/agent-task.entity.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/entities/agent-run.entity.ts`
 - Create: an instance command (generated)
 
 **Interfaces:**
@@ -1697,7 +1697,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-import { type ActorMetadata } from 'twenty-shared/types';
+import { type ActorMetadata } from 'searm-shared/types';
 
 import { AgentTaskStatus } from 'src/engine/metadata-modules/ai/ai-research/types/agent-task-status.type';
 import type { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
@@ -1868,7 +1868,7 @@ export class AgentRunEntity {
   @Column({ type: 'bigint', default: 0 })
   creditsUsedMicro: number;
 
-  // No `transcript` column. Twenty already persists a full agent transcript
+  // No `transcript` column. SeaRM already persists a full agent transcript
   // through AgentMessageEntity, nothing in Phases 2-5 reads AgentRun's copy,
   // and a jsonb mirror of the AI SDK's StepResult shape is a coupling to a
   // third-party type for no consumer. resultSummary is what run history needs.
@@ -1888,7 +1888,7 @@ Note: this run's resulting `Proposal` (if any) is found by `proposal WHERE threa
 - [ ] **Step 4: Generate the instance command**
 
 ```bash
-npx nx run twenty-server:database:migrate:generate --name add-ai-research-agent-task-and-run --type fast
+npx nx run searm-server:database:migrate:generate --name add-ai-research-agent-task-and-run --type fast
 ```
 
 Fill `up`:
@@ -1965,15 +1965,15 @@ DROP TABLE "core"."agentTask";
 - [ ] **Step 5: Apply and verify**
 
 ```bash
-npx nx run twenty-server:database:migrate:prod
+npx nx run searm-server:database:migrate:prod
 psql "$PG_DATABASE_URL" -c '\d core."agentTask"' -c '\d core."agentRun"'
 ```
 
 - [ ] **Step 6: Typecheck and commit**
 
 ```bash
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-research packages/twenty-server/src/database
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-research packages/searm-server/src/database
 git commit -m "feat(ai-research): add agent task and agent run entities"
 ```
 
@@ -1981,13 +1981,13 @@ git commit -m "feat(ai-research): add agent task and agent run entities"
 
 ### Task 5: AgentTaskService and the `ai-research` module
 
-The lease-claim engine. Claim uses a select-candidates-then-conditional-bulk-update pattern copied directly from `MessagingMessageListFetchCronJob` (verified by reading `packages/twenty-server/src/modules/messaging/message-import-manager/crons/jobs/messaging-message-list-fetch.cron.job.ts`) — no new locking primitive, no raw `FOR UPDATE SKIP LOCKED` SQL foreign to this codebase's conventions. Postgres serializes each row's conditional `UPDATE ... WHERE status = 'PENDING'`, so two concurrent claim ticks can never both win the same row.
+The lease-claim engine. Claim uses a select-candidates-then-conditional-bulk-update pattern copied directly from `MessagingMessageListFetchCronJob` (verified by reading `packages/searm-server/src/modules/messaging/message-import-manager/crons/jobs/messaging-message-list-fetch.cron.job.ts`) — no new locking primitive, no raw `FOR UPDATE SKIP LOCKED` SQL foreign to this codebase's conventions. Postgres serializes each row's conditional `UPDATE ... WHERE status = 'PENDING'`, so two concurrent claim ticks can never both win the same row.
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/constants/agent-task.const.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/services/agent-task.service.ts`
-- Test: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/services/__tests__/agent-task.service.spec.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/ai-research.module.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/constants/agent-task.const.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/services/agent-task.service.ts`
+- Test: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/services/__tests__/agent-task.service.spec.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/ai-research.module.ts`
 
 **Interfaces:**
 - Consumes: `AgentTaskEntity`, `AgentTaskStatus` (Task 4).
@@ -2336,7 +2336,7 @@ describe('AgentTaskService', () => {
 - [ ] **Step 3: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest agent-task.service.spec
+cd packages/searm-server && npx jest agent-task.service.spec
 ```
 
 Expected: FAIL — module not found.
@@ -2349,8 +2349,8 @@ Create `services/agent-task.service.ts`:
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { type ActorMetadata } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
+import { type ActorMetadata } from 'searm-shared/types';
+import { isDefined } from 'searm-shared/utils';
 import { In, Repository } from 'typeorm';
 
 import {
@@ -2609,7 +2609,7 @@ export class AgentTaskService {
 - [ ] **Step 5: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest agent-task.service.spec
+cd packages/searm-server && npx jest agent-task.service.spec
 ```
 
 Expected: PASS, 9 tests.
@@ -2660,14 +2660,14 @@ export class AiResearchModule {}
 
 **Real seam:** `AgentTaskService`'s only collaborator is the TypeORM repository — there is no service seam to un-double, and the compare-and-swap semantics that make the claim safe (`UPDATE … WHERE status = 'PENDING' OR (status = 'LEASED' AND "leasedUntil" < now())`) are a property of Postgres, not of this class. Its real-seam coverage is Task 13 steps 3, 9, 10 and 11, which run `claimDueTasks`/`failTask`/`cancelTask` against a real database. Do not treat this task as covered until those steps exist.
 
-> **Why a hand-rolled lease and not the message queue.** Twenty's queue driver is BullMQ over Redis (`message-queue/drivers/bullmq.driver.ts`), and its job options expose only `attempts`, `priority`, `delay` and retention (`buildJobsOptions`, `:330-352`) — jobs are not SQL-queryable, are dropped by `removeOnComplete`/`removeOnFail` retention, and cannot carry the `budget`/`attempts`/`outcome` state the approvals UI and Task 13's assertions read. So the durable record stays in `core."agentTask"`. What *is* reused is the recovery pattern: Twenty already solves "an in-flight row whose worker vanished" for workflow runs with a status column plus a periodic sweeper — `getStaledRunsFindOptions()` matches `status = ENQUEUED AND enqueuedAt < now() - STALED_RUNS_THRESHOLD_MS` (1 hour) and `WorkflowHandleStaledRunsWorkspaceService` re-enqueues them from the `cron:workflow:handle-staled-runs` cron. `claimDueTasks`'s expired-lease branch and `reapAbandonedTasks` are the same pattern with a per-row deadline instead of a global threshold. Do not introduce a second scheduler.
+> **Why a hand-rolled lease and not the message queue.** SeaRM's queue driver is BullMQ over Redis (`message-queue/drivers/bullmq.driver.ts`), and its job options expose only `attempts`, `priority`, `delay` and retention (`buildJobsOptions`, `:330-352`) — jobs are not SQL-queryable, are dropped by `removeOnComplete`/`removeOnFail` retention, and cannot carry the `budget`/`attempts`/`outcome` state the approvals UI and Task 13's assertions read. So the durable record stays in `core."agentTask"`. What *is* reused is the recovery pattern: SeaRM already solves "an in-flight row whose worker vanished" for workflow runs with a status column plus a periodic sweeper — `getStaledRunsFindOptions()` matches `status = ENQUEUED AND enqueuedAt < now() - STALED_RUNS_THRESHOLD_MS` (1 hour) and `WorkflowHandleStaledRunsWorkspaceService` re-enqueues them from the `cron:workflow:handle-staled-runs` cron. `claimDueTasks`'s expired-lease branch and `reapAbandonedTasks` are the same pattern with a per-row deadline instead of a global threshold. Do not introduce a second scheduler.
 
 - [ ] **Step 7: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-research packages/twenty-server/src/engine/core-modules/tool-provider
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-research packages/searm-server/src/engine/core-modules/tool-provider
 git commit -m "feat(ai-research): add agent task service and ai-research module"
 ```
 
@@ -2680,9 +2680,9 @@ git commit -m "feat(ai-research): add agent task service and ai-research module"
 **Ground truth this task was written against** (read, not assumed):
 
 - `AgentEntity` (`engine/metadata-modules/ai/ai-agent/entities/agent.entity.ts:18`) is `@Entity('agent')` — a plain **core-schema** TypeORM entity extending `SyncableEntity`, which supplies `universalIdentifier` and `applicationId`. It has **no** `roleId` column.
-- Per-workspace agents are created declaratively: `STANDARD_AGENT` (`twenty-standard-application/constants/standard-agent.constant.ts`) has exactly one entry, `helper`, and `STANDARD_FLAT_AGENT_METADATA_BUILDERS_BY_AGENT_NAME` (`utils/agent-metadata/create-standard-flat-agent-metadata.util.ts`) has the matching builder. The `satisfies { [P in AllStandardAgentName]: … }` constraint means adding a key to the constant **forces** adding the builder — the compiler enforces the pair.
+- Per-workspace agents are created declaratively: `STANDARD_AGENT` (`searm-standard-application/constants/standard-agent.constant.ts`) has exactly one entry, `helper`, and `STANDARD_FLAT_AGENT_METADATA_BUILDERS_BY_AGENT_NAME` (`utils/agent-metadata/create-standard-flat-agent-metadata.util.ts`) has the matching builder. The `satisfies { [P in AllStandardAgentName]: … }` constraint means adding a key to the constant **forces** adding the builder — the compiler enforces the pair.
 - Roles mirror this exactly: `STANDARD_ROLE` (one entry, `admin`) and `STANDARD_FLAT_ROLE_METADATA_BUILDERS_BY_ROLE_NAME`.
-- **Role *targets* do not.** There is no `standard-role-target` constant, no `utils/role-target-metadata/` directory, and `roleTarget` is **not** in `TWENTY_STANDARD_ALL_METADATA_NAME` — so the standard-application migration pipeline structurally cannot emit a roleTarget row. `createStandardRoleFlatMetadata` hard-codes `roleTargetIds: []`. The seeded `helper` agent is created **role-less** today, which is exactly the "no role means no registry tools" trap this plan's risk section already names.
+- **Role *targets* do not.** There is no `standard-role-target` constant, no `utils/role-target-metadata/` directory, and `roleTarget` is **not** in `SEARM_STANDARD_ALL_METADATA_NAME` — so the standard-application migration pipeline structurally cannot emit a roleTarget row. `createStandardRoleFlatMetadata` hard-codes `roleTargetIds: []`. The seeded `helper` agent is created **role-less** today, which is exactly the "no role means no registry tools" trap this plan's risk section already names.
 - Agent→role binding therefore has to happen at run time, through the one service that owns it: `AiAgentRoleService.assignRoleToAgent` (`engine/metadata-modules/ai/ai-agent-role/ai-agent-role.service.ts:30-57`), which calls `RoleTargetService.create({ createRoleTargetInput: { roleId, targetId: agentId, targetMetadataForeignKey: 'agentId' }, workspaceId })` and throws `ROLE_CANNOT_BE_ASSIGNED_TO_AGENTS` (line 145) unless `role.canBeAssignedToAgents`.
 - The existing `admin` standard role sets `canBeAssignedToAgents: false` (`create-standard-flat-role-metadata.util.ts:25`), as do `createMemberRole` and `createGuestRole`. **No shipped role can be assigned to an agent.** A new one is required.
 - `(workspaceId, agentId)` on `roleTarget` is `@Unique('IDX_ROLE_TARGET_UNIQUE_AGENT')`, so the binding is naturally idempotent-by-conflict; this task still checks before writing rather than relying on catching a constraint violation.
@@ -2698,14 +2698,14 @@ git commit -m "feat(ai-research): add agent task service and ai-research module"
 > **Deviation from Decision 4's phrasing — settled, and the deviation stands.** "Write-nothing-directly" is delivered by `ProposalGateService`, not by stripping the role's object-write permissions. The role below sets `canUpdateAllObjectRecords: true` and `canReadAllObjectRecords: true`, with `canSoftDeleteAllObjectRecords`, `canDestroyAllObjectRecords`, `canUpdateAllSettings` all `false`. This was an open question in the previous revision; it is now settled by reading `database-tool.provider.ts`. Tool *generation* is scoped by object write permission: `:144-146` derives `canUpdateRecords` from the role's object permissions, and `:262` wraps the entire `create_one_*` / `create_many_*` / `update_one_*` / `update_many_*` / upsert descriptor block in `if (canUpdateRecords && canBeManagedByAutomation)`. With `canUpdateAllObjectRecords: false` the agent's catalog would contain **no write tool of any kind**, so it could never trip the gate and never produce a proposal — the degraded no-op Decision 4 exists to prevent. The gate is what makes the write non-direct: `ProposalGateService.evaluate` intercepts above the tool layer and the shipped default policy is `PROPOSE`. **Owner-visible: this is a product-security default and the functional reading was chosen over the literal one.**
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/constants/research-agent.const.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/services/research-agent.service.ts`
-- Test: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/services/__tests__/research-agent.service.spec.ts`
-- Modify: `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/constants/standard-agent.constant.ts`
-- Modify: `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/agent-metadata/create-standard-flat-agent-metadata.util.ts`
-- Modify: `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant.ts`
-- Modify: `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/role-metadata/create-standard-flat-role-metadata.util.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/ai-research.module.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/constants/research-agent.const.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/services/research-agent.service.ts`
+- Test: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/services/__tests__/research-agent.service.spec.ts`
+- Modify: `packages/searm-server/src/engine/workspace-manager/searm-standard-application/constants/standard-agent.constant.ts`
+- Modify: `packages/searm-server/src/engine/workspace-manager/searm-standard-application/utils/agent-metadata/create-standard-flat-agent-metadata.util.ts`
+- Modify: `packages/searm-server/src/engine/workspace-manager/searm-standard-application/constants/standard-role.constant.ts`
+- Modify: `packages/searm-server/src/engine/workspace-manager/searm-standard-application/utils/role-metadata/create-standard-flat-role-metadata.util.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/ai-research.module.ts`
 
 **Interfaces:**
 - Produces: `RESEARCH_AGENT_UNIVERSAL_IDENTIFIER`, `RESEARCH_AGENT_ROLE_UNIVERSAL_IDENTIFIER`, `ResearchAgentService.resolveResearchAgentId(workspaceId: string): Promise<string>`.
@@ -2715,7 +2715,7 @@ git commit -m "feat(ai-research): add agent task service and ai-research module"
 Both were settled by reading the code; this step exists so a stale checkout is caught before eight steps of work are written against it. Run:
 
 ```bash
-cd packages/twenty-server
+cd packages/searm-server
 grep -n "No role means no registry tools" -A 2 src/engine/metadata-modules/ai/ai-agent-execution/services/agent-async-executor.service.ts
 grep -n "canUpdateRecords && canBeManagedByAutomation" src/engine/core-modules/tool-provider/providers/database-tool.provider.ts
 ```
@@ -2745,7 +2745,7 @@ export const RESEARCH_AGENT_ROLE_UNIVERSAL_IDENTIFIER =
 
 - [ ] **Step 3: Add the standard agent**
 
-In `twenty-standard-application/constants/standard-agent.constant.ts`, replace:
+In `searm-standard-application/constants/standard-agent.constant.ts`, replace:
 
 ```ts
 export const STANDARD_AGENT = {
@@ -2768,7 +2768,7 @@ export const STANDARD_AGENT = {
 } as const satisfies Record<
 ```
 
-The literal is repeated rather than imported from `research-agent.const.ts`: `twenty-standard-application` is bootstrap code and must not depend on a feature module. Step 6's test asserts the two literals agree, so the duplication cannot drift silently.
+The literal is repeated rather than imported from `research-agent.const.ts`: `searm-standard-application` is bootstrap code and must not depend on a feature module. Step 6's test asserts the two literals agree, so the duplication cannot drift silently.
 
 In `utils/agent-metadata/create-standard-flat-agent-metadata.util.ts`, add a second entry to `STANDARD_FLAT_AGENT_METADATA_BUILDERS_BY_AGENT_NAME`, after the `helper` entry's closing `}),`:
 
@@ -2801,7 +2801,7 @@ No new imports: `AUTO_SELECT_SMART_MODEL_ID` and `createStandardAgentFlatMetadat
 
 - [ ] **Step 4: Add the standard role**
 
-In `twenty-standard-application/constants/standard-role.constant.ts`, replace:
+In `searm-standard-application/constants/standard-role.constant.ts`, replace:
 
 ```ts
 export const STANDARD_ROLE = {
@@ -2866,8 +2866,8 @@ import { RESEARCH_AGENT_ROLE_UNIVERSAL_IDENTIFIER, RESEARCH_AGENT_UNIVERSAL_IDEN
 import { ResearchAgentService } from 'src/engine/metadata-modules/ai/ai-research/services/research-agent.service';
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import { RoleTargetEntity } from 'src/engine/metadata-modules/role-target/role-target.entity';
-import { STANDARD_AGENT } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-agent.constant';
-import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
+import { STANDARD_AGENT } from 'src/engine/workspace-manager/searm-standard-application/constants/standard-agent.constant';
+import { STANDARD_ROLE } from 'src/engine/workspace-manager/searm-standard-application/constants/standard-role.constant';
 
 describe('ResearchAgentService', () => {
   let service: ResearchAgentService;
@@ -2959,7 +2959,7 @@ describe('ResearchAgentService', () => {
 - [ ] **Step 6: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest research-agent.service.spec
+cd packages/searm-server && npx jest research-agent.service.spec
 ```
 
 Expected: FAIL — module not found.
@@ -2972,7 +2972,7 @@ Create `services/research-agent.service.ts`:
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'searm-shared/utils';
 import { Repository } from 'typeorm';
 
 import { AgentEntity } from 'src/engine/metadata-modules/ai/ai-agent/entities/agent.entity';
@@ -2989,13 +2989,13 @@ export class ResearchAgentService {
   private readonly logger = new Logger(ResearchAgentService.name);
 
   constructor(
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(AgentEntity)
     private readonly agentRepository: Repository<AgentEntity>,
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(RoleEntity)
     private readonly roleRepository: Repository<RoleEntity>,
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(RoleTargetEntity)
     private readonly roleTargetRepository: Repository<RoleTargetEntity>,
     private readonly aiAgentRoleService: AiAgentRoleService,
@@ -3003,7 +3003,7 @@ export class ResearchAgentService {
 
   // The workspace seed creates the agent row and the role row, but the
   // standard-application pipeline has no roleTarget mechanism (roleTarget is
-  // not in TWENTY_STANDARD_ALL_METADATA_NAME), so the binding is made here on
+  // not in SEARM_STANDARD_ALL_METADATA_NAME), so the binding is made here on
   // first use. Idempotent: roleTarget is UNIQUE on (workspaceId, agentId).
   async resolveResearchAgentId(workspaceId: string): Promise<string> {
     const agent = await this.agentRepository.findOne({
@@ -3084,7 +3084,7 @@ Two failure modes to keep in mind when writing the test doubles: the method thro
 - [ ] **Step 8: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest research-agent.service.spec
+cd packages/searm-server && npx jest research-agent.service.spec
 ```
 
 Expected: PASS, 5 tests.
@@ -3096,21 +3096,21 @@ In `ai-research.module.ts`, add `AgentEntity`, `RoleEntity`, and `RoleTargetEnti
 - [ ] **Step 10: Verify the seed actually runs against a fresh workspace — real seam**
 
 ```bash
-npx nx database:reset twenty-server
+npx nx database:reset searm-server
 psql "$PG_DATABASE_URL" -c "SELECT name, \"universalIdentifier\" FROM core.\"agent\" WHERE \"universalIdentifier\" = '20202020-9a3f-4c1e-8d27-6b41f0d5a7c3';"
 psql "$PG_DATABASE_URL" -c "SELECT label, \"canBeAssignedToAgents\" FROM core.\"role\" WHERE \"universalIdentifier\" = '20202020-4e88-4b0a-9f16-2c7d3ae91b54';"
 ```
 
-Expected: one `researcher` agent row and one `AI Researcher` role row with `canBeAssignedToAgents = true`, for every seeded workspace. If either query returns zero rows, the flat-metadata pair is not being picked up — check the `satisfies` constraint compiled and that `buildStandardFlatAgentMetadataMaps` / `buildStandardFlatRoleMetadataMaps` are both reached from `twenty-standard-application-all-flat-entity-maps.constant.ts`.
+Expected: one `researcher` agent row and one `AI Researcher` role row with `canBeAssignedToAgents = true`, for every seeded workspace. If either query returns zero rows, the flat-metadata pair is not being picked up — check the `satisfies` constraint compiled and that `buildStandardFlatAgentMetadataMaps` / `buildStandardFlatRoleMetadataMaps` are both reached from `searm-standard-application-all-flat-entity-maps.constant.ts`.
 
 This is the real-seam check for this task: the unit tests above double every repository, so only a reset can prove the declarative seed emits the rows.
 
 - [ ] **Step 11: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-research packages/twenty-server/src/engine/workspace-manager/twenty-standard-application
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-research packages/searm-server/src/engine/workspace-manager/searm-standard-application
 git commit -m "feat(ai-research): seed a research agent and its role in every workspace"
 ```
 
@@ -3118,7 +3118,7 @@ git commit -m "feat(ai-research): seed a research agent and its role in every wo
 
 ### Task 5c: `create_agent_task` static tool
 
-> **Program integration (owner: Phase 2, §2 C7).** This closes acceptance narrative "Lead to qualified opportunity" step 3 — *"a workflow creates a budgeted research task"*. The earlier claim that a workflow would call `createAgentTask` over HTTP with an API key is struck (see Task 10). Twenty's `AI_AGENT` workflow step already runs an agent with the registry tool catalog, so exposing task creation as a static tool makes every workflow able to schedule durable research with no new workflow machinery and no new `WorkflowActionType`.
+> **Program integration (owner: Phase 2, §2 C7).** This closes acceptance narrative "Lead to qualified opportunity" step 3 — *"a workflow creates a budgeted research task"*. The earlier claim that a workflow would call `createAgentTask` over HTTP with an API key is struck (see Task 10). SeaRM's `AI_AGENT` workflow step already runs an agent with the registry tool catalog, so exposing task creation as a static tool makes every workflow able to schedule durable research with no new workflow machinery and no new `WorkflowActionType`.
 
 Built exactly like `RecordEvidenceTool` (Task 3) and registered in the same `ActionToolProvider` static-tool map. Its denylist exemption already landed in Task 3 Step 5d.
 
@@ -3128,11 +3128,11 @@ Built exactly like `RecordEvidenceTool` (Task 3) and registered in the same `Act
 2. **`context.actorContext` does not exist.** `ToolExecutionContext` (`engine/core-modules/tool/types/tool-execution-context.type.ts`) is exactly `{ workspaceId; userId?; userWorkspaceId?; threadId?; onCodeExecutionUpdate? }` — five fields, no actor. `ActionToolProvider.executeStaticTool` (`action-tool.provider.ts:210-216`) constructs it from those five and nothing else, so no actor can reach a static tool today. The tool writes a literal `FieldActorSource.AGENT` actor instead.
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/core-modules/tool/tools/create-agent-task-tool/create-agent-task-tool.schema.ts`
-- Create: `packages/twenty-server/src/engine/core-modules/tool/tools/create-agent-task-tool/create-agent-task-tool.ts`
-- Test: `packages/twenty-server/src/engine/core-modules/tool/tools/create-agent-task-tool/__tests__/create-agent-task-tool.spec.ts`
-- Modify: `packages/twenty-server/src/engine/core-modules/tool-provider/providers/action-tool.provider.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/ai-research.module.ts`
+- Create: `packages/searm-server/src/engine/core-modules/tool/tools/create-agent-task-tool/create-agent-task-tool.schema.ts`
+- Create: `packages/searm-server/src/engine/core-modules/tool/tools/create-agent-task-tool/create-agent-task-tool.ts`
+- Test: `packages/searm-server/src/engine/core-modules/tool/tools/create-agent-task-tool/__tests__/create-agent-task-tool.spec.ts`
+- Modify: `packages/searm-server/src/engine/core-modules/tool-provider/providers/action-tool.provider.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/ai-research.module.ts`
 
 **Interfaces:**
 - Consumes: `AgentTaskService.createTask` (Task 5), `ResearchAgentService.resolveResearchAgentId` (Task 5b).
@@ -3278,7 +3278,7 @@ describe('CreateAgentTaskTool', () => {
 - [ ] **Step 3: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest create-agent-task-tool.spec
+cd packages/searm-server && npx jest create-agent-task-tool.spec
 ```
 
 Expected: FAIL — module not found.
@@ -3290,7 +3290,7 @@ Create `create-agent-task-tool.ts`:
 ```ts
 import { Injectable } from '@nestjs/common';
 
-import { FieldActorSource } from 'twenty-shared/types';
+import { FieldActorSource } from 'searm-shared/types';
 
 import { CreateAgentTaskInputZodSchema } from 'src/engine/core-modules/tool/tools/create-agent-task-tool/create-agent-task-tool.schema';
 import { type ToolExecutionContext } from 'src/engine/core-modules/tool/types/tool-execution-context.type';
@@ -3377,7 +3377,7 @@ Note what this tool does **not** do: it never touches a record-CRUD service, and
 - [ ] **Step 5: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest create-agent-task-tool.spec
+cd packages/searm-server && npx jest create-agent-task-tool.spec
 ```
 
 Expected: PASS, 4 tests.
@@ -3395,9 +3395,9 @@ Add one test to `proposal-gate.service.spec.ts` alongside the two from Task 3 St
 - [ ] **Step 8: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/core-modules/tool packages/twenty-server/src/engine/core-modules/tool-provider packages/twenty-server/src/engine/metadata-modules/ai/ai-research
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/core-modules/tool packages/searm-server/src/engine/core-modules/tool-provider packages/searm-server/src/engine/metadata-modules/ai/ai-research
 git commit -m "feat(ai-research): add the create_agent_task tool"
 ```
 
@@ -3408,8 +3408,8 @@ git commit -m "feat(ai-research): add the create_agent_task tool"
 Chat already batches every tool call from one turn into a single `Proposal` via `ToolProviderContext.threadId` (`ProposalGateService.getOrCreatePendingProposal`, Launch 1 — verified by reading `proposal-gate.service.ts`). `AgentAsyncExecutorService.executeAgent()` — the same executor `AgentRunService.run()` uses for non-chat agent execution (workflow AI nodes, `runAgent`) — never sets `threadId` on the `ToolProviderContext`/`ToolContext` it builds internally (verified by reading `agent-async-executor.service.ts` in full: `buildPreloadedRegistryTools` and `buildLazyRegistryTools` construct their context objects with `workspaceId, roleId, rolePermissionConfig/authContext/actorContext/userId/userWorkspaceId` — no `threadId` field). This task adds one optional parameter and threads it through, so a research run's tool calls (`update_person`, `record_evidence`, …) batch into one `Proposal` per run — reusing the exact batching field chat already relies on, not inventing a second one.
 
 **Files:**
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-agent-execution/services/agent-async-executor.service.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-agent-execution/services/__tests__/agent-async-executor.service.spec.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-agent-execution/services/agent-async-executor.service.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-agent-execution/services/__tests__/agent-async-executor.service.spec.ts`
 
 **Interfaces:**
 - Produces: `AgentAsyncExecutorService.executeAgent({ ..., threadId?: string, maxSteps?: number })` — every other field of the signature is unchanged and both new fields are optional with behaviour-preserving defaults, so every existing caller (chat, workflow AI nodes, `AgentRunService.run()`) compiles and behaves identically.
@@ -3467,7 +3467,7 @@ And a second test for the **lazy** strategy, which is the one Task 7's worker ac
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest agent-async-executor.service.spec
+cd packages/searm-server && npx jest agent-async-executor.service.spec
 ```
 
 Expected: FAIL — `Object.objectContaining` assertion fails because `threadId` is `undefined` on the received context (or a TS error if `threadId` is not yet a valid property of the `executeAgent` params type — either failure is the expected one at this step).
@@ -3777,7 +3777,7 @@ Add `import { AGENT_CONFIG } from 'src/engine/metadata-modules/ai/ai-agent/const
 - [ ] **Step 7: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest agent-async-executor.service.spec
+cd packages/searm-server && npx jest agent-async-executor.service.spec
 ```
 
 Expected: PASS, all tests in the file including the new one (the pre-existing suite has more tests than shown above — every one of them must still pass unchanged, since `threadId` is optional and every existing call site omits it).
@@ -3785,8 +3785,8 @@ Expected: PASS, all tests in the file including the new one (the pre-existing su
 - [ ] **Step 8: Full regression check on the executor and its direct callers**
 
 ```bash
-cd packages/twenty-server && npx jest ai-agent-execution
-cd packages/twenty-server && npx jest ai-chat
+cd packages/searm-server && npx jest ai-agent-execution
+cd packages/searm-server && npx jest ai-chat
 ```
 
 Expected: PASS. This is a hot path for every AI feature in the product — a red suite here means the threading is wrong, not that the suite is stale.
@@ -3794,9 +3794,9 @@ Expected: PASS. This is a hot path for every AI feature in the product — a red
 - [ ] **Step 9: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-agent-execution
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-agent-execution
 git commit -m "feat(ai-agent-execution): thread threadId through executeAgent for non-chat runs"
 ```
 
@@ -3811,20 +3811,20 @@ git commit -m "feat(ai-agent-execution): thread threadId through executeAgent fo
 The actual execution engine. A cron tick claims due tasks and enqueues one worker job per task (mirrors `MessagingMessageListFetchCronJob` → `MessagingMessagesImportJob`, verified by reading both files). The worker re-validates the task inside `GlobalWorkspaceOrmManager.executeInWorkspaceContext`, runs the agent via `AgentAsyncExecutorService.executeAgent()` with `threadId: agentRun.id`, records an `AgentRun`, and completes or fails the task.
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/constants/research-agent-prompts.const.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/crons/jobs/agent-task-dispatch.cron.job.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/crons/commands/agent-task-dispatch.cron.command.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/jobs/agent-task-run.job.ts`
-- Test: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/jobs/__tests__/agent-task-run.job.spec.ts`
-- Modify: `packages/twenty-server/src/engine/core-modules/message-queue/message-queue.constants.ts`
-- Modify: `packages/twenty-server/src/database/commands/cron-register-all.command.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/ai-research.module.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/constants/research-agent-prompts.const.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/crons/jobs/agent-task-dispatch.cron.job.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/crons/commands/agent-task-dispatch.cron.command.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/jobs/agent-task-run.job.ts`
+- Test: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/jobs/__tests__/agent-task-run.job.spec.ts`
+- Modify: `packages/searm-server/src/engine/core-modules/message-queue/message-queue.constants.ts`
+- Modify: `packages/searm-server/src/database/commands/cron-register-all.command.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/ai-research.module.ts`
 
 **Interfaces:**
-- Consumes: `AgentTaskService` (Task 5), `AgentAsyncExecutorService.executeAgent` with `threadId`/`maxSteps` (Task 6), `AgentRunEntity` (Task 4), `buildSystemAuthContext` (existing, `src/engine/twenty-orm/utils/build-system-auth-context.util`), `GlobalWorkspaceOrmManager` (existing, `src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager`).
+- Consumes: `AgentTaskService` (Task 5), `AgentAsyncExecutorService.executeAgent` with `threadId`/`maxSteps` (Task 6), `AgentRunEntity` (Task 4), `buildSystemAuthContext` (existing, `src/engine/searm-orm/utils/build-system-auth-context.util`), `GlobalWorkspaceOrmManager` (existing, `src/engine/searm-orm/global-workspace-datasource/global-workspace-orm.manager`).
 - Produces: a running `AgentTaskDispatchCronJob` + `AgentTaskRunJob` pair.
 
-**Cut from this task:** `summarizeAgentSteps` + `AgentRunEntity.transcript` + their spec. Twenty already persists a full agent transcript through `AgentMessageEntity`, and no task in Phases 2-5 reads `AgentRun.transcript`. `resultSummary` alone carries what run history needs. This removes a util, a spec, a jsonb column, and a coupling to the AI SDK's `StepResult` content-part shape.
+**Cut from this task:** `summarizeAgentSteps` + `AgentRunEntity.transcript` + their spec. SeaRM already persists a full agent transcript through `AgentMessageEntity`, and no task in Phases 2-5 reads `AgentRun.transcript`. `resultSummary` alone carries what run history needs. This removes a util, a spec, a jsonb column, and a coupling to the AI SDK's `StepResult` content-part shape.
 
 - [ ] **Step 1: Write the prompt constants**
 
@@ -4181,7 +4181,7 @@ describe('AgentTaskRunJob', () => {
 - [ ] **Step 10: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest agent-task-run.job.spec
+cd packages/searm-server && npx jest agent-task-run.job.spec
 ```
 
 Expected: FAIL — module not found.
@@ -4194,8 +4194,8 @@ Create `jobs/agent-task-run.job.ts`:
 import { Scope } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { FieldActorSource, type ActorMetadata } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
+import { FieldActorSource, type ActorMetadata } from 'searm-shared/types';
+import { isDefined } from 'searm-shared/utils';
 import { Repository } from 'typeorm';
 
 import { Process } from 'src/engine/core-modules/message-queue/decorators/process.decorator';
@@ -4213,8 +4213,8 @@ import { AgentTaskService } from 'src/engine/metadata-modules/ai/ai-research/ser
 import { AgentRunStatus } from 'src/engine/metadata-modules/ai/ai-research/types/agent-run-status.type';
 import { AgentTaskStatus } from 'src/engine/metadata-modules/ai/ai-research/types/agent-task-status.type';
 import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { GlobalWorkspaceOrmManager } from 'src/engine/searm-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { buildSystemAuthContext } from 'src/engine/searm-orm/utils/build-system-auth-context.util';
 
 export type AgentTaskRunJobData = {
   taskId: string;
@@ -4239,7 +4239,7 @@ export class AgentTaskRunJob {
     // question sitting in the phase's only execution engine, and it was
     // resolved by reading the entity: there is nothing workspace-scoped to
     // resolve. The workspaceId filter below is an ordinary column predicate.
-    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
+    // eslint-disable-next-line searm/prefer-workspace-scoped-repository
     @InjectRepository(AgentEntity)
     private readonly agentRepository: Repository<AgentEntity>,
   ) {}
@@ -4361,7 +4361,7 @@ export class AgentTaskRunJob {
 - [ ] **Step 12: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest agent-task-run.job.spec
+cd packages/searm-server && npx jest agent-task-run.job.spec
 ```
 
 Expected: PASS, 6 tests.
@@ -4380,7 +4380,7 @@ Add a constructor parameter. The constructor's last two parameters are (lines 77
 
 ```ts
     private readonly userSessionCleanupCronCommand: UserSessionCleanupCronCommand,
-    private readonly twentyConfigService: TwentyConfigService,
+    private readonly searmConfigService: SearmConfigService,
 ```
 
 Replace with:
@@ -4388,10 +4388,10 @@ Replace with:
 ```ts
     private readonly userSessionCleanupCronCommand: UserSessionCleanupCronCommand,
     private readonly agentTaskDispatchCronCommand: AgentTaskDispatchCronCommand,
-    private readonly twentyConfigService: TwentyConfigService,
+    private readonly searmConfigService: SearmConfigService,
 ```
 
-`twentyConfigService` stays last, matching the file's existing convention of keeping the non-command dependency at the end.
+`searmConfigService` stays last, matching the file's existing convention of keeping the non-command dependency at the end.
 
 Then add an entry to the `allCommands` array. Its final element is (lines 212-215):
 
@@ -4422,9 +4422,9 @@ The loop at lines 224-242 picks it up with no further change — `isEnabled` def
 - [ ] **Step 14: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-research packages/twenty-server/src/engine/core-modules/message-queue packages/twenty-server/src/database
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-research packages/searm-server/src/engine/core-modules/message-queue packages/searm-server/src/database
 git commit -m "feat(ai-research): add agent task dispatch cron and worker"
 ```
 
@@ -4437,13 +4437,13 @@ git commit -m "feat(ai-research): add agent task dispatch cron and worker"
 Closes the gap the Launch 1 anchors report flagged explicitly (§8): "Missing explicit evidence-links field (charter wants 'related evidence' on the item)." `ProposalGateService.evaluate()` (Launch 1, unchanged control flow) already knows the object/record/fields a write touches when it builds `gateInput` — this task adds one lookup before saving the item. No new write path: this only *reads* `Fact` rows and *attaches their ids* to the `ProposalItem` the gate was already about to create.
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/services/fact.service.ts`
-- Test: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/services/__tests__/fact.service.spec.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-gate.service.spec.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/ai-write-approval.module.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/ai-research.module.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/services/fact.service.ts`
+- Test: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/services/__tests__/fact.service.spec.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-gate.service.spec.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/ai-write-approval.module.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/ai-research.module.ts`
 - Create: an instance command (generated)
 
 **Interfaces:**
@@ -4620,7 +4620,7 @@ The `expect.objectContaining({ _value: [...] })` shape matches TypeORM's `In()` 
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest fact.service.spec
+cd packages/searm-server && npx jest fact.service.spec
 ```
 
 Expected: FAIL — module not found.
@@ -4633,7 +4633,7 @@ Create `services/fact.service.ts`:
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'searm-shared/utils';
 import { In, Repository } from 'typeorm';
 
 import { EvidenceEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/evidence.entity';
@@ -4744,7 +4744,7 @@ export class FactService {
 - [ ] **Step 4: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest fact.service.spec
+cd packages/searm-server && npx jest fact.service.spec
 ```
 
 Expected: PASS, 7 tests.
@@ -4768,7 +4768,7 @@ In `proposal-item.entity.ts`, add after `resultRecordId`:
 - [ ] **Step 7: Generate the instance command**
 
 ```bash
-npx nx run twenty-server:database:migrate:generate --name add-fact-ids-to-proposal-item --type fast
+npx nx run searm-server:database:migrate:generate --name add-fact-ids-to-proposal-item --type fast
 ```
 
 Fill `up`:
@@ -4786,7 +4786,7 @@ ALTER TABLE "core"."proposalItem" DROP COLUMN "factIds";
 Apply:
 
 ```bash
-npx nx run twenty-server:database:migrate:prod
+npx nx run searm-server:database:migrate:prod
 psql "$PG_DATABASE_URL" -c '\d core."proposalItem"'
 ```
 
@@ -4860,7 +4860,7 @@ The anchor is `'should capture a staleness baseline for a delete'`, not `'should
 - [ ] **Step 9: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-gate.service.spec
+cd packages/searm-server && npx jest proposal-gate.service.spec
 ```
 
 Expected: FAIL — `FactService` is not provided / `factIds` is `undefined` in the save call.
@@ -4897,7 +4897,7 @@ Note: for `SEND_EMAIL`/`CREATE_CALENDAR_EVENT` and every static-tool item, `gate
 - [ ] **Step 11: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-gate.service.spec
+cd packages/searm-server && npx jest proposal-gate.service.spec
 ```
 
 Expected: PASS — all pre-existing tests (including the two Task 3 Step 5b added) plus the 2 new ones. Do not "fix" any pre-existing test: this change adds a field to a save call, it changes no decision.
@@ -4915,9 +4915,9 @@ Add `AiResearchModule` to `imports`.
 - [ ] **Step 13: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-research packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval packages/twenty-server/src/database
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-research packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval packages/searm-server/src/database
 git commit -m "feat(ai-research): attach current facts to proposal items at creation"
 ```
 
@@ -4933,8 +4933,8 @@ The "don't nag" rule from Task 2 needs a trigger: something has to mark a `Fact`
 - `reject()` (lines 320-351) **never loads the items at all** — it is one bulk `update({ proposalId, status: In([PENDING, CONFLICTED]) })`. There is no `items` variable in scope, so an `items.flatMap(...)` patch cannot compile. Note it also rejects `CONFLICTED` items, which an earlier draft's version silently dropped.
 
 **Files:**
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-execution.service.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-execution.service.spec.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-execution.service.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-execution.service.spec.ts`
 
 **Interfaces:**
 - Consumes: `FactService.markDismissed` (Task 8).
@@ -5038,7 +5038,7 @@ The third test also needs `proposalItemRepository.find` to be reachable from `re
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-execution.service.spec
+cd packages/searm-server && npx jest proposal-execution.service.spec
 ```
 
 Expected: FAIL — `FactService` not provided / `markDismissed` never called.
@@ -5143,7 +5143,7 @@ This adds one `SELECT` to `reject()`. It sits after the proposal-level `rejectio
 - [ ] **Step 4: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-execution.service.spec
+cd packages/searm-server && npx jest proposal-execution.service.spec
 ```
 
 Expected: PASS — all pre-existing tests plus the 3 new ones. `'should reject items the reviewer did not select'` (line 393) and `'should reject pending and conflicted items'` (line 585) are the two that would break if the bulk `update` shape were changed; both must stay green untouched.
@@ -5151,7 +5151,7 @@ Expected: PASS — all pre-existing tests plus the 3 new ones. `'should reject i
 - [ ] **Step 5: Regression check the whole approval suite**
 
 ```bash
-cd packages/twenty-server && npx jest ai-write-approval
+cd packages/searm-server && npx jest ai-write-approval
 ```
 
 Expected: PASS — `ai-write-policy.service.spec`, `proposal-gate.service.spec`, `proposal-execution.service.spec` all green.
@@ -5161,9 +5161,9 @@ Expected: PASS — `ai-write-policy.service.spec`, `proposal-gate.service.spec`,
 - [ ] **Step 6: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval
 git commit -m "feat(ai-research): dismiss facts behind rejected proposal items"
 ```
 
@@ -5175,13 +5175,13 @@ Lets a human, an admin script, or an external OAuth-scoped agent schedule and ca
 
 > **Program integration (resolved).** The earlier version of this task claimed a workflow would reach `createAgentTask` through its generic HTTP-request action with a workspace API key. That path was never traced end to end and is struck. The supported workflow path is **Task 5c's `create_agent_task` static tool**, called from inside an `AI_AGENT` workflow step — the same step type every Phase 4 workflow template uses. This GraphQL mutation remains the path for humans, admin scripts, and external agents. Both call the same `AgentTaskService.createTask`; there is one scheduling path, two front doors.
 
-A purpose-built "AI research" node in the workflow-builder UI is deferred (see the deliberately-cut table) — a new `WorkflowActionType` touches roughly 108 files across `twenty-shared`/`twenty-front`/`twenty-server` in this codebase (verified: `grep -rl "WorkflowActionType" twenty-shared/src twenty-front/src twenty-server/src --include=*.ts | wc -l` → 108), comparable in cost to a standard object, and nobody has asked for the no-code version yet.
+A purpose-built "AI research" node in the workflow-builder UI is deferred (see the deliberately-cut table) — a new `WorkflowActionType` touches roughly 108 files across `searm-shared`/`searm-front`/`searm-server` in this codebase (verified: `grep -rl "WorkflowActionType" searm-shared/src searm-front/src searm-server/src --include=*.ts | wc -l` → 108), comparable in cost to a standard object, and nobody has asked for the no-code version yet.
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/dtos/agent-task.dto.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/dtos/create-agent-task.input.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/resolvers/agent-task.resolver.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-research/ai-research.module.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/dtos/agent-task.dto.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/dtos/create-agent-task.input.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/resolvers/agent-task.resolver.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-research/ai-research.module.ts`
 
 **Interfaces:**
 - Consumes: `AgentTaskService` (Task 5).
@@ -5285,8 +5285,8 @@ import { UseGuards } from '@nestjs/common';
 import { Args, ID, Mutation, Query } from '@nestjs/graphql';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { FieldActorSource } from 'twenty-shared/types';
-import { PermissionFlagType } from 'twenty-shared/constants';
+import { FieldActorSource } from 'searm-shared/types';
+import { PermissionFlagType } from 'searm-shared/constants';
 import { Repository } from 'typeorm';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
@@ -5375,8 +5375,8 @@ In `ai-research.module.ts`, add `AgentTaskResolver` to `providers`.
 - [ ] **Step 4: Verify the schema builds**
 
 ```bash
-npx nx typecheck twenty-server
-npx nx start twenty-server
+npx nx typecheck searm-server
+npx nx start searm-server
 ```
 
 Expected: server boots with no GraphQL schema errors. Confirm `agentTasks`, `createAgentTask`, `cancelAgentTask` appear in the metadata GraphQL playground.
@@ -5384,9 +5384,9 @@ Expected: server boots with no GraphQL schema errors. Confirm `agentTasks`, `cre
 - [ ] **Step 5: Regenerate front types, lint, commit**
 
 ```bash
-npx nx run twenty-front:graphql:generate --configuration=metadata
-npx nx lint:diff-with-main twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-research packages/twenty-front/src/generated-metadata
+npx nx run searm-front:graphql:generate --configuration=metadata
+npx nx lint:diff-with-main searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-research packages/searm-front/src/generated-metadata
 git commit -m "feat(ai-research): expose agent task graphql api"
 ```
 
@@ -5403,10 +5403,10 @@ That collapse also deletes the `EvidenceSourceTypeGraphQL` mirror enum, and with
 The DataLoader cut-table row is deleted along with the N+1 pair it described.
 
 **Files:**
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/dtos/proposal.dto.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/resolvers/proposal-item-fields.resolver.ts`
-- Test: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/resolvers/__tests__/proposal-item-fields.resolver.spec.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/ai-write-approval.module.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/dtos/proposal.dto.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/resolvers/proposal-item-fields.resolver.ts`
+- Test: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/resolvers/__tests__/proposal-item-fields.resolver.spec.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/ai-write-approval.module.ts`
 
 **Interfaces:**
 - Consumes: `FactService.findProposalItemFacts` (Task 8).
@@ -5533,7 +5533,7 @@ describe('ProposalItemFieldsResolver', () => {
 - [ ] **Step 3: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-item-fields.resolver.spec
+cd packages/searm-server && npx jest proposal-item-fields.resolver.spec
 ```
 
 Expected: FAIL — module not found.
@@ -5545,7 +5545,7 @@ Create `ai-write-approval/resolvers/proposal-item-fields.resolver.ts`:
 ```ts
 import { Parent, ResolveField, Resolver } from '@nestjs/graphql';
 
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'searm-shared/utils';
 
 import { FactService } from 'src/engine/metadata-modules/ai/ai-research/services/fact.service';
 import {
@@ -5576,7 +5576,7 @@ export class ProposalItemFieldsResolver {
 - [ ] **Step 5: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-item-fields.resolver.spec
+cd packages/searm-server && npx jest proposal-item-fields.resolver.spec
 ```
 
 Expected: PASS, 3 tests.
@@ -5588,8 +5588,8 @@ In `ai-write-approval.module.ts`, add `ProposalItemFieldsResolver` to `providers
 - [ ] **Step 7: Verify the schema builds and the field resolves — real seam**
 
 ```bash
-npx nx typecheck twenty-server
-npx nx start twenty-server
+npx nx typecheck searm-server
+npx nx start searm-server
 ```
 
 `ProposalResolver` is a `@MetadataResolver()`, so `pendingProposals` is served from **`/metadata`**, not `/graphql` (verified: Launch 1's integration spec routes it through its `metadataRequest` helper and comments on exactly this). In the metadata playground run:
@@ -5612,10 +5612,10 @@ Expected: resolves with no error. Against a workspace with no research-derived p
 - [ ] **Step 8: Regenerate front types, lint, commit**
 
 ```bash
-npx nx run twenty-front:graphql:generate --configuration=metadata
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai packages/twenty-front/src/generated-metadata
+npx nx run searm-front:graphql:generate --configuration=metadata
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai packages/searm-front/src/generated-metadata
 git commit -m "feat(ai-research): surface proposal item citations in graphql"
 ```
 
@@ -5628,16 +5628,16 @@ Extends Launch 1's existing `ProposalDiffTable` with a citation under the field 
 
 **Read the component before editing it.** It was rewritten by the Launch 1 fix wave and none of the earlier draft of this task matched it. What is actually on disk (177 lines, verified):
 
-- It uses `styled` from **`@linaria/react`** with **`themeCssVariables`** from `twenty-ui/theme-constants` (lines 2-3), e.g. `${themeCssVariables.font.color.tertiary}`. The `${({ theme }) => theme.font.color.light}` prop-interpolation idiom appears nowhere in the file and Linaria's static extraction does not support it — a styled block written that way fails at build time, not at review time.
+- It uses `styled` from **`@linaria/react`** with **`themeCssVariables`** from `searm-ui/theme-constants` (lines 2-3), e.g. `${themeCssVariables.font.color.tertiary}`. The `${({ theme }) => theme.font.color.light}` prop-interpolation idiom appears nowhere in the file and Linaria's static extraction does not support it — a styled block written that way fails at build time, not at review time.
 - The render is **two-tier**, not flat. Each item emits one item-level `<tr>` carrying the single checkbox (`aria-label={describeItem(item)}`) and a `colSpan={3}` description cell (lines 125-150), followed by per-field `<StyledFieldRow>` rows that begin with an empty `<StyledCell />` spacer (lines 151-162). Field rows are produced **only** when `FIELD_DIFF_ACTION_TYPES.includes(item.actionType)` — that is `['CREATE_RECORD', 'UPDATE_RECORD']` (line 92).
 - The local `ProposalItem` type (lines 7-17) already carries `toolId?: string | null`, which `describeItem()` reads at line 68 (`item.objectNameSingular ?? item.toolId ?? 'unknown target'`). **Extend the type; do not replace it.** An earlier draft's replacement omitted `toolId` and broke `describeItem`.
 - `PENDING_PROPOSALS` (`graphql/queries/pendingProposals.ts`) already selects `toolId` inside `items { … }` (line 15). Any "replace this selection" block that omits it either fails to match or silently drops the field.
 - The spec (`components/__tests__/ProposalDiffTable.test.tsx`) has **six** tests driven by a two-item fixture with multi-field payloads. **Add to the fixture; do not replace it.** An earlier draft supplied a complete replacement array that destroyed four of the six.
 
 **Files:**
-- Modify: `packages/twenty-front/src/modules/settings/ai-approvals/graphql/queries/pendingProposals.ts`
-- Modify: `packages/twenty-front/src/modules/settings/ai-approvals/components/ProposalDiffTable.tsx`
-- Modify: `packages/twenty-front/src/modules/settings/ai-approvals/components/__tests__/ProposalDiffTable.test.tsx`
+- Modify: `packages/searm-front/src/modules/settings/ai-approvals/graphql/queries/pendingProposals.ts`
+- Modify: `packages/searm-front/src/modules/settings/ai-approvals/components/ProposalDiffTable.tsx`
+- Modify: `packages/searm-front/src/modules/settings/ai-approvals/components/__tests__/ProposalDiffTable.test.tsx`
 
 **Interfaces:**
 - Consumes: `ProposalItemDTO.facts[]` (Task 11) — the flat projection, so there is no nested `evidence` selection to write.
@@ -5782,7 +5782,7 @@ Add three tests to the existing `describe` block:
 - [ ] **Step 3: Run the tests to verify the new ones fail**
 
 ```bash
-cd packages/twenty-front && npx jest ProposalDiffTable
+cd packages/searm-front && npx jest ProposalDiffTable
 ```
 
 Expected: FAIL — the three new tests fail. The first fails on `Unable to find an element with the text: /WEAK/`; the second fails on `getAllByText` finding zero elements; the third on `/Conflicting sources/`. All **six** pre-existing tests must still pass at this point — the fixture only gained a field. If any of the six went red, the fixture was replaced rather than extended; undo and redo Step 2.
@@ -5851,7 +5851,7 @@ const StyledConflictBadge = styled.span`
 `;
 ```
 
-Both tokens are confirmed to exist — this was an open item and it is settled. `packages/twenty-ui/src/theme-constants/themeCssVariables.ts:204` declares `xs: 'var(--t-font-size-xs)'` inside `font.size` (the full set is `xxs, xs, sm, md, lg, xl, xxl`), and `:60` declares `'1': 'var(--t-spacing-1)'` inside `spacing` (integer keys `'0'`–`'32'` plus half-steps `'0.5'`, `'1.5'`, …). No fallback is needed and none should be written. Keep the note that a missing Linaria token compiles to a silent empty string rather than an error, because that is why these were verified rather than assumed.
+Both tokens are confirmed to exist — this was an open item and it is settled. `packages/searm-ui/src/theme-constants/themeCssVariables.ts:204` declares `xs: 'var(--t-font-size-xs)'` inside `font.size` (the full set is `xxs, xs, sm, md, lg, xl, xxl`), and `:60` declares `'1': 'var(--t-spacing-1)'` inside `spacing` (integer keys `'0'`–`'32'` plus half-steps `'0.5'`, `'1.5'`, …). No fallback is needed and none should be written. Keep the note that a missing Linaria token compiles to a silent empty string rather than an error, because that is why these were verified rather than assumed.
 
 Add the lookup helper after `formatValue` (lines 57-63):
 
@@ -5922,7 +5922,7 @@ The item-level `<tr>`, the `describeItem` checkbox label, the `colSpan={3}` desc
 - [ ] **Step 5: Run the tests to verify they pass**
 
 ```bash
-cd packages/twenty-front && npx jest ProposalDiffTable
+cd packages/searm-front && npx jest ProposalDiffTable
 ```
 
 Expected: PASS — all six pre-existing tests plus the 3 new ones, 9 in total.
@@ -5938,9 +5938,9 @@ Navigate to Settings → AI approvals. After Task 13's manual verification has r
 - [ ] **Step 7: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-front
-npx nx typecheck twenty-front
-git add packages/twenty-front/src/modules/settings/ai-approvals
+npx nx lint:diff-with-main searm-front
+npx nx typecheck searm-front
+git add packages/searm-front/src/modules/settings/ai-approvals
 git commit -m "feat(ai-research): show evidence citations in the approval diff table"
 ```
 
@@ -5960,10 +5960,10 @@ Launch 1's own integration test (`test/integration/graphql/suites/ai-write-appro
 - Record CRUD is on `/graphql`; `@MetadataResolver()`s including `pendingProposals`, `approveProposal`, and this phase's `createAgentTask` are on `/metadata`. The two `post` helpers below are copied from that file.
 - Its comment on originating a gated write is the precedent followed here: *"To originate a gated write without standing up a real LLM turn, resolve `ToolExecutorService` … and call `dispatch` directly — this is the exact code path an agent takes, minus the model."*
 
-**No agent fixture needs hand-rolling.** Task 5b seeds one `AgentEntity` per workspace at `universalIdentifier = RESEARCH_AGENT_UNIVERSAL_IDENTIFIER`, and `npx nx run twenty-server:test:integration:with-db-reset` runs against a freshly seeded database, so the agent is already there. The suite looks it up rather than creating one. (An earlier draft told the implementer to *"grep `test/integration/graphql/suites` for an existing agent-creation fixture and reuse it"* — there is none, and Decision 4 removed the need for one.)
+**No agent fixture needs hand-rolling.** Task 5b seeds one `AgentEntity` per workspace at `universalIdentifier = RESEARCH_AGENT_UNIVERSAL_IDENTIFIER`, and `npx nx run searm-server:test:integration:with-db-reset` runs against a freshly seeded database, so the agent is already there. The suite looks it up rather than creating one. (An earlier draft told the implementer to *"grep `test/integration/graphql/suites` for an existing agent-creation fixture and reuse it"* — there is none, and Decision 4 removed the need for one.)
 
 **Files:**
-- Create: `packages/twenty-server/test/integration/graphql/suites/ai-research/agent-task-research.integration-spec.ts`
+- Create: `packages/searm-server/test/integration/graphql/suites/ai-research/agent-task-research.integration-spec.ts`
 
 **Interfaces:**
 - Consumes: everything from Tasks 1-12.
@@ -5977,7 +5977,7 @@ import { randomUUID } from 'node:crypto';
 
 import request from 'supertest';
 
-import { ToolCategory } from 'twenty-shared/ai';
+import { ToolCategory } from 'searm-shared/ai';
 
 import { type ToolProviderContext } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider-context.type';
 import { type ToolExecutorService } from 'src/engine/core-modules/tool-provider/services/tool-executor.service';
@@ -6642,7 +6642,7 @@ Two notes on the SQL above. `agentRun` and `agentTask` are read with raw `global
 - [ ] **Step 2: Run the integration suite**
 
 ```bash
-npx nx run twenty-server:test:integration:with-db-reset
+npx nx run searm-server:test:integration:with-db-reset
 ```
 
 Expected: the new suite passes and no existing suite regresses, including the Launch 1 `ai-write-approval` suite. A failure in `records evidence, derives a fact, …` at the `proposalId` assertion means Task 3 Step 5d was skipped and `record_evidence` is still gated.
@@ -6650,12 +6650,12 @@ Expected: the new suite passes and no existing suite regresses, including the La
 - [ ] **Step 3: Full regression check**
 
 ```bash
-npx nx test twenty-server
-npx nx test twenty-front
-npx nx lint:diff-with-main twenty-server
-npx nx lint:diff-with-main twenty-front
-npx nx typecheck twenty-server
-npx nx typecheck twenty-front
+npx nx test searm-server
+npx nx test searm-front
+npx nx lint:diff-with-main searm-server
+npx nx lint:diff-with-main searm-front
+npx nx typecheck searm-server
+npx nx typecheck searm-front
 ```
 
 Expected: all green.
@@ -6663,7 +6663,7 @@ Expected: all green.
 - [ ] **Step 4: Manual end-to-end verification**
 
 ```bash
-npx nx database:reset twenty-server
+npx nx database:reset searm-server
 yarn start
 ```
 
@@ -6672,12 +6672,12 @@ Sign in with "Continue with Email" and the prefilled credentials. Confirm Settin
 Then trigger the dispatch tick. Either wait up to one minute for the registered cron, or run the command once:
 
 ```bash
-npx nx run twenty-server:command cron:ai-research:agent-task-dispatch
+npx nx run searm-server:command cron:ai-research:agent-task-dispatch
 ```
 
-The invocation is confirmed against `packages/twenty-server/project.json` — this was an open item and it is settled. The `command` target is a plain `nx:run-commands` wrapper: `{"cwd": "packages/twenty-server", "command": "node dist/command/command.js"}`. Nx appends whatever follows the target name as arguments, so any nest-commander command name registered on the CLI works, and the bulk registrar `cron:register:all` is just one such name — there is nothing special about it. Two consequences worth knowing before running it:
+The invocation is confirmed against `packages/searm-server/project.json` — this was an open item and it is settled. The `command` target is a plain `nx:run-commands` wrapper: `{"cwd": "packages/searm-server", "command": "node dist/command/command.js"}`. Nx appends whatever follows the target name as arguments, so any nest-commander command name registered on the CLI works, and the bulk registrar `cron:register:all` is just one such name — there is nothing special about it. Two consequences worth knowing before running it:
 
-- It executes `dist/`, so build first (`npx nx build twenty-server`) or the command runs stale code. A source-tree alternative that skips the build is `cd packages/twenty-server && npx ts-node -r tsconfig-paths/register src/command/command.ts cron:ai-research:agent-task-dispatch`.
+- It executes `dist/`, so build first (`npx nx build searm-server`) or the command runs stale code. A source-tree alternative that skips the build is `cd packages/searm-server && npx ts-node -r tsconfig-paths/register src/command/command.ts cron:ai-research:agent-task-dispatch`.
 - Every cron command in this repo *registers* a recurring job rather than running the work once — e.g. `cron:workflow:handle-staled-runs`, `cron:billing:reminder` (`@Command({ name: 'cron:…' })`). So this invocation schedules the dispatch tick; it does not perform one synchronously. To force an immediate tick, register it and wait one `AGENT_TASK_DISPATCH_CRON_PATTERN` interval, with the worker process running.
 
 Confirm: the task moves `PENDING` → `LEASED` → `SUCCEEDED`; Settings → AI approvals shows a proposal with a citation line under the changed field; approving it updates the record exactly once.
@@ -6685,7 +6685,7 @@ Confirm: the task moves `PENDING` → `LEASED` → `SUCCEEDED`; Settings → AI 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add packages/twenty-server/test
+git add packages/searm-server/test
 git commit -m "feat(ai-research): add end-to-end integration coverage for evidence, facts, and agent tasks"
 ```
 
@@ -6699,12 +6699,12 @@ git commit -m "feat(ai-research): add end-to-end integration coverage for eviden
 | `Evidence`: immutable observation — source type, locator, observed time, extractor, payload hash, strength, record links | Task 1 entity + migration; Task 2 `EvidenceRecordingService` tests (deterministic strength, hash) |
 | `Fact`: current/superseded sourced assertion — freshness, conflict state, field/value, evidence links | Task 1 entity, including the `lastObservedAt` freshness column copied from the observing `Evidence.observedAt`; Task 2 `FactDerivationService` tests (corroboration, freshness-only-moves-forward, supersession, same-run conflict, dismissal) |
 | `AgentTask`: durable scheduled work — priority, record target, reason, lease, retry count, budget, idempotency key, cancellation | Task 4 entity; Task 5 `AgentTaskService` tests (idempotent create, lease claim, guarded complete, backoff-then-exhaustion fail, cancel) |
-| `AgentRun` extends Twenty's existing run/turn/cost machinery, not a parallel one | Task 4 entity design note, including the charter's `workflowRunId` link and the deliberate absence of a `transcript` column (`AgentMessageEntity` already persists one) + Task 6 (reuses `threadId` batching field); Task 7 worker reuses `AgentAsyncExecutorService`/`AiBillingService` verbatim, adding only status and cost bookkeeping |
+| `AgentRun` extends SeaRM's existing run/turn/cost machinery, not a parallel one | Task 4 entity design note, including the charter's `workflowRunId` link and the deliberate absence of a `transcript` column (`AgentMessageEntity` already persists one) + Task 6 (reuses `threadId` batching field); Task 7 worker reuses `AgentAsyncExecutorService`/`AiBillingService` verbatim, adding only status and cost bookkeeping |
 | Strong non-conflicting facts flow into ProposalItems; weak/conflicting ones surface with the conflict shown | Task 8 gate integration test; Task 2's conflict/supersession tests; Task 12 UI citation with conflict badge |
 | Every AI-derived record change still goes through `ProposalGateService` — no second write path | Task 3 Step 5b ungates exactly two tools, both of which write only platform tables, with a test asserting the denylist still gates everything unclassified; Task 8 (gate only *reads* facts, still the same `save()` call it always made); Task 13's `create_agent_task` test asserts no proposal is created; explicit statement in Global Constraints |
 | Evidence and facts surfaced in the approval UI with sources | Task 11's single `ProposalItemDTO.facts` resolve field returning a flat projection; Task 12 `ProposalDiffTable` citation inside the existing field row, and its three tests |
 | End-to-end lead research workflow creates evidence, proposes changes, gets approval, updates records once, survives retry and restart | Task 13's eight integration tests, against a real database. "Survives restart" specifically is the expired-lease trio: a `LEASED` row whose lease expired is re-claimed, a `LEASED` row whose lease has not expired is not, and a row that exhausted `maxAttempts` while leased is reaped to `FAILED` rather than left non-terminal. |
-| Reuse Twenty's existing agent run/turn/cost-accounting/message-queue machinery — verified before designing anything that might duplicate it | Explicit design notes in Tasks 4, 5, 6, 7 citing the exact existing files read (`agent-turn.entity.ts`, `agent-async-executor.service.ts`, `ai-billing.service.ts`, `messaging-message-list-fetch.cron.job.ts`) |
+| Reuse SeaRM's existing agent run/turn/cost-accounting/message-queue machinery — verified before designing anything that might duplicate it | Explicit design notes in Tasks 4, 5, 6, 7 citing the exact existing files read (`agent-turn.entity.ts`, `agent-async-executor.service.ts`, `ai-billing.service.ts`, `messaging-message-list-fetch.cron.job.ts`) |
 | Audit entries distinguish agent/API/workflow principals (Principal contract) | `AgentTaskEntity.createdByActor` and the `ActorMetadata`/`FieldActorSource` reuse in Task 5c and Task 7 (`FieldActorSource.AGENT`) and Task 10 (`FieldActorSource.API`) — note `ToolExecutionContext` carries no actor at all, so Task 5c writes a literal one rather than reading a field that does not exist — the same `ActorMetadata` type `ProposalEntity.createdByActor` already uses (Launch 1) |
 
 ## Acceptance narrative coverage
@@ -6731,7 +6731,7 @@ Every capability the scouting reports (`crm-scout.md`, the anchors report) inven
 | Stale-record sweep cron that auto-creates `AgentTask`s for old/high-value records without being asked (the rest of the charter's "autonomous account monitoring" narrative, step 1's "cron... triggers") | When autonomous monitoring is scoped as its own deliverable — picking staleness thresholds and which fields matter is a product decision, not an architecture gap |
 | Per-task hard **dollar/credit** spend cap distinct from the workspace's AI credit ceiling | The task's **step** budget is now enforced (Task 7's program-integration note passes `maxSteps: task.budget`), which is the cheap 80% of the Execution contract's "budgeted" requirement. A per-task credit cap additionally needs a mid-run billing check `AgentAsyncExecutorService` does not expose. Build when a workspace wants one research task capped below its overall credit balance. |
 | Two-lane dispatch (cheap/deterministic "direct" tasks vs. LLM-session "research" tasks, with different lease durations) | When a second, non-LLM `AgentTask` kind actually exists — Phase 2 has exactly one kind (agent research), so a `kind` column and lane split would be speculative today |
-| Identity resolution / deterministic person-company fuzzy matching | Out of this phase's scope by charter's own delivery sequence (belongs to "Lead to qualified opportunity" step 2, already partly covered by Twenty's existing `match-participant` service per the anchors report — a Phase 2 research task can call that existing service, nothing new needed here) |
+| Identity resolution / deterministic person-company fuzzy matching | Out of this phase's scope by charter's own delivery sequence (belongs to "Lead to qualified opportunity" step 2, already partly covered by SeaRM's existing `match-participant` service per the anchors report — a Phase 2 research task can call that existing service, nothing new needed here) |
 | `Fact`/`Evidence` join table instead of a jsonb `evidenceIds`/`factIds` array | When the same piece of evidence needs to support facts on more than one field, or when a query needs to join *from* evidence *to* every fact it backs at scale — today it's a small array read by id, not a hot join path |
 | ~~DataLoader batching for the `ProposalItemDTO.facts`/`FactDTO.evidence` N+1 resolver pattern~~ | **Struck.** The N+1 pair no longer exists: Task 11 collapsed to a single `ProposalItemDTO.facts` resolve field over `FactService.findProposalItemFacts`, which is two queries per item regardless of fact count. There is nothing left to batch. |
 | Evidence recording from a live chat conversation (no `AgentTask`/`AgentRun`) | When users want an ad hoc chat research finding to also feed the fact pipeline — today `record_evidence` requires `context.threadId` to resolve to a real `AgentRunEntity`, so chat-only sessions can't use it |
@@ -6740,9 +6740,9 @@ Every capability the scouting reports (`crm-scout.md`, the anchors report) inven
 | Workspace-level self-profile brief (`WorkspaceProfile`, from `crm-scout.md` item 16) | When outreach/prep tasks need reusable context about the workspace's own org — no consumer of it exists yet in this phase |
 | Record briefs (narrative summary panel per record, `crm-scout.md` item 15) | When a record-page "brief" UI surface is scoped — this phase builds the fact/evidence substrate a brief would read from, but not the narrative-generation tool or panel itself |
 | Real dollar-cost/quality/freshness/conversion dashboards (charter narrative step 8) | When a dashboards/reporting phase is scoped — `AgentRun.creditsUsedMicro`/`inputTokens`/`outputTokens` are captured this phase so that data exists to build on |
-| **Evidence/fact workflow trigger** (charter "Trust layer meets workflows": *"fires on new material evidence, a conflict, stale data, or an approved proposal"*) — added by the program review, previously uncovered by every plan | Twenty's `DATABASE_EVENT` trigger only fires on workspace-object tables; `Evidence`/`Fact` are core-schema tables, so this needs either a new trigger type or the Owner Decision #1 fork (trust entities as standard objects). Build when a customer asks to automate off a conflict or a stale fact — until then the `AgentTask` cron plus Phase 4's cron templates cover the scheduled half of the same need. |
+| **Evidence/fact workflow trigger** (charter "Trust layer meets workflows": *"fires on new material evidence, a conflict, stale data, or an approved proposal"*) — added by the program review, previously uncovered by every plan | SeaRM's `DATABASE_EVENT` trigger only fires on workspace-object tables; `Evidence`/`Fact` are core-schema tables, so this needs either a new trigger type or the Owner Decision #1 fork (trust entities as standard objects). Build when a customer asks to automate off a conflict or a stale fact — until then the `AgentTask` cron plus Phase 4's cron templates cover the scheduled half of the same need. |
 | **Evidence/fact panel on the record page** (charter Phase 2: *"surfaced on record pages, chat, workflows, dashboards, search"*) — added by the program review; this phase surfaces evidence in the **approval UI only** (Tasks 11–12) | When a reviewer asks "what does the CRM believe about this record and why" outside the context of an open proposal. The GraphQL read path (`FactService`, Task 8) already supports it; only the record-page tab component would be new. Ships naturally alongside record briefs. |
-| **Per-field human-authorship supremacy** (`crm-scout.md` item 12 — agent never overwrites a value a human typed) — added by the program review | Twenty stores actor provenance per *record*, not per *field*, so a true implementation needs per-field authorship the platform does not have. Launch 1's baseline-vs-approval conflict check already blocks the dangerous case (a human edit *after* the proposal), and Task 9's dismissal memory blocks re-proposing a rejected value. Build the full version when reviewers report the agent proposing over hand-entered values often enough to be annoying. |
+| **Per-field human-authorship supremacy** (`crm-scout.md` item 12 — agent never overwrites a value a human typed) — added by the program review | SeaRM stores actor provenance per *record*, not per *field*, so a true implementation needs per-field authorship the platform does not have. Launch 1's baseline-vs-approval conflict check already blocks the dangerous case (a human edit *after* the proposal), and Task 9's dismissal memory blocks re-proposing a rejected value. Build the full version when reviewers report the agent proposing over hand-entered values often enough to be annoying. |
 | **Static per-kind task-priority table** (`crm-scout.md` item 20) | `AgentTaskEntity.priority` is stored and ordered on, but every task created this phase uses the caller-supplied or default priority — there is exactly one task kind, so a per-kind table would have one row. Build alongside the two-lane dispatch cut above, when a second kind exists. |
 
 ## Risks and unknowns
@@ -6751,13 +6751,13 @@ Named because reading the code could not resolve them — verify at implementati
 
 **Resolved since the previous revision, kept here so the reasoning is not lost:**
 
-- ~~*`AgentEntity` role/permission resolution for a task-scheduled run is unverified for the "no role assigned" case.*~~ **Resolved by Owner Decision 4 and Task 5b.** The trap was real and worse than described: `roleTarget` is not in `TWENTY_STANDARD_ALL_METADATA_NAME`, so the standard-application pipeline cannot emit an agent→role binding at all, and every shipped role (`admin`, member, guest) sets `canBeAssignedToAgents: false` — so no agent in a fresh workspace has a role today, and `getAgentRoleId()` returning `undefined` means no registry tools, including `record_evidence`. Task 5b seeds a purpose-built agent-assignable role and binds it on first use through `AiAgentRoleService.assignRoleToAgent`, and logs a named warning rather than silently degrading if an admin deletes the role.
+- ~~*`AgentEntity` role/permission resolution for a task-scheduled run is unverified for the "no role assigned" case.*~~ **Resolved by Owner Decision 4 and Task 5b.** The trap was real and worse than described: `roleTarget` is not in `SEARM_STANDARD_ALL_METADATA_NAME`, so the standard-application pipeline cannot emit an agent→role binding at all, and every shipped role (`admin`, member, guest) sets `canBeAssignedToAgents: false` — so no agent in a fresh workspace has a role today, and `getAgentRoleId()` returning `undefined` means no registry tools, including `record_evidence`. Task 5b seeds a purpose-built agent-assignable role and binds it on first use through `AiAgentRoleService.assignRoleToAgent`, and logs a named warning rather than silently degrading if an admin deletes the role.
 - ~~*`cron-register-all.command.ts`'s exact method body was not read in full.*~~ **Resolved.** All 260 lines read; Task 7 Step 13 now carries the three literal edits (import, constructor parameter, `allCommands` entry) against quoted line numbers.
 - ~~*`InjectWorkspaceScopedRepository(AgentEntity)` inside a `Scope.REQUEST` queue processor.*~~ **Resolved by reading the entity.** `AgentEntity` is `@Entity('agent')` on the core schema, not a per-workspace-schema entity, so there is nothing workspace-scoped to resolve — Task 7 uses a plain `@InjectRepository(AgentEntity)` with a `workspaceId` column predicate. The earlier draft's `unknown`-typed constructor parameter and its attached design instruction are gone.
 - ~~*Workflow → GraphQL wiring for `createAgentTask` over HTTP with a workspace API key.*~~ **Struck** (program §2 C7). That path was never traced end to end and no task builds it. The workflow path is the `create_agent_task` static tool (Task 5c) called from an `AI_AGENT` step; the GraphQL mutation (Task 10) serves humans, admin scripts, and external agents. Nothing in this plan implements or documents an HTTP-request-action path, and nothing should.
 
 - ~~*Whether registry tool generation is scoped by object write permission.*~~ **Resolved by reading `database-tool.provider.ts`.** It is. `:144-146` derives `canUpdateRecords` from the role's object permissions and `:262` guards the whole `create_one_*`/`create_many_*`/`update_one_*`/`update_many_*`/upsert descriptor block with `if (canUpdateRecords && canBeManagedByAutomation)`. A role with `canUpdateAllObjectRecords: false` therefore yields an agent with no write tool at all, which could never reach the gate and never produce a proposal. Task 5b ships `true` with the gate as the write barrier; the deviation from Decision 4's literal *"write-nothing-directly"* phrasing is deliberate and flagged in Task 5b's blockquote. Task 5b Step 1 keeps a one-line grep so a future change to that guard is caught.
-- ~~*The exact CLI invocation to run a single cron command once.*~~ **Resolved against `project.json`.** The `command` target is `{"cwd": "packages/twenty-server", "command": "node dist/command/command.js"}`; Nx appends the command name, so `npx nx run twenty-server:command cron:ai-research:agent-task-dispatch` works for any registered nest-commander name — `cron:register:all` is not privileged. Two caveats now written into Task 13 Step 4: it runs `dist/`, so build first or use `ts-node` against `src/command/command.ts`; and a `cron:*` command *registers* the recurring job rather than performing one tick.
+- ~~*The exact CLI invocation to run a single cron command once.*~~ **Resolved against `project.json`.** The `command` target is `{"cwd": "packages/searm-server", "command": "node dist/command/command.js"}`; Nx appends the command name, so `npx nx run searm-server:command cron:ai-research:agent-task-dispatch` works for any registered nest-commander name — `cron:register:all` is not privileged. Two caveats now written into Task 13 Step 4: it runs `dist/`, so build first or use `ts-node` against `src/command/command.ts`; and a `cron:*` command *registers* the recurring job rather than performing one tick.
 - ~~*Whether `claimDueTasks` re-claims a row still marked `LEASED` whose lease expired.*~~ **Resolved — the previous revision's query was wrong and is now fixed.** It filtered `status = PENDING` and checked `leasedUntil` only as a secondary condition, so a crashed worker's row (status `LEASED`, lease expired) matched nothing and was stranded forever, and the "survives retry/restart" exit gate could not have passed. Task 5's `claimDueTasks` now selects on `status = PENDING OR (status = LEASED AND "leasedUntil" < :now)` and re-checks that same predicate inside the conditional UPDATE, preserving the compare-and-swap (a freshly claimed row has a future lease, so a concurrent tick's predicate is false). A new `reapAbandonedTasks()` sweeps rows that exhausted `maxAttempts` while leased to `FAILED`, since those are neither claimable nor terminal. Task 13's lease test no longer rewrites `status` — it only expires the lease, which is what a crash actually leaves — plus two new tests: an unexpired lease must not be re-claimable, and the reaper must close out an exhausted row.
 - ~~*`ToolProviderContext.threadId` reaching `record_evidence` through the lazy tool-loading path.*~~ **Resolved by reading the chain end to end.** `createExecuteToolTool`'s `execute()` passes its captured `ToolContext` through unchanged to `toolRegistry.resolveAndExecute(toolName, args, context, …)` (`execute-tool.tool.ts:66-69`); `resolveAndExecute` calls `buildContextFromToolContext`, which copies `threadId` explicitly (`tool-registry.service.ts`); `ActionToolProvider.executeStaticTool` forwards `threadId: context.threadId` into the five-field `ToolExecutionContext` (`action-tool.provider.ts:210-216`). The only break was the source object: `buildLazyRegistryTools` did not set `threadId` on the `ToolContext` it constructs. Task 6 Step 6 adds it, and Task 6 Step 1 now carries a second test covering the lazy strategy specifically, because that is the one Task 7's worker uses.
 

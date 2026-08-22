@@ -2,21 +2,21 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** an external, OAuth-authorized agent can discover Twenty's schema, read the records its role permits, create proposals for writes, and — when something goes wrong — recover from the response alone, without a human in the loop to translate the error. Every AI-facing failure carries `code`, `message`, `hint`, `retryable`, `allowedActions`. AI-requested deletes require a confirmation round-trip. Retried AI writes never duplicate a proposal. Three starter workflow templates package the research/proposal capabilities already in the product.
+**Goal:** an external, OAuth-authorized agent can discover SeaRM's schema, read the records its role permits, create proposals for writes, and — when something goes wrong — recover from the response alone, without a human in the loop to translate the error. Every AI-facing failure carries `code`, `message`, `hint`, `retryable`, `allowedActions`. AI-requested deletes require a confirmation round-trip. Retried AI writes never duplicate a proposal. Three starter workflow templates package the research/proposal capabilities already in the product.
 
-**Architecture:** this phase does not replace anything from Launch 1 (`docs/superpowers/plans/2026-08-05-ai-write-approval.md`) or from Twenty's existing tool-provider/MCP stack — it extends both. The single write chokepoint is still `ProposalGateService.evaluate()`, called from `ToolExecutorService.dispatch()`. The single external-facing transport is still `packages/twenty-server/src/engine/api/mcp/`. Every task below either (a) adds a structured failure shape and threads it through the *existing* error paths of that stack, or (b) extends `ProposalGateService`/`ProposalItemEntity` in place, or (c) adds new, narrowly-scoped services that call *existing* Twenty services rather than reimplementing them.
+**Architecture:** this phase does not replace anything from Launch 1 (`docs/superpowers/plans/2026-08-05-ai-write-approval.md`) or from SeaRM's existing tool-provider/MCP stack — it extends both. The single write chokepoint is still `ProposalGateService.evaluate()`, called from `ToolExecutorService.dispatch()`. The single external-facing transport is still `packages/searm-server/src/engine/api/mcp/`. Every task below either (a) adds a structured failure shape and threads it through the *existing* error paths of that stack, or (b) extends `ProposalGateService`/`ProposalItemEntity` in place, or (c) adds new, narrowly-scoped services that call *existing* SeaRM services rather than reimplementing them.
 
 **Tech Stack:** NestJS 10, TypeORM, PostgreSQL 16, GraphQL (code-first, metadata schema), React 18 + Jotai + Linaria, Nx, Jest, Vercel AI SDK (`ai` package) for tool sets.
 
-**Spec:** `docs/superpowers/PRODUCT-CHARTER.md` §"Metadata-aware AI and MCP tools" and delivery-sequence row 4. Scouting: `docs/superpowers/scouting/twenty-anchors.md` §2, §8; `docs/superpowers/scouting/crmkit-scout.md` §1.1–§1.11.
+**Spec:** `docs/superpowers/PRODUCT-CHARTER.md` §"Metadata-aware AI and MCP tools" and delivery-sequence row 4. Scouting: `docs/superpowers/scouting/searm-anchors.md` §2, §8; `docs/superpowers/scouting/crmkit-scout.md` §1.1–§1.11.
 
-**Working directory for all paths below:** `d:\Files\Vatsa\Projects\AI-CRM\twenty`
+**Working directory for all paths below:** `d:\Files\Vatsa\Projects\AI-CRM\searm`
 
 ## Ground truth this plan was written against
 
 **Re-verified against HEAD `dba03d0907`** ("style(ai-write-approval): apply oxfmt to the fix-wave changes") on 2026-08-06, after the fix wave `c6e057906b..HEAD` rewrote the gate, the policy service and the execution service. Every quoted signature, line number, permission flag, GraphQL decorator and find-and-replace block below was re-read from the file it names. Where this document quotes a line number, that number is from this commit. If HEAD has moved, re-read before transcribing — **reality wins over this plan, always.**
 
-Read directly from the checkout before writing a single line of code below (paths relative to `packages/twenty-server/src/` unless noted):
+Read directly from the checkout before writing a single line of code below (paths relative to `packages/searm-server/src/` unless noted):
 
 - `engine/core-modules/tool/types/tool-output.type.ts` — the `ToolOutput<T>` shape every tool returns today.
 - `engine/core-modules/tool-provider/services/tool-executor.service.ts` — `ToolExecutorService.dispatch()`, **already gated by `ProposalGateService`** (Launch 1 Task 4 has landed on this branch — verified by reading the file, not assumed).
@@ -42,24 +42,24 @@ Copied from the repo's `CLAUDE.md`, the Launch 1 plan, and this phase's brief. E
 - **No `any`.** Strict TypeScript enforced.
 - **Types over interfaces**, except when extending a third-party interface.
 - **String literal unions over enums**, except GraphQL enums (real TS enums registered with `registerEnumType`).
-- **Functional components only** in `twenty-front`.
+- **Functional components only** in `searm-front`.
 - **File naming:** kebab-case with suffix — `.service.ts`, `.entity.ts`, `.dto.ts`, `.module.ts`, `.resolver.ts`. Front components are PascalCase `.tsx`.
 - **Comments:** short-form `//` only, no JSDoc blocks. Explain WHY, not WHAT.
-- **Use `isDefined()` from `twenty-shared/utils`** rather than hand-rolled null checks.
+- **Use `isDefined()` from `searm-shared/utils`** rather than hand-rolled null checks.
 - **Services under 500 lines, components under 300 lines.**
 - **Entity registration is automatic** — `core.datasource.ts` globs `engine/metadata-modules/**/*.entity.{ts,js}`. Never add an entity to a registry list.
-- **Schema changes ship as instance commands**, never TypeORM migrations. Generate with `npx nx run twenty-server:database:migrate:generate --name <name> --type fast`. The naming convention actually used in this repo, confirmed by reading a real generated file, is `<minor>-instance-command-fast-<epoch-ms>-<slug>.ts` containing a class decorated `@RegisteredInstanceCommand('<version>', <epoch-ms>)` implementing `FastInstanceCommand` (`up`/`down` raw SQL). Never rewrite a committed command's `up`/`down`.
+- **Schema changes ship as instance commands**, never TypeORM migrations. Generate with `npx nx run searm-server:database:migrate:generate --name <name> --type fast`. The naming convention actually used in this repo, confirmed by reading a real generated file, is `<minor>-instance-command-fast-<epoch-ms>-<slug>.ts` containing a class decorated `@RegisteredInstanceCommand('<version>', <epoch-ms>)` implementing `FastInstanceCommand` (`up`/`down` raw SQL). Never rewrite a committed command's `up`/`down`.
 - **Never gate reads.** `find_many`, `find_one`, `group_by` must pass through untouched.
 - **Never gate the four deterministic workflow record-crud actions.** Only AI-originated writes are proposed.
 - **Confirmation tokens apply to AI-requested deletes only.** Human UI deletion (the ordinary GraphQL record-delete mutation used by the front end) is untouched by every task in this plan — every change below lives inside `ProposalGateService`, `ToolExecutorService`, MCP, or the Zod schemas that only AI tool calls are validated against.
 - **The gate must keep returning `success: true` for proposed writes** and now also for `ALLOW`ed AUTO writes that pass confirmation — an agent that reads failure retries and duplicates.
 - **Custom objects are the only extension mechanism for business-specific records.** Nothing in this plan adds a workspace-visible standard object; the new entity change (Task 6) extends an existing `core`-schema TypeORM entity, matching the pattern `ProposalEntity`/`ProposalItemEntity` already use.
-- Lint and typecheck after each task: `npx nx lint:diff-with-main twenty-server` and `npx nx typecheck twenty-server` (front tasks: `twenty-front`).
+- Lint and typecheck after each task: `npx nx lint:diff-with-main searm-server` and `npx nx typecheck searm-server` (front tasks: `searm-front`).
 - **Every task must have at least one test that exercises a real seam, not a double.** Launch 1 shipped three Criticals behind a green suite because its specs doubled the broken seam. Each task below names its own; do not replace one with a mock to make a test simpler. The seams, per task: T1 the real util; T2/T5/T6 the **real `AiWritePolicyService`** inside `proposal-gate.service.spec.ts` (that spec does not mock `resolveMode` — see Task 2 Step 1), plus T5's real `buildDeleteConfirmationToken`; T3 the real `ToolRegistryService` + real `findSimilarToolNames`; T4 the real `McpToolExecutorService` JSON-RPC envelope; T7 the real `FindRecordsService`; T8 the real `getObjectsPermissionsFromRolePermissionConfig` against the real cache payload shape; T9 and T13 real database integration suites; T10 the real `normalizeWorkflowTemplateSteps` and real `WORKFLOW_TEMPLATES`; T11 a real render of the component.
 
 ## File Structure
 
-**New — server, error envelope** (under `packages/twenty-server/src/engine/core-modules/tool/`):
+**New — server, error envelope** (under `packages/searm-server/src/engine/core-modules/tool/`):
 
 | File | Responsibility |
 | --- | --- |
@@ -83,13 +83,13 @@ Copied from the repo's `CLAUDE.md`, the Launch 1 plan, and this phase's brief. E
 | `engine/metadata-modules/object-metadata/tools/object-metadata-tools.factory.ts` | `generateTools(context)` instead of `generateTools(workspaceId)`; annotate each object with `permittedOperations` |
 | `engine/core-modules/tool-provider/providers/metadata-tool.provider.ts` | pass full `context` to `objectMetadataToolsFactory.generateTools` |
 
-**New — server, confirmation tokens** (under `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/`):
+**New — server, confirmation tokens** (under `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/`):
 
 | File | Responsibility |
 | --- | --- |
 | `utils/build-delete-confirmation-token.util.ts` | deterministic per-record/per-filter confirm token |
 
-**New — server, workflow templates** (under `packages/twenty-server/src/modules/workflow/workflow-templates/`):
+**New — server, workflow templates** (under `packages/searm-server/src/modules/workflow/workflow-templates/`):
 
 | File | Responsibility |
 | --- | --- |
@@ -108,14 +108,14 @@ Copied from the repo's `CLAUDE.md`, the Launch 1 plan, and this phase's brief. E
 
 | File | Responsibility |
 | --- | --- |
-| `packages/twenty-front/src/pages/settings/ai/SettingsWorkflowTemplates.tsx` | page shell + route target |
-| `packages/twenty-front/src/modules/settings/workflow-templates/graphql/queries/workflowTemplates.ts` | query document |
-| `packages/twenty-front/src/modules/settings/workflow-templates/graphql/mutations/installWorkflowTemplate.ts` | mutation document |
-| `packages/twenty-front/src/modules/settings/workflow-templates/components/WorkflowTemplateCard.tsx` | one template card + install button |
+| `packages/searm-front/src/pages/settings/ai/SettingsWorkflowTemplates.tsx` | page shell + route target |
+| `packages/searm-front/src/modules/settings/workflow-templates/graphql/queries/workflowTemplates.ts` | query document |
+| `packages/searm-front/src/modules/settings/workflow-templates/graphql/mutations/installWorkflowTemplate.ts` | mutation document |
+| `packages/searm-front/src/modules/settings/workflow-templates/components/WorkflowTemplateCard.tsx` | one template card + install button |
 
-**Modified — front:** `packages/twenty-shared/src/types/SettingsPath.ts`, `packages/twenty-front/src/modules/app/components/SettingsRoutes.tsx`.
+**Modified — front:** `packages/searm-shared/src/types/SettingsPath.ts`, `packages/searm-front/src/modules/app/components/SettingsRoutes.tsx`.
 
-**New — docs:** `packages/twenty-server/docs/AGENT_API_CONTRACT.md`.
+**New — docs:** `packages/searm-server/docs/AGENT_API_CONTRACT.md`.
 
 **New — migration:** none. (An earlier draft of this line promised `idempotencyKey`/`workspaceId` columns on `core.proposalItem` for Task 6; Task 6 as written needs no schema change and none is added. Removed by the program review as a contradiction between this table and the task.)
 
@@ -126,10 +126,10 @@ Copied from the repo's `CLAUDE.md`, the Launch 1 plan, and this phase's brief. E
 Defines the machine-readable failure shape the charter requires: `code`, `message`, `hint`, `retryable`, `allowedActions`. Additive to `ToolOutput` — nothing that reads `success`/`error`/`message` today breaks.
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/core-modules/tool/types/tool-failure.type.ts`
-- Create: `packages/twenty-server/src/engine/core-modules/tool/utils/build-tool-failure.util.ts`
-- Modify: `packages/twenty-server/src/engine/core-modules/tool/types/tool-output.type.ts`
-- Test: `packages/twenty-server/src/engine/core-modules/tool/utils/__tests__/build-tool-failure.util.spec.ts`
+- Create: `packages/searm-server/src/engine/core-modules/tool/types/tool-failure.type.ts`
+- Create: `packages/searm-server/src/engine/core-modules/tool/utils/build-tool-failure.util.ts`
+- Modify: `packages/searm-server/src/engine/core-modules/tool/types/tool-output.type.ts`
+- Test: `packages/searm-server/src/engine/core-modules/tool/utils/__tests__/build-tool-failure.util.spec.ts`
 
 **Interfaces:**
 - Produces:
@@ -249,7 +249,7 @@ describe('toFailedToolOutput', () => {
 - [ ] **Step 4: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest build-tool-failure.util.spec
+cd packages/searm-server && npx jest build-tool-failure.util.spec
 ```
 
 Expected: FAIL — `Cannot find module '.../build-tool-failure.util'`.
@@ -292,7 +292,7 @@ export const toFailedToolOutput = (failure: ToolFailure): ToolOutput => ({
 - [ ] **Step 6: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest build-tool-failure.util.spec
+cd packages/searm-server && npx jest build-tool-failure.util.spec
 ```
 
 Expected: PASS, 3 tests.
@@ -300,9 +300,9 @@ Expected: PASS, 3 tests.
 - [ ] **Step 7: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/core-modules/tool
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/core-modules/tool
 git commit -m "feat(agent-api): add agent-safe tool failure envelope"
 ```
 
@@ -313,8 +313,8 @@ git commit -m "feat(agent-api): add agent-safe tool failure envelope"
 The gate is the single funnel for every AI write. `FORBID` is its only failure-shaped decision today — give it a structured `failure` instead of a bare string, so callers (Task 3) don't have to re-derive one.
 
 **Files:**
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-gate.service.spec.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-gate.service.spec.ts`
 
 **Interfaces:**
 - Consumes: `buildToolFailure` (Task 1).
@@ -348,7 +348,7 @@ In `services/__tests__/proposal-gate.service.spec.ts`, replace the body of the e
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-gate.service.spec
+cd packages/searm-server && npx jest proposal-gate.service.spec
 ```
 
 Expected: FAIL — `decision.failure` is `undefined` (the current `FORBID` branch only sets `message`).
@@ -396,7 +396,7 @@ Replace the `FORBID` branch inside `evaluate()`:
 - [ ] **Step 4: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-gate.service.spec
+cd packages/searm-server && npx jest proposal-gate.service.spec
 ```
 
 Expected: PASS — all pre-existing tests in the file (~19 `it` blocks at HEAD `dba03d0907`) including the updated one. Do not treat a higher count as a regression.
@@ -404,9 +404,9 @@ Expected: PASS — all pre-existing tests in the file (~19 `it` blocks at HEAD `
 - [ ] **Step 5: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval
 git commit -m "feat(agent-api): give the proposal gate's FORBID decision a structured failure"
 ```
 
@@ -417,11 +417,11 @@ git commit -m "feat(agent-api): give the proposal gate's FORBID decision a struc
 Every AI tool call resolves through exactly two chokepoints before it reaches an AI SDK `ToolSet`: `ToolExecutorService.dispatch()` (called by `hydrateToolSet`'s closures and by `resolveAndExecute`) and `ToolRegistryService.resolveAndExecute()` (used by the `execute_tool` meta-tool). This task builds a `failure` at every place those two files already build a failed `ToolOutput`.
 
 **Files:**
-- Modify: `packages/twenty-server/src/engine/core-modules/tool-provider/services/tool-executor.service.ts`
-- Modify: `packages/twenty-server/src/engine/core-modules/tool-provider/services/tool-registry.service.ts`
-- Modify: `packages/twenty-server/src/engine/core-modules/tool-provider/utils/tool-error.util.ts`
-- Test: `packages/twenty-server/src/engine/core-modules/tool-provider/services/__tests__/tool-executor-gate.spec.ts` (extend)
-- Test: `packages/twenty-server/src/engine/core-modules/tool-provider/services/__tests__/tool-registry.service.spec.ts` (create)
+- Modify: `packages/searm-server/src/engine/core-modules/tool-provider/services/tool-executor.service.ts`
+- Modify: `packages/searm-server/src/engine/core-modules/tool-provider/services/tool-registry.service.ts`
+- Modify: `packages/searm-server/src/engine/core-modules/tool-provider/utils/tool-error.util.ts`
+- Test: `packages/searm-server/src/engine/core-modules/tool-provider/services/__tests__/tool-executor-gate.spec.ts` (extend)
+- Test: `packages/searm-server/src/engine/core-modules/tool-provider/services/__tests__/tool-registry.service.spec.ts` (create)
 
 **Interfaces:**
 - Consumes: `GateDecision` (Task 2), `buildToolFailure`/`toFailedToolOutput` (Task 1), `findSimilarToolNames` (existing).
@@ -460,7 +460,7 @@ In `services/__tests__/tool-executor-gate.spec.ts`, replace the `'should return 
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest tool-executor-gate.spec
+cd packages/searm-server && npx jest tool-executor-gate.spec
 ```
 
 Expected: FAIL — `dispatch()` still builds `{success:false, message: decision.message, error: decision.message}`, which no longer type-checks against the new `GateDecision` (`decision.message` doesn't exist on the `FORBID` variant anymore) and doesn't set `failure`.
@@ -506,7 +506,7 @@ import { buildToolFailure } from 'src/engine/core-modules/tool/utils/build-tool-
 - [ ] **Step 4: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest tool-executor-gate.spec
+cd packages/searm-server && npx jest tool-executor-gate.spec
 ```
 
 Expected: PASS, 4 tests.
@@ -599,7 +599,7 @@ describe('ToolRegistryService failure envelope', () => {
 - [ ] **Step 6: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest tool-registry.service.spec
+cd packages/searm-server && npx jest tool-registry.service.spec
 ```
 
 Expected: FAIL — `output.failure` is `undefined` on both assertions.
@@ -666,7 +666,7 @@ Replace the catch branch:
 - [ ] **Step 8: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest tool-registry.service.spec
+cd packages/searm-server && npx jest tool-registry.service.spec
 ```
 
 Expected: PASS, 2 tests.
@@ -710,7 +710,7 @@ export const wrapWithErrorHandler = (
 - [ ] **Step 10: Run the surrounding suites for regressions**
 
 ```bash
-cd packages/twenty-server && npx jest tool-provider
+cd packages/searm-server && npx jest tool-provider
 ```
 
 Expected: PASS. Existing suites that assert exact `message: 'Failed to execute ...'` text on `wrapWithErrorHandler`'s output are unaffected (`message` is unchanged; only `failure` is new).
@@ -718,9 +718,9 @@ Expected: PASS. Existing suites that assert exact `message: 'Failed to execute .
 - [ ] **Step 11: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/core-modules/tool-provider
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/core-modules/tool-provider
 git commit -m "feat(agent-api): surface structured failures from the tool executor and registry"
 ```
 
@@ -731,8 +731,8 @@ git commit -m "feat(agent-api): surface structured failures from the tool execut
 `McpToolExecutorService.handleToolCall()` is the literal JSON an external MCP client receives. Today an unknown tool name or an uncaught exception reaches the client as either a bare JSON-RPC `error.message` string or `content[0].text` set to `executionError.message` — no code, no hint, no retryable flag. This is the gap named explicitly in the anchors report.
 
 **Files:**
-- Modify: `packages/twenty-server/src/engine/api/mcp/services/mcp-tool-executor.service.ts`
-- Test: `packages/twenty-server/src/engine/api/mcp/services/__tests__/mcp-tool-executor.service.spec.ts` (extend)
+- Modify: `packages/searm-server/src/engine/api/mcp/services/mcp-tool-executor.service.ts`
+- Test: `packages/searm-server/src/engine/api/mcp/services/__tests__/mcp-tool-executor.service.spec.ts` (extend)
 
 **Interfaces:**
 - Consumes: `buildToolFailure`/`toFailedToolOutput` (Task 1).
@@ -779,7 +779,7 @@ Add to the existing describe block (or a new one in the same file):
 - [ ] **Step 3: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest mcp-tool-executor.service.spec
+cd packages/searm-server && npx jest mcp-tool-executor.service.spec
 ```
 
 Expected: FAIL — `response.error.data` is `undefined`; `response.result.content[0].text` is the bare string `'downstream boom'`, not JSON.
@@ -881,7 +881,7 @@ Replace the catch branch's return:
 - [ ] **Step 5: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest mcp-tool-executor.service.spec
+cd packages/searm-server && npx jest mcp-tool-executor.service.spec
 ```
 
 Expected: PASS, all existing tests plus the 2 new ones.
@@ -889,9 +889,9 @@ Expected: PASS, all existing tests plus the 2 new ones.
 - [ ] **Step 6: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/api/mcp
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/api/mcp
 git commit -m "feat(agent-api): surface structured failures over the MCP transport"
 ```
 
@@ -902,12 +902,12 @@ git commit -m "feat(agent-api): surface structured failures over the MCP transpo
 Under the Launch 1 default policy (`PROPOSE`), an AI-requested delete already stops at a human-reviewed proposal — no single AI call ever deletes anything. The gap this task closes is the **AUTO** fast path: a workspace admin who has opted an object's deletes into `AUTO` still has a single AI tool call that deletes a record immediately. This task adds a deterministic confirm-token round trip to that one path — a second call is required even when the write is otherwise auto-approved. Nothing here touches the human UI delete mutation.
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/utils/build-delete-confirmation-token.util.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts`
-- Modify: `packages/twenty-server/src/engine/core-modules/record-crud/zod-schemas/delete-tool.zod-schema.ts`
-- Modify: `packages/twenty-server/src/engine/core-modules/record-crud/zod-schemas/bulk-delete-tool.zod-schema.ts`
-- Test: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/utils/__tests__/build-delete-confirmation-token.util.spec.ts`
-- Test: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-gate.service.spec.ts` (extend)
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/utils/build-delete-confirmation-token.util.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts`
+- Modify: `packages/searm-server/src/engine/core-modules/record-crud/zod-schemas/delete-tool.zod-schema.ts`
+- Modify: `packages/searm-server/src/engine/core-modules/record-crud/zod-schemas/bulk-delete-tool.zod-schema.ts`
+- Test: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/utils/__tests__/build-delete-confirmation-token.util.spec.ts`
+- Test: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-gate.service.spec.ts` (extend)
 
 **Interfaces:**
 - Consumes: `buildToolFailure` (Task 1).
@@ -971,7 +971,7 @@ describe('buildDeleteConfirmationToken', () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest build-delete-confirmation-token.util.spec
+cd packages/searm-server && npx jest build-delete-confirmation-token.util.spec
 ```
 
 Expected: FAIL — module not found.
@@ -1003,7 +1003,7 @@ export const buildDeleteConfirmationToken = (params: {
 - [ ] **Step 4: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest build-delete-confirmation-token.util.spec
+cd packages/searm-server && npx jest build-delete-confirmation-token.util.spec
 ```
 
 Expected: PASS, 3 tests.
@@ -1050,7 +1050,7 @@ Edit `zod-schemas/bulk-delete-tool.zod-schema.ts` — add `confirm` alongside `f
 
 Add to `services/__tests__/proposal-gate.service.spec.ts`, in a new `describe('delete confirmation (AUTO mode)', ...)` block.
 
-**Use the harness that is actually in that file.** Verified at `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-gate.service.spec.ts:49-110` (HEAD `dba03d0907`): there is **no `policyService.resolveMode` mock**. `AiWritePolicyService` is provided *real* (line 87) and the policy is set through `setPolicy(policy)` (line 61), which stubs `keyValuePairService.get`. The file also defines the helpers `crudDescriptor(operation, objectNameSingular = 'person')` (line 21), `staticDescriptor(toolId, category = 'action')` (line 37), `evaluate(descriptor, args)` (line 105) and `savedItem()` (line 110). There is no `updateDescriptor` constant — it is `crudDescriptor('update_one')`. Reuse all of these; do not introduce a mocked policy service.
+**Use the harness that is actually in that file.** Verified at `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-gate.service.spec.ts:49-110` (HEAD `dba03d0907`): there is **no `policyService.resolveMode` mock**. `AiWritePolicyService` is provided *real* (line 87) and the policy is set through `setPolicy(policy)` (line 61), which stubs `keyValuePairService.get`. The file also defines the helpers `crudDescriptor(operation, objectNameSingular = 'person')` (line 21), `staticDescriptor(toolId, category = 'action')` (line 37), `evaluate(descriptor, args)` (line 105) and `savedItem()` (line 110). There is no `updateDescriptor` constant — it is `crudDescriptor('update_one')`. Reuse all of these; do not introduce a mocked policy service.
 
 **This is the task's real-seam test.** The gate → policy resolution runs through the real `AiWritePolicyService`, and the expected confirm token is computed by the real `buildDeleteConfirmationToken` from Step 3 rather than being hard-coded or stubbed — so a divergence between the token the gate emits and the token the util produces fails the suite instead of agreeing with a mock.
 
@@ -1234,7 +1234,7 @@ These are the tests that fail loudly if Step 8 is ever rewritten into an allowli
 - [ ] **Step 7: Run the tests to verify they fail**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-gate.service.spec
+cd packages/searm-server && npx jest proposal-gate.service.spec
 ```
 
 Expected: FAIL — `CONFIRMATION_REQUIRED` is not a member of `GateDecision` yet and AUTO always returns `ALLOW` unconditionally.
@@ -1259,7 +1259,7 @@ export type GateDecision =
 
 > **C9 — read this before touching the file.** An earlier draft of this step replaced `buildGateInput` wholesale with a version written against a file that no longer exists. That replacement inverted the gate from a **denylist** to an **allowlist** (`GATED_CRUD_OPERATIONS`/`GATED_STATIC_TOOL_IDS`, neither of which exists), and deleted `target`, `toolId`, `toolCategory`, and `baselineFieldNames`. It has been deleted. **This task does not change how anything is classified.** It is purely additive: two optional properties on `GateInput`, set in two branches of `buildCrudGateInput`, plus one check in `evaluate()`.
 >
-> Verified against `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts` at HEAD `dba03d0907`. The live classification, which must survive this task **unchanged**:
+> Verified against `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts` at HEAD `dba03d0907`. The live classification, which must survive this task **unchanged**:
 > - `UNGATED_CRUD_OPERATIONS = ['find_many','find_one','group_by']` (line 44) — a true denylist; every other CRUD operation, including one added next quarter, is gated. The `buildCrudGateInput` fallback at line 372 gates unclassified operations under `ProposalActionType.STATIC_TOOL`.
 > - `UNGATED_STATIC_TOOL_IDS` (line 50) — a static tool is gated unless it appears in this 22-entry list. `code_interpreter` is in it (sandboxed compute, no write path).
 > - `isGatedStaticTool` (line 241) — `http_request` is ungated only for `GET`/`HEAD` (`UNGATED_HTTP_METHODS`, line 88); every other method is gated.
@@ -1372,7 +1372,7 @@ Both branches already build their `payload` from named fields (`{}` and `{ filte
 - [ ] **Step 9: Run the tests to verify they pass**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-gate.service.spec
+cd packages/searm-server && npx jest proposal-gate.service.spec
 ```
 
 Expected: PASS — all pre-existing tests in the file (verified ~19 `it` blocks at HEAD `dba03d0907`, including the two `describe('denylist')` cases this task must keep green) plus the 7 new confirmation tests from Step 6 and the 3 classification-regression tests from Step 6b. Do not "repair" the suite to match a count; if a pre-existing denylist test now fails, Step 8 was applied wrongly — revert it.
@@ -1390,7 +1390,7 @@ In `services/tool-executor.service.ts`, add a branch right after the `FORBID` br
 - [ ] **Step 11: Regression-check the surrounding suites**
 
 ```bash
-cd packages/twenty-server && npx jest tool-executor-gate.spec
+cd packages/searm-server && npx jest tool-executor-gate.spec
 ```
 
 Expected: PASS — the `ALLOW` test still passes because it uses `update_one`, which never reaches the confirmation branch.
@@ -1398,9 +1398,9 @@ Expected: PASS — the `ALLOW` test still passes because it uses `update_one`, w
 - [ ] **Step 12: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval packages/twenty-server/src/engine/core-modules/record-crud/zod-schemas packages/twenty-server/src/engine/core-modules/tool-provider
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval packages/searm-server/src/engine/core-modules/record-crud/zod-schemas packages/searm-server/src/engine/core-modules/tool-provider
 git commit -m "feat(agent-api): require confirmation for AI-requested AUTO-mode deletes"
 ```
 
@@ -1415,8 +1415,8 @@ git commit -m "feat(agent-api): require confirmation for AI-requested AUTO-mode 
 An agent that times out waiting for a tool response and retries the identical call, or an MCP client that resends after a dropped connection, produces two `ProposalItem`s for the same intended write if nothing dedupes them — both get approved, both apply, and the record ends up duplicated. Proposals already batch every write from one agent turn into a single pending proposal keyed by `threadId` (Launch 1's `getOrCreatePendingProposal`); this task uses that same batch to detect and collapse an exact repeat before a second row is ever written. No schema migration is needed — this reuses the proposal that's already loaded.
 
 **Files:**
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-gate.service.spec.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-gate.service.spec.ts`
 
 **Interfaces:**
 - Consumes: `ProposalItemEntity` (Launch 1, unchanged).
@@ -1491,7 +1491,7 @@ Add `find: jest.fn().mockResolvedValue([])` to the `proposalItemRepository` mock
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-gate.service.spec
+cd packages/searm-server && npx jest proposal-gate.service.spec
 ```
 
 Expected: FAIL — `proposalItemRepository.find` is never called by `evaluate()` today, so `decision.output.result.proposalItemId` is a freshly-saved id, not `'item-existing'`.
@@ -1605,7 +1605,7 @@ Add the new private method, near `getOrCreatePendingProposal`:
 - [ ] **Step 4: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-gate.service.spec
+cd packages/searm-server && npx jest proposal-gate.service.spec
 ```
 
 Expected: PASS, all existing plus the 2 new duplicate-detection tests.
@@ -1613,9 +1613,9 @@ Expected: PASS, all existing plus the 2 new duplicate-detection tests.
 - [ ] **Step 5: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval
 git commit -m "feat(agent-api): dedupe retried AI writes within one pending proposal"
 ```
 
@@ -1626,9 +1626,9 @@ git commit -m "feat(agent-api): dedupe retried AI writes within one pending prop
 Pagination is already stable (`id` is always appended as an `orderBy` tiebreaker) and the total count is already returned. What's missing is an explicit "should I keep paging" boolean — today an agent has to compute `offset + records.length < count` itself, and frequently doesn't.
 
 **Files:**
-- Modify: `packages/twenty-server/src/engine/core-modules/record-crud/types/find-records-result.type.ts`
-- Modify: `packages/twenty-server/src/engine/core-modules/record-crud/services/find-records.service.ts`
-- Test: `packages/twenty-server/src/engine/core-modules/record-crud/services/__tests__/find-records.service.spec.ts`
+- Modify: `packages/searm-server/src/engine/core-modules/record-crud/types/find-records-result.type.ts`
+- Modify: `packages/searm-server/src/engine/core-modules/record-crud/services/find-records.service.ts`
+- Test: `packages/searm-server/src/engine/core-modules/record-crud/services/__tests__/find-records.service.spec.ts`
 
 **Interfaces:**
 - Consumes: `CommonFindManyQueryRunnerService.execute` (existing, unchanged).
@@ -1729,7 +1729,7 @@ describe('FindRecordsService hasMore', () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest find-records.service.spec
+cd packages/searm-server && npx jest find-records.service.spec
 ```
 
 Expected: FAIL — `output.result?.hasMore` is `undefined`.
@@ -1769,7 +1769,7 @@ In `services/find-records.service.ts`, replace the `return` at the end of the tr
 - [ ] **Step 5: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest find-records.service.spec
+cd packages/searm-server && npx jest find-records.service.spec
 ```
 
 Expected: PASS, 2 tests.
@@ -1777,9 +1777,9 @@ Expected: PASS, 2 tests.
 - [ ] **Step 6: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/core-modules/record-crud
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/core-modules/record-crud
 git commit -m "feat(agent-api): add explicit hasMore signal to find_many results"
 ```
 
@@ -1792,16 +1792,16 @@ git commit -m "feat(agent-api): add explicit hasMore signal to find_many results
 > **Program integration — this task absorbed Phase 3's discovery tool.** Phase 3 Task 5 originally built a second, per-object `describe_custom_fields_<object>` tool because `MetadataToolProvider.isAvailable()` hard-gates the whole METADATA provider behind `PermissionFlagType.DATA_MODEL` (verified on disk: `return this.permissionsService.checkRolesPermissions(context.rolePermissionConfig, context.workspaceId, PermissionFlagType.DATA_MODEL)`), so a record-scoped agent cannot discover custom fields at all. Rather than add N tools to work around one over-broad availability check, **this task fixes the check** and scopes the output — Steps 5, 6 and 7 below. Consequence: the "field-level permission scoping for `FieldMetadataToolsFactory`" row is **removed from this plan's cut table** — relaxing provider availability makes scoping `get_field_metadata` mandatory, not optional, and it is the same filter written twice.
 
 **Files:**
-- Modify: `packages/twenty-server/src/engine/metadata-modules/object-metadata/tools/object-metadata-tools.factory.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/field-metadata/tools/field-metadata-tools.factory.ts`
-- Modify: `packages/twenty-server/src/engine/core-modules/tool-provider/providers/metadata-tool.provider.ts`
-- Test: `packages/twenty-server/src/engine/metadata-modules/object-metadata/tools/__tests__/object-metadata-tools.factory.spec.ts` (create)
-- Test: `packages/twenty-server/src/engine/metadata-modules/field-metadata/tools/__tests__/field-metadata-tools.factory.spec.ts` (create)
-- Test: `packages/twenty-server/src/engine/core-modules/tool-provider/providers/__tests__/metadata-tool.provider.spec.ts` (create — no spec exists for this provider today)
+- Modify: `packages/searm-server/src/engine/metadata-modules/object-metadata/tools/object-metadata-tools.factory.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/field-metadata/tools/field-metadata-tools.factory.ts`
+- Modify: `packages/searm-server/src/engine/core-modules/tool-provider/providers/metadata-tool.provider.ts`
+- Test: `packages/searm-server/src/engine/metadata-modules/object-metadata/tools/__tests__/object-metadata-tools.factory.spec.ts` (create)
+- Test: `packages/searm-server/src/engine/metadata-modules/field-metadata/tools/__tests__/field-metadata-tools.factory.spec.ts` (create)
+- Test: `packages/searm-server/src/engine/core-modules/tool-provider/providers/__tests__/metadata-tool.provider.spec.ts` (create — no spec exists for this provider today)
 
 **Interfaces:**
 - Consumes:
-  - `getObjectsPermissionsFromRolePermissionConfig` — **verified signature** at `src/engine/twenty-orm/utils/get-objects-permissions-from-role-permission-config.util.ts:10-16`:
+  - `getObjectsPermissionsFromRolePermissionConfig` — **verified signature** at `src/engine/searm-orm/utils/get-objects-permissions-from-role-permission-config.util.ts:10-16`:
     ```ts
     export const getObjectsPermissionsFromRolePermissionConfig = ({
       rolesPermissions,
@@ -1990,7 +1990,7 @@ describe('ObjectMetadataToolsFactory permittedOperations', () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest object-metadata-tools.factory.spec
+cd packages/searm-server && npx jest object-metadata-tools.factory.spec
 ```
 
 Expected: FAIL — `factory.generateTools` today takes a `workspaceId` string, not a `context` object, so the test fails to compile/run (TS error on the call, or `permittedOperations` is `undefined` once you loosen it to compile).
@@ -2000,11 +2000,11 @@ Expected: FAIL — `factory.generateTools` today takes a `workspaceId` string, n
 In `object-metadata-tools.factory.ts`, add imports (the live import block ends at line 15):
 
 ```ts
-import { PermissionFlagType } from 'twenty-shared/constants';
+import { PermissionFlagType } from 'searm-shared/constants';
 
 import { type ToolProviderContext } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider-context.type';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
-import { getObjectsPermissionsFromRolePermissionConfig } from 'src/engine/twenty-orm/utils/get-objects-permissions-from-role-permission-config.util';
+import { getObjectsPermissionsFromRolePermissionConfig } from 'src/engine/searm-orm/utils/get-objects-permissions-from-role-permission-config.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 ```
 
@@ -2056,7 +2056,7 @@ Add the shared scope resolver as a private method next to `buildFieldsByObjectId
   }
 ```
 
-`ObjectsPermissions` is `Record<objectMetadataId, ObjectPermissions>` (`twenty-shared/src/types/ObjectsPermissions.ts:5`) — import the type from `twenty-shared/types`.
+`ObjectsPermissions` is `Record<objectMetadataId, ObjectPermissions>` (`searm-shared/src/types/ObjectsPermissions.ts:5`) — import the type from `searm-shared/types`.
 
 Change `generateTools(workspaceId: string): ToolSet` (live line 177) to `generateTools(context: ToolProviderContext): ToolSet`. Inside the method every existing use of the parameter `workspaceId` becomes `context.workspaceId` — there are **seven** occurrences at HEAD `dba03d0907`, not two: `findManyWithinWorkspace` (line 191), `buildFieldsByObjectId` (line 209), `createOneObject` (line 262), `updateOneObject` (line 311), `deleteOneObject` (line 335), and the two inside the batch tools (lines 374 and 423). Missing any of them is a compile error, not a silent bug.
 
@@ -2114,7 +2114,7 @@ Inside the `get_object_metadata` tool's `execute`, replace the `return flatObjec
 - [ ] **Step 4: Run the object-factory tests to verify they pass**
 
 ```bash
-cd packages/twenty-server && npx jest object-metadata-tools.factory.spec
+cd packages/searm-server && npx jest object-metadata-tools.factory.spec
 ```
 
 Expected: PASS, 4 tests.
@@ -2265,7 +2265,7 @@ Create `providers/__tests__/metadata-tool.provider.spec.ts` (no spec exists for 
 ```
 
 ```bash
-cd packages/twenty-server && npx jest object-metadata-tools.factory.spec field-metadata-tools.factory.spec metadata-tool.provider.spec
+cd packages/searm-server && npx jest object-metadata-tools.factory.spec field-metadata-tools.factory.spec metadata-tool.provider.spec
 ```
 
 Expected: PASS, 9 tests (4 + 2 + 3).
@@ -2273,9 +2273,9 @@ Expected: PASS, 9 tests (4 + 2 + 3).
 - [ ] **Step 8: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/object-metadata packages/twenty-server/src/engine/metadata-modules/field-metadata packages/twenty-server/src/engine/core-modules/tool-provider/providers/metadata-tool.provider.ts
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/object-metadata packages/searm-server/src/engine/metadata-modules/field-metadata packages/searm-server/src/engine/core-modules/tool-provider/providers/metadata-tool.provider.ts
 git commit -m "feat(agent-api): scope metadata discovery to the caller's readable objects"
 ```
 
@@ -2286,7 +2286,7 @@ git commit -m "feat(agent-api): scope metadata discovery to the caller's readabl
 The OAuth authorization server (`engine/core-modules/application/application-oauth/`) already mints workspace-pinned, role-scoped tokens (§"Ground truth" above). This task does not add new auth machinery — it proves the property the charter requires ("OAuth-scoped agent credentials with workspace-limited access") holds end-to-end through the tool layer, and closes one small, concrete gap: `DatabaseToolProvider.isAvailable()` always returns `true`, so a role with zero object permissions still sees an (empty) database-CRUD catalog rather than the category being reported unavailable — harmless functionally (`generateDescriptors` already returns `[]` when `Object.keys(objectPermissions).length === 0`) but worth an explicit regression test since it is the one place a widening bug would first show up silently.
 
 **Files:**
-- Create: `packages/twenty-server/test/integration/graphql/suites/agent-api/mcp-oauth-scoping.integration-spec.ts`
+- Create: `packages/searm-server/test/integration/graphql/suites/agent-api/mcp-oauth-scoping.integration-spec.ts`
 
 **Interfaces:**
 - Consumes: the existing OAuth token-issuance flow, `McpToolExecutorService.handleToolsListing` (Task 4's file, unchanged signature), `DatabaseToolProvider.generateDescriptors` (existing).
@@ -2309,7 +2309,7 @@ Create `test/integration/graphql/suites/agent-api/mcp-oauth-scoping.integration-
 - [ ] **Step 3: Run the integration suite**
 
 ```bash
-npx nx run twenty-server:test:integration:with-db-reset
+npx nx run searm-server:test:integration:with-db-reset
 ```
 
 Expected: the new suite passes and no existing suite regresses.
@@ -2317,7 +2317,7 @@ Expected: the new suite passes and no existing suite regresses.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add packages/twenty-server/test/integration/graphql/suites/agent-api
+git add packages/searm-server/test/integration/graphql/suites/agent-api
 git commit -m "test(agent-api): verify role-scoped tool discovery and execution end to end"
 ```
 
@@ -2340,41 +2340,41 @@ Phase 5's `seedWorkflow` helper and both of its app workflows depend on exactly 
 | Item | Value | Why (verified) |
 | --- | --- | --- |
 | **GraphQL schema** | `installWorkflowDefinition` is on the **core** schema (`/graphql`), declared with `@CoreResolver()` on a second resolver class, `WorkflowDefinitionInstallResolver`. `workflowTemplates`/`installWorkflowTemplate` stay on the **metadata** schema for the settings UI. | C11. `@MetadataResolver()` is `@Resolver()` + `SetMetadata(RESOLVER_SCHEMA_SCOPE_KEY, 'metadata')` (`src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator.ts:1-11`); the core driver is built with `resolverSchemaScope: 'core'` and `include: [CoreEngineModule]` (`graphql-config.service.ts:83-86`), the metadata driver with `'metadata'` and `include: [MetadataGraphQLApiModule]` (`metadata.module-factory.ts:36-38`). A metadata-scoped mutation is therefore **absent** from the core endpoint, and Phase 5 calls it through `CoreApiClient`. The scope tag — not the module — decides the schema, so one module can safely hold both resolvers. |
-| **Client** | `import { type CoreApiClient } from 'twenty-client-sdk/core'` — Phase 5's `seedWorkflow(client: CoreApiClient, …)` signature is correct **as written** and needs no change. | `twenty-client-sdk/package.json:8-31` exports `./core` and `./metadata`; `src/core/index.ts:1` exports `CoreApiClient`. |
+| **Client** | `import { type CoreApiClient } from 'searm-client-sdk/core'` — Phase 5's `seedWorkflow(client: CoreApiClient, …)` signature is correct **as written** and needs no change. | `searm-client-sdk/package.json:8-31` exports `./core` and `./metadata`; `src/core/index.ts:1` exports `CoreApiClient`. |
 | **Module registration** | `WorkflowTemplatesModule` is imported by **both** `CoreEngineModule` (`src/engine/core-modules/core-engine.module.ts`) and `MetadataEngineModule`. `CoreEngineModule` already imports modules from `src/modules/**` (`EmailingModule`, `DashboardModule`, `MessagingWebhooksModule`), so this is the established pattern, not a new one. | Without a path from the include root, a resolver is silently absent from the schema. |
-| **Required permission flag** | The mutation is behind `SettingsPermissionGuard(PermissionFlagType.WORKFLOWS)`. **An installing application's service role must declare `SystemPermissionFlag.WORKFLOWS` in `permissionFlagUniversalIdentifiers`.** | C12. `PermissionFlagType.WORKFLOWS` exists (`twenty-shared/src/constants/PermissionFlagType.ts:9`), its UUID is `SystemPermissionFlag.WORKFLOWS = '6189e7bd-4051-5752-b6b1-5f31358fbaf1'` (`SystemPermissionFlag.ts:10`). `RoleManifest.permissionFlagUniversalIdentifiers?: string[]` (`twenty-shared/src/application/roleManifestType.ts:59`) is carried through `RoleConfig` (`twenty-sdk/src/sdk/define/roles/role-config.ts:7-13`) and applied at install by `compute-application-manifest-all-universal-flat-entity-maps.service.ts:304-316`. Precedent: `twenty-apps/public/people-data-labs/src/roles/default-function.role.ts:40` grants `[SystemPermissionFlag.WORKFLOWS]`. **Phase 5 side:** add that flag to `app-default.role.ts`. **Phase 4 side:** the guard is unchanged and this row is the contract. |
+| **Required permission flag** | The mutation is behind `SettingsPermissionGuard(PermissionFlagType.WORKFLOWS)`. **An installing application's service role must declare `SystemPermissionFlag.WORKFLOWS` in `permissionFlagUniversalIdentifiers`.** | C12. `PermissionFlagType.WORKFLOWS` exists (`searm-shared/src/constants/PermissionFlagType.ts:9`), its UUID is `SystemPermissionFlag.WORKFLOWS = '6189e7bd-4051-5752-b6b1-5f31358fbaf1'` (`SystemPermissionFlag.ts:10`). `RoleManifest.permissionFlagUniversalIdentifiers?: string[]` (`searm-shared/src/application/roleManifestType.ts:59`) is carried through `RoleConfig` (`searm-sdk/src/sdk/define/roles/role-config.ts:7-13`) and applied at install by `compute-application-manifest-all-universal-flat-entity-maps.service.ts:304-316`. Precedent: `searm-apps/public/people-data-labs/src/roles/default-function.role.ts:40` grants `[SystemPermissionFlag.WORKFLOWS]`. **Phase 5 side:** add that flag to `app-default.role.ts`. **Phase 4 side:** the guard is unchanged and this row is the contract. |
 | **Input shape** | `InstallWorkflowDefinitionInput { name: String!, description: String, trigger: JSON!, steps: JSON!, activate: Boolean! = true }`. `steps` entries may be `{ type, name, settings }` only — **`id`, `valid`, and `nextStepIds` are optional and are generated server-side.** | C13. Phase 5's `WorkflowStepTemplate = { type; name; settings }` is accepted as-is. |
 | **Step normalisation** | `installDefinition` normalises every supplied step: assigns `id: uuidv4()` where absent, forces `valid: true`, and chains `nextStepIds` in array order (step *n* → `[id of step n+1]`, last step → `[]`). | C13. `BaseWorkflowAction` requires `id: string`, `name: string`, `type`, `settings`, `valid: boolean` and allows `nextStepIds?: string[]` (`workflow-executor/workflow-actions/types/workflow-action.type.ts:24-34`). `steps` is stored as `GraphQLJSON`, so nothing catches a missing `id` at compile time — it fails at execution. |
 | **Return shape** | `InstalledWorkflowTemplate { workflowId: ID!, workflowVersionId: ID! }` — the same DTO both mutations return. |
 | **Idempotency** | `installDefinition` is keyed on `definition.name` within the workspace: a second call with the same name returns the existing `{ workflowId, workflowVersionId }` and creates nothing. A post-install hook may therefore re-run on every upgrade. |
 
 **Files:**
-- Create: `packages/twenty-server/src/modules/workflow/workflow-templates/types/workflow-template.type.ts`
-- Create: `packages/twenty-server/src/modules/workflow/workflow-templates/constants/workflow-templates.const.ts`
-- Create: `packages/twenty-server/src/modules/workflow/workflow-templates/services/workflow-template.service.ts`
-- Create: `packages/twenty-server/src/modules/workflow/workflow-templates/dtos/workflow-template.dto.ts`
-- Create: `packages/twenty-server/src/modules/workflow/workflow-templates/dtos/install-workflow-template.input.ts`
-- Create: `packages/twenty-server/src/modules/workflow/workflow-templates/dtos/install-workflow-definition.input.ts`
-- Create: `packages/twenty-server/src/modules/workflow/workflow-templates/utils/normalize-workflow-template-steps.util.ts`
-- Create: `packages/twenty-server/src/modules/workflow/workflow-templates/resolvers/workflow-template.resolver.ts`
-- Create: `packages/twenty-server/src/modules/workflow/workflow-templates/resolvers/workflow-definition-install.resolver.ts`
-- Create: `packages/twenty-server/src/modules/workflow/workflow-templates/workflow-templates.module.ts`
-- Modify: `packages/twenty-server/src/engine/core-modules/core-engine.module.ts` (import `WorkflowTemplatesModule`)
-- Modify: `packages/twenty-server/src/engine/metadata-modules/metadata-engine.module.ts` (import `WorkflowTemplatesModule`)
-- Test: `packages/twenty-server/src/modules/workflow/workflow-templates/services/__tests__/workflow-template.service.spec.ts`
-- Test: `packages/twenty-server/src/modules/workflow/workflow-templates/utils/__tests__/normalize-workflow-template-steps.util.spec.ts`
+- Create: `packages/searm-server/src/modules/workflow/workflow-templates/types/workflow-template.type.ts`
+- Create: `packages/searm-server/src/modules/workflow/workflow-templates/constants/workflow-templates.const.ts`
+- Create: `packages/searm-server/src/modules/workflow/workflow-templates/services/workflow-template.service.ts`
+- Create: `packages/searm-server/src/modules/workflow/workflow-templates/dtos/workflow-template.dto.ts`
+- Create: `packages/searm-server/src/modules/workflow/workflow-templates/dtos/install-workflow-template.input.ts`
+- Create: `packages/searm-server/src/modules/workflow/workflow-templates/dtos/install-workflow-definition.input.ts`
+- Create: `packages/searm-server/src/modules/workflow/workflow-templates/utils/normalize-workflow-template-steps.util.ts`
+- Create: `packages/searm-server/src/modules/workflow/workflow-templates/resolvers/workflow-template.resolver.ts`
+- Create: `packages/searm-server/src/modules/workflow/workflow-templates/resolvers/workflow-definition-install.resolver.ts`
+- Create: `packages/searm-server/src/modules/workflow/workflow-templates/workflow-templates.module.ts`
+- Modify: `packages/searm-server/src/engine/core-modules/core-engine.module.ts` (import `WorkflowTemplatesModule`)
+- Modify: `packages/searm-server/src/engine/metadata-modules/metadata-engine.module.ts` (import `WorkflowTemplatesModule`)
+- Test: `packages/searm-server/src/modules/workflow/workflow-templates/services/__tests__/workflow-template.service.spec.ts`
+- Test: `packages/searm-server/src/modules/workflow/workflow-templates/utils/__tests__/normalize-workflow-template-steps.util.spec.ts`
 
 **Interfaces:**
 - Consumes (each with its **owning module**, verified — I20; no grepping at implementation time):
 
   | Service | Import path | Owning module to import |
   | --- | --- | --- |
-  | `GlobalWorkspaceOrmManager` | `src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager` | `GlobalWorkspaceDataSourceModule` (`src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module`) — it is `@Global()`, so importing it is optional |
+  | `GlobalWorkspaceOrmManager` | `src/engine/searm-orm/global-workspace-datasource/global-workspace-orm.manager` | `GlobalWorkspaceDataSourceModule` (`src/engine/searm-orm/global-workspace-datasource/global-workspace-datasource.module`) — it is `@Global()`, so importing it is optional |
   | `RecordPositionService` | `src/engine/core-modules/record-position/services/record-position.service` | `RecordPositionModule` (`src/engine/core-modules/record-position/record-position.module`, providers/exports L9-10) |
   | `WorkflowVersionCoreSyncService` | `src/engine/core-modules/workflow/services/workflow-version-core-sync.service` | `WorkflowVersionCoreModule` (`src/engine/core-modules/workflow/workflow-version-core.module`, providers L18 / exports L24) |
   | `WorkflowTriggerWorkspaceService` | `src/modules/workflow/workflow-trigger/workspace-services/workflow-trigger.workspace-service` | `WorkflowTriggerModule` (`src/modules/workflow/workflow-trigger/workflow-trigger.module`, providers/exports L29-30) |
 
-  Plus `buildSystemAuthContext` (`src/engine/twenty-orm/utils/build-system-auth-context.util`) and `isDefined` (`twenty-shared/utils`). `WorkflowToolsModule` already imports `WorkflowTriggerModule`, `RecordPositionModule` and `WorkflowVersionCoreModule` together without a cycle, which is the precedent this module copies.
+  Plus `buildSystemAuthContext` (`src/engine/searm-orm/utils/build-system-auth-context.util`) and `isDefined` (`searm-shared/utils`). `WorkflowToolsModule` already imports `WorkflowTriggerModule`, `RecordPositionModule` and `WorkflowVersionCoreModule` together without a cycle, which is the precedent this module copies.
 - Produces:
   - `type WorkflowTemplateKey = 'RESEARCH_BRIEF' | 'FOLLOW_UP_DIGEST' | 'ACCOUNT_MONITORING'`
   - `WorkflowTemplateService.list(): WorkflowTemplateDefinition[]`
@@ -2430,7 +2430,7 @@ export type WorkflowDefinitionInput = {
 Create `constants/workflow-templates.const.ts`. Every step and trigger below type-checks against `WorkflowAction`/`WorkflowTrigger` as read from the real files in "Ground truth": `outputSchema: {}` is a valid empty `Record<string, Leaf | Node>`, `errorHandlingOptions` is mandatory on every step, and an `AI_AGENT` step's `agentId` is intentionally omitted so it runs as an ad-hoc agent against the given `prompt` (verified against `AiAgentWorkflowAction.execute`, which only looks up an agent `if (agentId)`).
 
 ```ts
-import { WorkflowActionType } from 'twenty-shared/workflow';
+import { WorkflowActionType } from 'searm-shared/workflow';
 
 import { type WorkflowTemplateDefinition } from 'src/modules/workflow/workflow-templates/types/workflow-template.type';
 import { WorkflowTriggerType } from 'src/modules/workflow/workflow-trigger/types/workflow-trigger.type';
@@ -2530,7 +2530,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 
 import { RecordPositionService } from 'src/engine/core-modules/record-position/services/record-position.service';
 import { WorkflowVersionCoreSyncService } from 'src/engine/core-modules/workflow/services/workflow-version-core-sync.service';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { GlobalWorkspaceOrmManager } from 'src/engine/searm-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { WorkflowTriggerWorkspaceService } from 'src/modules/workflow/workflow-trigger/workspace-services/workflow-trigger.workspace-service';
 import { WorkflowTemplateService } from 'src/modules/workflow/workflow-templates/services/workflow-template.service';
 
@@ -2655,7 +2655,7 @@ describe('WorkflowTemplateService', () => {
 - [ ] **Step 4: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest workflow-template.service.spec
+cd packages/searm-server && npx jest workflow-template.service.spec
 ```
 
 Expected: FAIL — module not found.
@@ -2667,13 +2667,13 @@ Create `services/workflow-template.service.ts`, mirroring `create-complete-workf
 ```ts
 import { Injectable } from '@nestjs/common';
 
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'searm-shared/utils';
 import { v4 as uuidv4 } from 'uuid';
 
 import { RecordPositionService } from 'src/engine/core-modules/record-position/services/record-position.service';
 import { WorkflowVersionCoreSyncService } from 'src/engine/core-modules/workflow/services/workflow-version-core-sync.service';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { GlobalWorkspaceOrmManager } from 'src/engine/searm-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { buildSystemAuthContext } from 'src/engine/searm-orm/utils/build-system-auth-context.util';
 import { WorkflowVersionStatus } from 'src/modules/workflow/common/standard-objects/workflow-version.workspace-entity';
 import { WorkflowStatus } from 'src/modules/workflow/common/standard-objects/workflow.workspace-entity';
 import { WorkflowTriggerWorkspaceService } from 'src/modules/workflow/workflow-trigger/workspace-services/workflow-trigger.workspace-service';
@@ -2916,7 +2916,7 @@ export class WorkflowTemplateService {
 }
 ```
 
-**The `getRepository` third argument is settled, not a risk.** Its verified overloads (`src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager.ts:27-43`) type the third parameter as `permissionOptions?: RolePermissionConfig`, and `{ shouldBypassPermissionChecks: true }` is a member of that union (`src/engine/twenty-orm/types/role-permission-config.ts`). `WorkflowCommonWorkspaceService` already calls it in exactly this form for `'workflowVersion'`. `create-complete-workflow.tool.ts:224-230` passes `context.rolePermissionConfig` instead because it has a calling user's role; a template install is system-originated and has none, so the bypass form is the correct one here. `executeInWorkspaceContext(fn, authContext)` takes the callback **first** (line 70-74).
+**The `getRepository` third argument is settled, not a risk.** Its verified overloads (`src/engine/searm-orm/global-workspace-datasource/global-workspace-orm.manager.ts:27-43`) type the third parameter as `permissionOptions?: RolePermissionConfig`, and `{ shouldBypassPermissionChecks: true }` is a member of that union (`src/engine/searm-orm/types/role-permission-config.ts`). `WorkflowCommonWorkspaceService` already calls it in exactly this form for `'workflowVersion'`. `create-complete-workflow.tool.ts:224-230` passes `context.rolePermissionConfig` instead because it has a calling user's role; a template install is system-originated and has none, so the bypass form is the correct one here. `executeInWorkspaceContext(fn, authContext)` takes the callback **first** (line 70-74).
 
 The `where: { name }` lookup is a new query shape for the `workflow` repository (no existing call site filters by name) but is an ordinary `WorkspaceRepository.findOne`, the same call `get-workflow-current-version.tool.ts:52-54` makes by id. The draft-version query mirrors `workflow-version.workspace-service.ts:100-105`.
 
@@ -2956,7 +2956,7 @@ export const normalizeWorkflowTemplateSteps = (
 Create `utils/__tests__/normalize-workflow-template-steps.util.spec.ts`:
 
 ```ts
-import { WorkflowActionType } from 'twenty-shared/workflow';
+import { WorkflowActionType } from 'searm-shared/workflow';
 
 import { normalizeWorkflowTemplateSteps } from 'src/modules/workflow/workflow-templates/utils/normalize-workflow-template-steps.util';
 
@@ -3056,7 +3056,7 @@ Create `resolvers/workflow-definition-install.resolver.ts` — a **separate reso
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation } from '@nestjs/graphql';
 
-import { PermissionFlagType } from 'twenty-shared/constants';
+import { PermissionFlagType } from 'searm-shared/constants';
 
 import { CoreResolver } from 'src/engine/api/graphql/graphql-config/decorators/core-resolver.decorator';
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
@@ -3099,7 +3099,7 @@ export class WorkflowDefinitionInstallResolver {
 }
 ```
 
-**The `WORKFLOWS` guard is deliberate and is the Phase 5 obligation (C12).** An app's post-install hook runs with the application's own credentials; those credentials hold only what the app's role manifest declares. `PermissionFlagType.WORKFLOWS` (`twenty-shared/src/constants/PermissionFlagType.ts:9`) is therefore a hard requirement on the caller: **Phase 5's `app-default.role.ts` must declare `permissionFlagUniversalIdentifiers: [SystemPermissionFlag.WORKFLOWS]`** (UUID `6189e7bd-4051-5752-b6b1-5f31358fbaf1`, `SystemPermissionFlag.ts:10`), exactly as `twenty-apps/public/people-data-labs/src/roles/default-function.role.ts:40` already does. Without it the mutation is rejected and neither Phase 5 workflow installs.
+**The `WORKFLOWS` guard is deliberate and is the Phase 5 obligation (C12).** An app's post-install hook runs with the application's own credentials; those credentials hold only what the app's role manifest declares. `PermissionFlagType.WORKFLOWS` (`searm-shared/src/constants/PermissionFlagType.ts:9`) is therefore a hard requirement on the caller: **Phase 5's `app-default.role.ts` must declare `permissionFlagUniversalIdentifiers: [SystemPermissionFlag.WORKFLOWS]`** (UUID `6189e7bd-4051-5752-b6b1-5f31358fbaf1`, `SystemPermissionFlag.ts:10`), exactly as `searm-apps/public/people-data-labs/src/roles/default-function.role.ts:40` already does. Without it the mutation is rejected and neither Phase 5 workflow installs.
 
 Add the two service tests this step earns:
 
@@ -3155,7 +3155,7 @@ For these, the Step 3 harness needs `findOne: jest.fn().mockResolvedValue(null)`
 - [ ] **Step 6: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest workflow-template.service.spec normalize-workflow-template-steps.util.spec
+cd packages/searm-server && npx jest workflow-template.service.spec normalize-workflow-template-steps.util.spec
 ```
 
 Expected: PASS, 11 tests — 5 from Step 3, the 2 added in Step 5c, and the 4 normaliser tests from Step 5b.
@@ -3224,7 +3224,7 @@ Create `resolvers/workflow-template.resolver.ts` — the **metadata-schema** res
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query } from '@nestjs/graphql';
 
-import { PermissionFlagType } from 'twenty-shared/constants';
+import { PermissionFlagType } from 'searm-shared/constants';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
@@ -3306,8 +3306,8 @@ Importing one module into both trees is safe: the schema a resolver lands in is 
 - [ ] **Step 8: Verify the schema builds**
 
 ```bash
-npx nx typecheck twenty-server
-npx nx start twenty-server
+npx nx typecheck searm-server
+npx nx start searm-server
 ```
 
 Expected: server boots with no GraphQL schema errors; `workflowTemplates` and `installWorkflowTemplate` appear in the **metadata** playground (`/metadata`), and `installWorkflowDefinition` appears in the **core** playground (`/graphql`). Check both. If `installWorkflowDefinition` is missing from `/graphql`, `WorkflowTemplatesModule` is not reachable from `CoreEngineModule` — fix the import rather than moving the mutation, because Phase 5 calls it through `CoreApiClient`.
@@ -3315,10 +3315,10 @@ Expected: server boots with no GraphQL schema errors; `workflowTemplates` and `i
 - [ ] **Step 9: Regenerate front types, lint, typecheck, commit**
 
 ```bash
-npx nx run twenty-front:graphql:generate --configuration=metadata
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/modules/workflow/workflow-templates packages/twenty-front/src/generated-metadata
+npx nx run searm-front:graphql:generate --configuration=metadata
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/modules/workflow/workflow-templates packages/searm-front/src/generated-metadata
 git commit -m "feat(agent-api): add starter workflow template catalog and install API"
 ```
 
@@ -3327,13 +3327,13 @@ git commit -m "feat(agent-api): add starter workflow template catalog and instal
 ### Task 11: Workflow templates settings page
 
 **Files:**
-- Modify: `packages/twenty-shared/src/types/SettingsPath.ts`
-- Modify: `packages/twenty-front/src/modules/app/components/SettingsRoutes.tsx`
-- Create: `packages/twenty-front/src/pages/settings/ai/SettingsWorkflowTemplates.tsx`
-- Create: `packages/twenty-front/src/modules/settings/workflow-templates/graphql/queries/workflowTemplates.ts`
-- Create: `packages/twenty-front/src/modules/settings/workflow-templates/graphql/mutations/installWorkflowTemplate.ts`
-- Create: `packages/twenty-front/src/modules/settings/workflow-templates/components/WorkflowTemplateCard.tsx`
-- Test: `packages/twenty-front/src/modules/settings/workflow-templates/components/__tests__/WorkflowTemplateCard.test.tsx`
+- Modify: `packages/searm-shared/src/types/SettingsPath.ts`
+- Modify: `packages/searm-front/src/modules/app/components/SettingsRoutes.tsx`
+- Create: `packages/searm-front/src/pages/settings/ai/SettingsWorkflowTemplates.tsx`
+- Create: `packages/searm-front/src/modules/settings/workflow-templates/graphql/queries/workflowTemplates.ts`
+- Create: `packages/searm-front/src/modules/settings/workflow-templates/graphql/mutations/installWorkflowTemplate.ts`
+- Create: `packages/searm-front/src/modules/settings/workflow-templates/components/WorkflowTemplateCard.tsx`
+- Test: `packages/searm-front/src/modules/settings/workflow-templates/components/__tests__/WorkflowTemplateCard.test.tsx`
 
 **Interfaces:**
 - Consumes: the GraphQL operations from Task 10 via generated metadata hooks.
@@ -3341,7 +3341,7 @@ git commit -m "feat(agent-api): add starter workflow template catalog and instal
 
 - [ ] **Step 1: Add the route path**
 
-In `packages/twenty-shared/src/types/SettingsPath.ts`, add to the `SettingsPath` enum next to the AI entries:
+In `packages/searm-shared/src/types/SettingsPath.ts`, add to the `SettingsPath` enum next to the AI entries:
 
 ```ts
   WorkflowTemplates = 'ai/workflow-templates',
@@ -3433,19 +3433,19 @@ describe('WorkflowTemplateCard', () => {
 - [ ] **Step 4: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-front && npx jest WorkflowTemplateCard
+cd packages/searm-front && npx jest WorkflowTemplateCard
 ```
 
 Expected: FAIL — cannot resolve `WorkflowTemplateCard`.
 
 - [ ] **Step 5: Write the component**
 
-Create `modules/settings/workflow-templates/components/WorkflowTemplateCard.tsx`. Match the styling primitives `packages/twenty-front/src/pages/settings/ai/SettingsAiApprovals.tsx` (Launch 1 Task 7) already uses — do not invent a different shell:
+Create `modules/settings/workflow-templates/components/WorkflowTemplateCard.tsx`. Match the styling primitives `packages/searm-front/src/pages/settings/ai/SettingsAiApprovals.tsx` (Launch 1 Task 7) already uses — do not invent a different shell:
 
 ```tsx
 import styled from '@emotion/styled';
 
-import { Button } from 'twenty-ui/input';
+import { Button } from 'searm-ui/input';
 
 type WorkflowTemplateSummary = {
   key: string;
@@ -3493,7 +3493,7 @@ Confirm the `Button` import path against `SettingsAiApprovals.tsx`'s own imports
 - [ ] **Step 6: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-front && npx jest WorkflowTemplateCard
+cd packages/searm-front && npx jest WorkflowTemplateCard
 ```
 
 Expected: PASS, 2 tests.
@@ -3569,9 +3569,9 @@ Navigate to Settings → the workflow templates route, confirm the three templat
 - [ ] **Step 9: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-front
-npx nx typecheck twenty-front
-git add packages/twenty-front packages/twenty-shared
+npx nx lint:diff-with-main searm-front
+npx nx typecheck searm-front
+git add packages/searm-front packages/searm-shared
 git commit -m "feat(agent-api): add workflow templates settings page"
 ```
 
@@ -3582,7 +3582,7 @@ git commit -m "feat(agent-api): add workflow templates settings page"
 Charter Phase 4 explicitly names "self-hosting, API, MCP, admin, and security documentation" as a deliverable. This task writes the one document an external integrator or self-hoster needs: the agent-facing API contract this phase just built.
 
 **Files:**
-- Create: `packages/twenty-server/docs/AGENT_API_CONTRACT.md`
+- Create: `packages/searm-server/docs/AGENT_API_CONTRACT.md`
 
 - [ ] **Step 1: Write the document**
 
@@ -3591,7 +3591,7 @@ Create `docs/AGENT_API_CONTRACT.md`:
 ```md
 # Agent API Contract
 
-This document describes the machine-readable contract Twenty's tool layer (chat, agent runs, MCP, `execute_tool`, and workflow AI-agent steps) guarantees to any caller — human-authored client, internal agent, or external OAuth-authorized MCP client.
+This document describes the machine-readable contract SeaRM's tool layer (chat, agent runs, MCP, `execute_tool`, and workflow AI-agent steps) guarantees to any caller — human-authored client, internal agent, or external OAuth-authorized MCP client.
 
 ## Authentication and scope
 
@@ -3656,7 +3656,7 @@ Three starter workflow templates (`workflowTemplates` GraphQL query) package the
 - [ ] **Step 2: Commit**
 
 ```bash
-git add packages/twenty-server/docs/AGENT_API_CONTRACT.md
+git add packages/searm-server/docs/AGENT_API_CONTRACT.md
 git commit -m "docs(agent-api): document the agent-facing API and MCP contract"
 ```
 
@@ -3667,7 +3667,7 @@ git commit -m "docs(agent-api): document the agent-facing API and MCP contract"
 Proves the whole chain — structured failures, confirmation tokens, dedup, permission-scoped discovery — against a real database.
 
 **Files:**
-- Create: `packages/twenty-server/test/integration/graphql/suites/agent-api/agent-api-semantics.integration-spec.ts`
+- Create: `packages/searm-server/test/integration/graphql/suites/agent-api/agent-api-semantics.integration-spec.ts`
 
 **Interfaces:**
 - Consumes: everything from Tasks 1–10.
@@ -3688,7 +3688,7 @@ Create `test/integration/graphql/suites/agent-api/agent-api-semantics.integratio
 - [ ] **Step 2: Run the integration suite**
 
 ```bash
-npx nx run twenty-server:test:integration:with-db-reset
+npx nx run searm-server:test:integration:with-db-reset
 ```
 
 Expected: the new suite passes and no existing suite regresses.
@@ -3696,12 +3696,12 @@ Expected: the new suite passes and no existing suite regresses.
 - [ ] **Step 3: Full regression check**
 
 ```bash
-npx nx test twenty-server
-npx nx test twenty-front
-npx nx lint:diff-with-main twenty-server
-npx nx lint:diff-with-main twenty-front
-npx nx typecheck twenty-server
-npx nx typecheck twenty-front
+npx nx test searm-server
+npx nx test searm-front
+npx nx lint:diff-with-main searm-server
+npx nx lint:diff-with-main searm-front
+npx nx typecheck searm-server
+npx nx typecheck searm-front
 ```
 
 Expected: all green.
@@ -3709,7 +3709,7 @@ Expected: all green.
 - [ ] **Step 4: Manual end-to-end verification**
 
 ```bash
-npx nx database:reset twenty-server
+npx nx database:reset searm-server
 yarn start
 ```
 
@@ -3718,7 +3718,7 @@ Sign in with "Continue with Email" and the prefilled credentials. From AI chat, 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add packages/twenty-server/test/integration/graphql/suites/agent-api
+git add packages/searm-server/test/integration/graphql/suites/agent-api
 git commit -m "test(agent-api): add end-to-end coverage for phase 4 agent semantics"
 ```
 
@@ -3748,9 +3748,9 @@ git commit -m "test(agent-api): add end-to-end coverage for phase 4 agent semant
 | --- | --- |
 | Rewriting every individual tool's internal error path (record-crud services, metadata tools beyond `get_object_metadata`, logic-function execution) to build its own `ToolFailure` inline | When a specific tool's bare `error` string is observed causing an agent to retry-loop or hallucinate a workaround in practice — convert that one call site, following the exact pattern in Task 3. The funnel-level wiring already guarantees every failure that *reaches* the executor/registry/MCP layer gets a `failure`, even from tools that never set one themselves — Task 3's chokepoints only miss failures a tool constructs *and returns successfully as `success:false`* without going through an exception; those keep their legacy shape until migrated individually. |
 | `Evidence`/`Fact`-backed workflow templates (durable, evidence-linked research and account monitoring using `AgentTask`/`AgentRun`) | When Phase 2 ships the `Evidence`/`Fact`/`AgentTask` entities. Today's three templates use the existing synchronous `AI_AGENT` workflow step. Once Phase 2 lands, the agent inside that step can call the `create_agent_task` tool (Phase 2 Task 3 Step 8) to schedule durable, leased, retried research instead of doing it inline — update the three prompts to say so, keeping the same three keys and the same step type. |
-| A short, workspace-scoped display alias for record ids (crmkit's handle/id split, §1.6) | When token-cost telemetry on MCP tool responses (once `AgentRun` cost accounting exists, per Phase 2) shows UUID verbosity is a material fraction of agent token spend on read-heavy tool calls. Not built now — Twenty's UUIDs are the primary key everywhere; a parallel alias table is real ongoing surface area for a benefit that is currently unmeasured. |
-| Plain-text-by-default HTTP content negotiation as a whole-API transport (crmkit §1.7) | Never on the current trigger set — Twenty's transport is GraphQL/MCP-JSON-RPC; a parallel plain-text API duplicates the whole surface for a token saving `compactToolOutput`/`stripEmptyValues` already capture at the payload-shape level. Revisit only if a future compact-transport experiment is explicitly commissioned. |
-| A literal free-text query-string filter DSL (crmkit §1.9) | Never — Twenty's GraphQL filter/orderBy inputs already parameterize by construction; there is no SQL-identifier-injection problem to solve on a typed schema. |
+| A short, workspace-scoped display alias for record ids (crmkit's handle/id split, §1.6) | When token-cost telemetry on MCP tool responses (once `AgentRun` cost accounting exists, per Phase 2) shows UUID verbosity is a material fraction of agent token spend on read-heavy tool calls. Not built now — SeaRM's UUIDs are the primary key everywhere; a parallel alias table is real ongoing surface area for a benefit that is currently unmeasured. |
+| Plain-text-by-default HTTP content negotiation as a whole-API transport (crmkit §1.7) | Never on the current trigger set — SeaRM's transport is GraphQL/MCP-JSON-RPC; a parallel plain-text API duplicates the whole surface for a token saving `compactToolOutput`/`stripEmptyValues` already capture at the payload-shape level. Revisit only if a future compact-transport experiment is explicitly commissioned. |
+| A literal free-text query-string filter DSL (crmkit §1.9) | Never — SeaRM's GraphQL filter/orderBy inputs already parameterize by construction; there is no SQL-identifier-injection problem to solve on a typed schema. |
 | Confirmation-token requirement extended to `PROPOSE`-mode deletes | If a workspace is observed setting `default: AUTO` broadly and relying on confirmation tokens as its only safety net for high-volume delete automation — today `PROPOSE` already routes every delete through human approval, which is a stronger gate than a token, so adding a second gate there is pure friction with no safety gain. |
 | ~~Field-level permission scoping for `FieldMetadataToolsFactory`~~ — **no longer cut.** Task 8 Step 5b builds it; relaxing `MetadataToolProvider.isAvailable()` (to absorb Phase 3's discovery need) makes it mandatory | n/a — built |
 | A dedicated OAuth scope per tool category (e.g., a `mcp:write` vs `mcp:read` scope, distinct from the role) | If a workspace admin asks to hand out an OAuth client that can read but never write, independent of any role's own permissions — today the same effect is achieved by assigning the OAuth application a read-only role, which is simpler and reuses the existing permission system rather than adding a second, parallel authorization axis. |
@@ -3761,10 +3761,10 @@ git commit -m "test(agent-api): add end-to-end coverage for phase 4 agent semant
 | **Email step-up escalation for high-risk non-CRUD actions** (`crmkit-scout.md` §1.3) — added by the program review | The charter's approval gate already puts a human in the loop for every AI write and every outbound send, which is strictly stronger than an emailed step-up token. Build only if a workspace opts a high-risk action into `AUTO` policy and then wants an out-of-band confirmation for it specifically — i.e. the Task 5 confirmation-token pattern extended from deletes to sends. |
 | **MCP `initialize` server-declared `instructions` field** (`crmkit-scout.md` §1.15) — added by the program review | Trivial and free, but it is a prompt-tuning knob with no consumer today; Task 12's `AGENT_API_CONTRACT.md` is the human-readable equivalent. Build when a real external MCP client is onboarded and needs in-band usage guidance rather than a docs link. |
 | **Optimistic concurrency via a `version` field + conditional write on the agent-facing tool API** (`crmkit-scout.md` §1.4) — added by the program review | Launch 1's `ProposalItemEntity.baseline`, re-read and compared at approval time, already prevents the exact failure (agent proposes from stale data, a human edits, the write silently clobbers) — and it does it without an agent-visible protocol. Build an agent-visible `version`/`If-Match` only if `AUTO`-policy writes (which skip approval and therefore skip the baseline check) become common enough to clobber human edits. |
-| **Structured computed diffs in the audit log** (`crmkit-scout.md` §1.16) — added by the program review | Twenty's own audit/timeline already records record changes, and the proposal's `baseline` vs `payload` pair *is* a structured diff for every AI-originated change. Build a dedicated diff-computing audit layer when a compliance requirement asks for field-level before/after on non-AI writes too. |
+| **Structured computed diffs in the audit log** (`crmkit-scout.md` §1.16) — added by the program review | SeaRM's own audit/timeline already records record changes, and the proposal's `baseline` vs `payload` pair *is* a structured diff for every AI-originated change. Build a dedicated diff-computing audit layer when a compliance requirement asks for field-level before/after on non-AI writes too. |
 | **Campaign entity / target-account campaign vertical** (`crmkit-scout.md` §1.13; charter vertical wave 1) — added by the program review | Belongs to the vertical-app framework, not the platform: it is objects + views + a workflow, exactly like Phase 5's customer-support app. Build as the second vertical app once Phase 5 proves the framework; it needs zero core change. |
 | `request-approval` workflow action / pause-resume on a human-authored workflow step | Unchanged from Launch 1's own deferral — still true here: no workflow template in this phase needs a workflow to block mid-run on approval, because every AI write inside a workflow's `AI_AGENT` step already routes through the proposal gate automatically. |
-| A parallel quota/rate-limit subsystem for MCP tool calls (crmkit §1.11) | If Twenty's existing billing/entitlement system is found not to cover agent-specific resource caps (e.g., concurrent MCP sessions) when that system is inventoried during a future phase — not investigated in this plan; flagged as a risk below, not assumed either way. |
+| A parallel quota/rate-limit subsystem for MCP tool calls (crmkit §1.11) | If SeaRM's existing billing/entitlement system is found not to cover agent-specific resource caps (e.g., concurrent MCP sessions) when that system is inventoried during a future phase — not investigated in this plan; flagged as a risk below, not assumed either way. |
 
 ## Ties to the acceptance narratives
 
@@ -3780,5 +3780,5 @@ git commit -m "test(agent-api): add end-to-end coverage for phase 4 agent semant
 - ~~**Exact module wiring for `WorkflowTemplatesModule`'s imports.**~~ **Resolved.** The four owning modules are named in Task 10's Interfaces table and written into Step 7's `@Module`. `WorkflowToolsModule` already combines three of them without a cycle. `forwardRef` remains the fallback if Nest complains at boot.
 - **Registering `WorkflowTemplatesModule` in two schema include-roots.** Task 10 Step 7 imports it into both `CoreEngineModule` and `MetadataEngineModule` so its two resolvers reach their two schemas. This relies on the `RESOLVER_SCHEMA_SCOPE` tag filtering per schema, which is how `@CoreResolver`/`@MetadataResolver` are defined and used throughout the repo — but no existing module is imported into *both* roots for this reason specifically. Step 8's two-playground check is what proves it; if the metadata resolver leaks into the core schema (or vice versa), split the module in two rather than moving either mutation, because Phase 5's transport choice depends on `installWorkflowDefinition` staying on core.
 - **Whether an `AI_AGENT` workflow step with no `agentId` behaves acceptably in production**, not just in the unit-level type sense confirmed by reading `AiAgentWorkflowAction.execute`. The three templates in Task 10 all omit `agentId` deliberately (to avoid the two-phase "create workflow, then create the agent, then wire it in" flow `create_complete_workflow`'s own tool comment describes) — confirm during Task 10 Step 8's manual verification that `AgentAsyncExecutorService.executeAgent({agent: null, ...})` produces a sensible, capable agent turn (with access to the standard tool catalog) rather than a degraded no-tools fallback. If it degrades, each template needs a real `AgentEntity` seeded alongside it — a materially bigger Task 10, not attempted here.
-- **Whether Twenty's entitlement/billing system already caps agent-specific resources** (concurrent MCP sessions, tool-call rate) independent of the general workspace plan. Not inventoried in this plan (crmkit's quota subsystem was deliberately cut on the assumption Twenty's existing billing covers it, per the anchors report's own finding for `AiBillingService`) — if a future load test shows uncapped MCP tool-call volume from a single OAuth client, that is a new, unscoped risk this plan does not close.
+- **Whether SeaRM's entitlement/billing system already caps agent-specific resources** (concurrent MCP sessions, tool-call rate) independent of the general workspace plan. Not inventoried in this plan (crmkit's quota subsystem was deliberately cut on the assumption SeaRM's existing billing covers it, per the anchors report's own finding for `AiBillingService`) — if a future load test shows uncapped MCP tool-call volume from a single OAuth client, that is a new, unscoped risk this plan does not close.
 - **Zod schema strictness beyond the two files this plan edits.** Task 5 confirmed by reading the file that `DeleteToolInputSchema`/`generateBulkDeleteToolInputSchema` use plain (non-strict) `z.object()`, which strips rather than rejects an unknown `confirm` key if omitted from the schema — this plan adds it explicitly rather than relying on passthrough behavior, but did not audit every other generated schema for the same class of problem; out of scope here since no other schema in this plan carries an out-of-band control field.

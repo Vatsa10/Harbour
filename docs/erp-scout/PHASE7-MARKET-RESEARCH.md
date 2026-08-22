@@ -339,7 +339,7 @@ The plan's §8.2 W2 argument is that the deemed-supply payload — a tax invoice
 
 That argument survives this research completely intact. It is an argument about *defensibility*, and it is correct. The verified 18%-interest-from-dispatch-date mechanic makes it stronger, not weaker — computing interest from the original dispatch date requires the original dispatch document, its stock movement, and a GL that can post a retroactive-dated supply.
 
-**But defensibility is not demand.** §8.5's counter-reading remains the better default until Q1 answers: these capabilities do not exist in ERPNext after fifteen years or Odoo after twenty, and the honest reading is *"nobody paid enough for it to get built."* Absence in competitor code is evidence of a **gap**. It is not evidence of a **market**.
+**But defensibility is not demand.** §8.5's counter-reading remains the better default until Q1 answers: these capabilities do not exist in ERPNext after fifteen years or Odoo after searm, and the honest reading is *"nobody paid enough for it to get built."* Absence in competitor code is evidence of a **gap**. It is not evidence of a **market**.
 
 ### 5.5 VERDICT
 

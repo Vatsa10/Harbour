@@ -9,9 +9,9 @@ on:
   push:
     branches: ['main']
     paths:
-      - 'packages/twenty-docs/**/*.mdx'
-      - '!packages/twenty-docs/l/**'
-      - 'packages/twenty-docs/navigation/navigation.template.json'
+      - 'packages/searm-docs/**/*.mdx'
+      - '!packages/searm-docs/l/**'
+      - 'packages/searm-docs/navigation/navigation.template.json'
       - '.github/crowdin-docs.yml'
 
 concurrency:
@@ -43,7 +43,7 @@ jobs:
           upload_translations: false
           download_translations: false
           localization_branch_name: i18n-docs
-          base_url: 'https://twenty.api.crowdin.com'
+          base_url: 'https://searm.api.crowdin.com'
           config: '.github/crowdin-docs.yml'
         env:
           # Docs translations project

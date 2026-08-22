@@ -28,7 +28,7 @@ jobs:
         uses: ./.github/actions/yarn-install
 
       - name: Check PR commits, description, comments and reviews for blocked contributors
-        run: npx nx run twenty-server:ts-node-no-deps-transpile-only -- ./scripts/check-blocked-contributors.ts
+        run: npx nx run searm-server:ts-node-no-deps-transpile-only -- ./scripts/check-blocked-contributors.ts
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}

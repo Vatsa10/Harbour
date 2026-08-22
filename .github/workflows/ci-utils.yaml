@@ -33,7 +33,7 @@ jobs:
         # GitHub API responses with ERR_STREAM_PREMATURE_CLOSE. Retry to absorb
         # those transient fetch errors instead of failing the whole check.
         run: |
-          cd packages/twenty-utils
+          cd packages/searm-utils
           for attempt in 1 2 3; do
             if npx nx danger:ci; then
               exit 0
@@ -59,7 +59,7 @@ jobs:
       - name: Run congratulate-dangerfile.js
         # Same transient ERR_STREAM_PREMATURE_CLOSE protection as danger-js.
         run: |
-          cd packages/twenty-utils
+          cd packages/searm-utils
           for attempt in 1 2 3; do
             if npx nx danger:congratulate; then
               exit 0

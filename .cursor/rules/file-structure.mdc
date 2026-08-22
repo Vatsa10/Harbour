@@ -1,5 +1,5 @@
 ---
-description: File structure guidelines for Twenty CRM
+description: File structure guidelines for SeaRM CRM
 globs: []
 alwaysApply: true
 ---
@@ -7,7 +7,7 @@ alwaysApply: true
 
 ## Directory Organization
 ```
-packages/twenty-front/src/
+packages/searm-front/src/
 ├── components/      # Reusable UI components
 ├── pages/          # Route components  
 ├── modules/        # Feature modules
@@ -15,7 +15,7 @@ packages/twenty-front/src/
 ├── services/       # API services
 └── types/          # Type definitions
 
-packages/twenty-server/src/
+packages/searm-server/src/
 ├── modules/        # Feature modules
 ├── entities/       # Database entities
 ├── dto/           # Data transfer objects

@@ -3,11 +3,11 @@
 #
 # The defaults in this monorepo are sized for CI, not a laptop:
 #   - `npx jest` with no flags uses cores-1 = 23 workers, each a node process
-#   - tsgo/tsc on twenty-server routinely wants several GB
+#   - tsgo/tsc on searm-server routinely wants several GB
 # Run two or three of those concurrently and the host is OOM-killed. That is
 # what kept killing the Claude Code process during the phase workflows.
 #
-# Usage, from packages/twenty-server:
+# Usage, from packages/searm-server:
 #   bash ../../scripts/lowmem.sh test <jest-pattern>
 #   bash ../../scripts/lowmem.sh itest <jest-pattern>
 #   bash ../../scripts/lowmem.sh types

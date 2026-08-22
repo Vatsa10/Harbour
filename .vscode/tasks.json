@@ -2,11 +2,11 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "twenty-server - run integration test file",
+			"label": "searm-server - run integration test file",
 			"type": "shell",
-			"command": "npx nx run twenty-server:jest -- --config ./jest-integration.config.ts ${relativeFile} --silent=false ${input:watchMode} ${input:updateSnapshot}",
+			"command": "npx nx run searm-server:jest -- --config ./jest-integration.config.ts ${relativeFile} --silent=false ${input:watchMode} ${input:updateSnapshot}",
 			"options": {
-				"cwd": "${workspaceFolder}/packages/twenty-server",
+				"cwd": "${workspaceFolder}/packages/searm-server",
 				"env": {
 					"NODE_ENV": "test",
 					"NODE_OPTIONS": "--max-old-space-size=12288 --import tsx/esm"
@@ -24,11 +24,11 @@
 			"problemMatcher": []
 		},
 		{
-			"label": "twenty-server - run unit test file",
+			"label": "searm-server - run unit test file",
 			"type": "shell",
-			"command": "npx nx run twenty-server:jest -- --config ./jest.config.mjs ${relativeFile} --silent=false ${input:watchMode} ${input:updateSnapshot}",
+			"command": "npx nx run searm-server:jest -- --config ./jest.config.mjs ${relativeFile} --silent=false ${input:watchMode} ${input:updateSnapshot}",
 			"options": {
-				"cwd": "${workspaceFolder}/packages/twenty-server",
+				"cwd": "${workspaceFolder}/packages/searm-server",
 				"env": {
 					"NODE_ENV": "test",
 					"NODE_OPTIONS": "--max-old-space-size=12288 --import tsx/esm"

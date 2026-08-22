@@ -1,0 +1,36 @@
+import { defineApplication } from 'searm-sdk/define';
+import { APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identifiers';
+
+export default defineApplication({
+  universalIdentifier: APPLICATION_UNIVERSAL_IDENTIFIER,
+  displayName: 'Linear',
+  description:
+    'Connect Linear to SeaRM. Each workspace member connects their own Linear account; logic functions can then create issues and read team data on their behalf.',
+  logoUrl: 'public/linear-logomark.svg',
+  applicationVariables: undefined,
+  author: 'SeaRM',
+  category: 'Product management',
+  emailSupport: 'contact@searm.com',
+  screenshots: [
+    'public/gallery/command-menu-item-1.png',
+    'public/gallery/command-menu-item-2.png',
+    'public/gallery/command-menu-item-3.png',
+    'public/gallery/command-menu-item-4.png',
+  ],
+  termsUrl: 'https://github.com/Vatsa10/Harbour?tab=License-1-ov-file#readme',
+  websiteUrl: 'https://www.searm.com',
+  serverVariables: {
+    LINEAR_CLIENT_ID: {
+      description:
+        'OAuth client ID from your Linear OAuth application (linear.app/settings/api/applications).',
+      isSecret: false,
+      isRequired: true,
+    },
+    LINEAR_CLIENT_SECRET: {
+      description:
+        'OAuth client secret from your Linear OAuth application. Stored encrypted; never exposed in API responses.',
+      isSecret: true,
+      isRequired: true,
+    },
+  },
+});

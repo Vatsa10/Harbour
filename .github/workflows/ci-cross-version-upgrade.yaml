@@ -12,14 +12,14 @@ on:
       from_version:
         type: string
         required: false
-        description: 'Old Twenty version to upgrade from (defaults to oldest supported: v1.22)'
+        description: 'Old SeaRM version to upgrade from (defaults to oldest supported: v1.22)'
   workflow_dispatch:
     inputs:
       from_version:
         type: string
         required: false
         default: ''
-        description: 'Old Twenty version to upgrade from (defaults to oldest supported: v1.22)'
+        description: 'Old SeaRM version to upgrade from (defaults to oldest supported: v1.22)'
 
 permissions:
   contents: read
@@ -67,13 +67,13 @@ jobs:
           echo "Testing upgrade from ${FROM_VERSION} to current (built from source)"
 
       - name: Create Docker network
-        run: docker network create twenty-net
+        run: docker network create searm-net
 
       - name: Start Postgres
         run: |
           docker run -d \
             --name postgres \
-            --network twenty-net \
+            --network searm-net \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=postgres \
             -e POSTGRES_DB=default \
@@ -96,7 +96,7 @@ jobs:
         run: |
           docker run -d \
             --name redis \
-            --network twenty-net \
+            --network searm-net \
             -p 6379:6379 \
             redis:7-alpine
 
@@ -119,29 +119,29 @@ jobs:
       - name: Old version / Start container
         run: |
           docker run -d \
-            --name twenty-old \
-            --network twenty-net \
+            --name searm-old \
+            --network searm-net \
             -p 3000:3000 \
             -e NODE_PORT=3000 \
             -e SERVER_URL=http://localhost:3000 \
             -e PG_DATABASE_URL=${OLD_PG_DATABASE_URL} \
             -e REDIS_URL=${OLD_REDIS_URL} \
             -e APP_SECRET=${APP_SECRET} \
-            "twentycrm/twenty:${FROM_VERSION}"
+            "searmcrm/searm:${FROM_VERSION}"
 
       - name: Old version / Wait for API ready
         run: |
           TIMEOUT=600
-          CONTAINER="twenty-old"
+          CONTAINER="searm-old"
           ELAPSED=0
-          echo "Waiting for Twenty on port 3000 (timeout ${TIMEOUT}s)…"
+          echo "Waiting for SeaRM on port 3000 (timeout ${TIMEOUT}s)…"
           while true; do
             healthz=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:3000/healthz" 2>/dev/null || echo "000")
             graphql=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:3000/graphql" \
               -H "Content-Type: application/json" \
               -d '{"query":"{ __typename }"}' 2>/dev/null || echo "000")
             if [ "$healthz" = "200" ] && [ "$graphql" != "000" ] && [ "$graphql" != "404" ]; then
-              echo "Twenty is ready! healthz=${healthz} graphql=${graphql} (took ~${ELAPSED}s)"
+              echo "SeaRM is ready! healthz=${healthz} graphql=${graphql} (took ~${ELAPSED}s)"
               break
             fi
             container_status=$(docker inspect --format='{{.State.Status}}' "$CONTAINER" 2>/dev/null || echo "unknown")
@@ -152,7 +152,7 @@ jobs:
             fi
             ELAPSED=$((ELAPSED + 5))
             if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
-              echo "::error::Twenty did not become ready within ${TIMEOUT}s (healthz=${healthz} graphql=${graphql})"
+              echo "::error::SeaRM did not become ready within ${TIMEOUT}s (healthz=${healthz} graphql=${graphql})"
               docker logs "$CONTAINER" 2>&1 | tail -100
               exit 1
             fi
@@ -162,7 +162,7 @@ jobs:
 
       - name: Old version / Seed dev data
         run: |
-          docker exec twenty-old sh -c "cd /app/packages/twenty-server && yarn command:prod workspace:seed:dev"
+          docker exec searm-old sh -c "cd /app/packages/searm-server && yarn command:prod workspace:seed:dev"
 
       - name: Old version / Sanity check seeded data
         # Verify the seed populated the database directly via psql — avoids
@@ -174,16 +174,16 @@ jobs:
           echo "Seed workspaces found: ${COUNT}"
           if [ "${COUNT:-0}" -lt 1 ]; then
             echo "Sanity check failed: seed workspace ${SEED_WORKSPACE_ID} not found"
-            docker logs twenty-old
+            docker logs searm-old
             exit 1
           fi
 
       - name: Old version / Stop container
         run: |
           mkdir -p upgrade-logs
-          docker logs twenty-old > upgrade-logs/twenty-old.log 2>&1 || true
-          docker stop twenty-old
-          docker rm twenty-old
+          docker logs searm-old > upgrade-logs/searm-old.log 2>&1 || true
+          docker stop searm-old
+          docker rm searm-old
 
       # ================================================================
       # Phase 2 — Current version (from source): upgrade on same database
@@ -203,15 +203,15 @@ jobs:
         with:
           key: ${{ env.SERVER_BUILD_CACHE_KEY }}
 
-      - name: Build twenty-shared
-        run: npx nx build twenty-shared
+      - name: Build searm-shared
+        run: npx nx build searm-shared
 
       - name: Server / Write .env
-        run: npx nx reset:env twenty-server
+        run: npx nx reset:env searm-server
 
       - name: Server / Align .env with seeded database
         run: |
-          ENV_FILE="packages/twenty-server/.env"
+          ENV_FILE="packages/searm-server/.env"
           # Must match the old container's APP_SECRET (same DB, same run-generated secret).
           sed -i "s|^APP_SECRET=.*|APP_SECRET=${APP_SECRET}|" "$ENV_FILE"
           # PG_DATABASE_URL / REDIS_URL come from .env.example (postgres@localhost:5432/default,
@@ -219,18 +219,18 @@ jobs:
           grep -E '^(PG_DATABASE_URL|REDIS_URL)=' "$ENV_FILE"
 
       - name: Server / Build
-        run: npx nx build twenty-server
+        run: npx nx build searm-server
 
       - name: Server / Flush cache
-        run: npx nx run twenty-server:command-no-deps -- cache:flush
+        run: npx nx run searm-server:command-no-deps -- cache:flush
 
       - name: Server / Run upgrade command
-        run: npx nx run twenty-server:command-no-deps -- upgrade --verbose
+        run: npx nx run searm-server:command-no-deps -- upgrade --verbose
 
       - name: Server / Start
         run: |
           mkdir -p upgrade-logs
-          npx nx start:ci twenty-server > upgrade-logs/twenty-new.log 2>&1 &
+          npx nx start:ci searm-server > upgrade-logs/searm-new.log 2>&1 &
 
       - name: Waiting for server starting...
         run: |
@@ -243,7 +243,7 @@ jobs:
             sleep 5
           done
           echo "::error::Server did not become healthy in time"
-          tail -100 upgrade-logs/twenty-new.log || true
+          tail -100 upgrade-logs/searm-new.log || true
           exit 1
 
       # ================================================================
@@ -255,7 +255,7 @@ jobs:
         # Mint a token against the running upgraded server (signed with this run's
         # APP_SECRET). No token is committed to the repo.
         run: |
-          OUTPUT=$(NO_COLOR=1 npx nx run twenty-server:command-no-deps -- \
+          OUTPUT=$(NO_COLOR=1 npx nx run searm-server:command-no-deps -- \
             workspace:generate-api-key -w "${SEED_WORKSPACE_ID}" -n "cross-version-upgrade-ci")
           echo "$OUTPUT"
           TOKEN=$(echo "$OUTPUT" | grep -o 'TOKEN:[A-Za-z0-9._-]*' | head -1 | cut -d: -f2-)
@@ -268,7 +268,7 @@ jobs:
 
       - name: Smoke / Upgrade status
         run: |
-          RAW=$(FORCE_COLOR=0 NO_COLOR=1 npx nx run twenty-server:command-no-deps -- upgrade:status 2>&1)
+          RAW=$(FORCE_COLOR=0 NO_COLOR=1 npx nx run searm-server:command-no-deps -- upgrade:status 2>&1)
           # chalk colorizes even with NO_COLOR under nx — strip ANSI codes before asserting.
           OUTPUT=$(printf '%s\n' "$RAW" | sed -E 's/\x1b\[[0-9;]*m//g')
           echo "$OUTPUT"
@@ -356,10 +356,10 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          docker stop twenty-old 2>/dev/null || true
-          docker rm twenty-old 2>/dev/null || true
+          docker stop searm-old 2>/dev/null || true
+          docker rm searm-old 2>/dev/null || true
           docker stop postgres 2>/dev/null || true
           docker rm postgres 2>/dev/null || true
           docker stop redis 2>/dev/null || true
           docker rm redis 2>/dev/null || true
-          docker network rm twenty-net 2>/dev/null || true
+          docker network rm searm-net 2>/dev/null || true

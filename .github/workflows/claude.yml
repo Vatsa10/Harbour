@@ -85,7 +85,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           additional_permissions: |
             actions: read
-          claude_args: '--max-turns 200 --model opus --allowedTools "Edit,Write,WebFetch,Bash(bash packages/twenty-utils/setup-dev-env.sh),Bash(npx nx *),Bash(npx jest *),Bash(yarn *),Bash(git *),Bash(gh *),Bash(sed *),Bash(python3 *),Bash(rm *),Bash(find *),Bash(grep *),Bash(cat *),Bash(ls *),Bash(head *),Bash(tail *),Bash(wc *),Bash(sort *),Bash(uniq *),Bash(mkdir *),Bash(cp *),Bash(mv *),Bash(touch *),Bash(chmod *),Bash(echo *),Bash(curl *),Bash(cd *),Bash(pwd *),Bash(diff *),Bash(xargs *),Bash(awk *),Bash(cut *),Bash(tee *),Bash(tr *)"'
+          claude_args: '--max-turns 200 --model opus --allowedTools "Edit,Write,WebFetch,Bash(bash packages/searm-utils/setup-dev-env.sh),Bash(npx nx *),Bash(npx jest *),Bash(yarn *),Bash(git *),Bash(gh *),Bash(sed *),Bash(python3 *),Bash(rm *),Bash(find *),Bash(grep *),Bash(cat *),Bash(ls *),Bash(head *),Bash(tail *),Bash(wc *),Bash(sort *),Bash(uniq *),Bash(mkdir *),Bash(cp *),Bash(mv *),Bash(touch *),Bash(chmod *),Bash(echo *),Bash(curl *),Bash(cd *),Bash(pwd *),Bash(diff *),Bash(xargs *),Bash(awk *),Bash(cut *),Bash(tee *),Bash(tr *)"'
           settings: |
             {
               "env": {
@@ -161,9 +161,9 @@ jobs:
             const p = context.payload.client_payload;
             let prompt;
             if (p.comment_body) {
-              prompt = `You are responding to a comment on issue #${p.issue_number} ("${p.issue_title}") in the ${p.repo_full_name} repository.\n\nThe comment by @${p.sender} says:\n\n${p.comment_body}\n\nIssue body:\n\n${p.issue_body}\n\nPlease help with this request. The code you are working with is the twenty codebase (this repository).`;
+              prompt = `You are responding to a comment on issue #${p.issue_number} ("${p.issue_title}") in the ${p.repo_full_name} repository.\n\nThe comment by @${p.sender} says:\n\n${p.comment_body}\n\nIssue body:\n\n${p.issue_body}\n\nPlease help with this request. The code you are working with is the searm codebase (this repository).`;
             } else {
-              prompt = `You are responding to issue #${p.issue_number} ("${p.issue_title}") in the ${p.repo_full_name} repository, opened by @${p.sender}.\n\nIssue body:\n\n${p.issue_body}\n\nPlease help with this request. The code you are working with is the twenty codebase (this repository).`;
+              prompt = `You are responding to issue #${p.issue_number} ("${p.issue_title}") in the ${p.repo_full_name} repository, opened by @${p.sender}.\n\nIssue body:\n\n${p.issue_body}\n\nPlease help with this request. The code you are working with is the searm codebase (this repository).`;
             }
             core.setOutput('prompt', prompt);
             core.setOutput('repo', p.repo_full_name);
@@ -176,7 +176,7 @@ jobs:
           prompt: ${{ steps.prompt.outputs.prompt }}
           additional_permissions: |
             actions: read
-          claude_args: '--max-turns 200 --model opus --allowedTools "Edit,Write,WebFetch,Bash(bash packages/twenty-utils/setup-dev-env.sh),Bash(npx nx *),Bash(npx jest *),Bash(yarn *),Bash(git *),Bash(gh *),Bash(sed *),Bash(python3 *),Bash(rm *),Bash(find *),Bash(grep *),Bash(cat *),Bash(ls *),Bash(head *),Bash(tail *),Bash(wc *),Bash(sort *),Bash(uniq *),Bash(mkdir *),Bash(cp *),Bash(mv *),Bash(touch *),Bash(chmod *),Bash(echo *),Bash(curl *),Bash(cd *),Bash(pwd *),Bash(diff *),Bash(xargs *),Bash(awk *),Bash(cut *),Bash(tee *),Bash(tr *)"'
+          claude_args: '--max-turns 200 --model opus --allowedTools "Edit,Write,WebFetch,Bash(bash packages/searm-utils/setup-dev-env.sh),Bash(npx nx *),Bash(npx jest *),Bash(yarn *),Bash(git *),Bash(gh *),Bash(sed *),Bash(python3 *),Bash(rm *),Bash(find *),Bash(grep *),Bash(cat *),Bash(ls *),Bash(head *),Bash(tail *),Bash(wc *),Bash(sort *),Bash(uniq *),Bash(mkdir *),Bash(cp *),Bash(mv *),Bash(touch *),Bash(chmod *),Bash(echo *),Bash(curl *),Bash(cd *),Bash(pwd *),Bash(diff *),Bash(xargs *),Bash(awk *),Bash(cut *),Bash(tee *),Bash(tr *)"'
           settings: |
             {
               "env": {
@@ -188,9 +188,9 @@ jobs:
         if: always()
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          client-id: ${{ vars.TWENTY_WORKFLOW_DISPATCHER_CLIENT_ID }}
-          private-key: ${{ secrets.TWENTY_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
-          owner: twentyhq
+          client-id: ${{ vars.SEARM_WORKFLOW_DISPATCHER_CLIENT_ID }}
+          private-key: ${{ secrets.SEARM_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
+          owner: Vatsa10
           repositories: ci-privileged
           permission-actions: write
 
@@ -202,7 +202,7 @@ jobs:
           ISSUE_NUMBER: ${{ steps.prompt.outputs.issue_number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          gh workflow run post-claude-response.yaml --repo twentyhq/ci-privileged --ref main \
+          gh workflow run post-claude-response.yaml --repo Vatsa10/ci-privileged --ref main \
             -f repo="$REPO" \
             -f issue_number="$ISSUE_NUMBER" \
             -f run_url="$RUN_URL"

@@ -1,0 +1,87 @@
+---
+title: Server local
+description: Gestionează serverul SeaRM Docker local — pornește, oprește, actualizează, rulează o instanță de testare în paralel și configurează manual SDK-ul.
+icon: server
+---
+
+## Gestionarea serverului local
+
+Folosiți `yarn searm docker:*` pentru a controla containerul SeaRM local:
+
+| Comandă                                | Ce face                                                      |
+| -------------------------------------- | ------------------------------------------------------------ |
+| `yarn searm docker:start`             | Pornește serverul (descarcă imaginea dacă este necesar)      |
+| `yarn searm docker:start 2.2.0`       | Pornește o anumită versiune a serverului                     |
+| `yarn searm docker:start --port 3030` | Pornește pe un port personalizat                             |
+| `yarn searm docker:stop`              | Oprește serverul (păstrează datele)                          |
+| `yarn searm docker:status`            | Afișează URL-ul, versiunea și credențialele de autentificare |
+| `yarn searm docker:logs`              | Transmite în flux jurnalele serverului                       |
+| `yarn searm docker:reset`             | Șterge datele și pornește de la zero                         |
+| `yarn searm docker:upgrade`           | Descarcă cea mai recentă imagine `searm-app-dev`            |
+| `yarn searm docker:upgrade 2.2.0`     | Actualizează la o versiune specifică                         |
+
+Datele persistă între reporniri în două volume Docker (`searm-app-dev-data` pentru PostgreSQL, `searm-app-dev-storage` pentru fișiere). Folosiți `reset` pentru a șterge totul.
+
+## Fixarea versiunii serverului
+
+Când nu este transmisă nicio versiune, `docker:start` rezolvă versiunea din intervalul `engines.searm` al aplicației tale din `package.json` — același interval față de care serverul validează când aplicația ta este instalată. Pornește cea mai nouă imagine publicată `searm-app-dev` care satisface intervalul, revenind la `latest` atunci când câmpul lipsește sau nicio versiune publicată nu se potrivește:
+
+```json filename="package.json"
+{
+  "engines": {
+    "searm": ">=2.2.0"
+  }
+}
+```
+
+Transmite explicit o versiune pentru a suprascrie intervalul pentru o singură rulare: `yarn searm docker:start 2.3.0`. Dacă un container există deja pe o versiune diferită, `docker:start` îl actualizează pe loc (recreând containerul, dar păstrând volumele tale de date).
+
+## Actualizarea imaginii serverului
+
+`yarn searm docker:upgrade` descarcă cea mai recentă imagine, compară digest-urile și recreează containerul doar dacă s-a schimbat ceva. Volumele de date sunt păstrate — doar containerul este înlocuit. Dacă a fost descărcată o imagine nouă și containerul rula, actualizarea pornește automat un container nou; rulați apoi `yarn searm docker:start` pentru a aștepta până când devine funcțional.
+
+```bash filename="Terminal"
+yarn searm docker:upgrade            # Latest
+yarn searm docker:upgrade 2.2.0      # Specific version
+```
+
+Puteți verifica versiunea care rulează cu `yarn searm docker:status` (aceasta afișează `APP_VERSION` încorporat în container).
+
+## Rularea unei instanțe de test în paralel
+
+Adăugați `--test` la orice comandă `docker:*` pentru a gestiona o a doua instanță, complet izolată — utilă pentru teste de integrare sau pentru a experimenta fără a atinge datele principale de dezvoltare:
+
+| Comandă                             | Ce face                                             |
+| ----------------------------------- | --------------------------------------------------- |
+| `yarn searm docker:start --test`   | Pornește instanța de test (implicit pe portul 2021) |
+| `yarn searm docker:stop --test`    | Oprește-o                                           |
+| `yarn searm docker:status --test`  | Afișează-i starea                                   |
+| `yarn searm docker:logs --test`    | Transmite în flux jurnalele sale                    |
+| `yarn searm docker:reset --test`   | Șterge-i datele                                     |
+| `yarn searm docker:upgrade --test` | Actualizează-i imaginea                             |
+
+Instanța de test are propriul container (`searm-app-dev-test`), propriile volume (`searm-app-dev-test-data`, `searm-app-dev-test-storage`) și propria configurație — rulează alături de instanța principală, fără conflicte. Combinați `--test` cu `--port` pentru a înlocui portul 2021.
+
+## Configurare manuală (fără generator)
+
+Săriți peste generatorul de schelet dacă adăugați SDK-ul într-un proiect existent:
+
+```bash filename="Terminal"
+yarn add searm-sdk searm-client-sdk
+```
+
+Adăugați scriptul în `package.json`:
+
+```json filename="package.json"
+{
+  "scripts": {
+    "searm": "searm"
+  }
+}
+```
+
+Acum puteți rula `yarn searm dev`, `yarn searm docker:start` și restul.
+
+<Note>
+Nu instalați `searm-sdk` global — fixați-l per proiect astfel încât fiecare aplicație să folosească propria versiune.
+</Note>

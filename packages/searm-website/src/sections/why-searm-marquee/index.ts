@@ -1,0 +1,1 @@
+export { WhySearmMarquee } from './WhySearmMarquee';

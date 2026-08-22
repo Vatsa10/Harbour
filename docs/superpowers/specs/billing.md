@@ -1,7 +1,7 @@
 # Spec — Billing
 
 Status: **DELETE NOW. BUILD LATER, UNDER A TRIGGER.**
-Scope: `packages/twenty-server/src/engine/core-modules/billing`, `…/billing-webhook`, `…/ai-billing`, and every AGPL call site that imports them.
+Scope: `packages/searm-server/src/engine/core-modules/billing`, `…/billing-webhook`, `…/ai-billing`, and every AGPL call site that imports them.
 Written against: the SeaRM Product Charter, the enterprise audit (`.superpowers/sdd/enterprise-rewrite/enterprise-audit.md`), and Stripe's public API documentation. No `@license Enterprise` file was opened.
 
 ---
@@ -19,15 +19,15 @@ Billing is, today, a compile-time dependency of self-hosting. That is a live cha
 Three facts settle it:
 
 1. **There is no hosted SeaRM.** No Stripe account, no price catalog, no customer, no invoice. Every line of the 152 enterprise-licensed files in this cluster models a price book that does not exist.
-2. **The code is already dead at runtime.** `IS_BILLING_ENABLED` defaults to unset — `packages/twenty-server/.env.example:22` reads `# IS_BILLING_ENABLED=false`. Every consumer short-circuits: `workspace.resolver.ts:184, :280, :293` return early, `ai-billing.service.ts:102-104` returns `{ hasNoMoreAvailableCredits: false }`, and the same guard repeats in `workflow-executor.workspace-service.ts`, `logic-function-executor.service.ts` and `email-billing.service.ts`. Deleting it removes no behaviour any deployment currently has.
+2. **The code is already dead at runtime.** `IS_BILLING_ENABLED` defaults to unset — `packages/searm-server/.env.example:22` reads `# IS_BILLING_ENABLED=false`. Every consumer short-circuits: `workspace.resolver.ts:184, :280, :293` return early, `ai-billing.service.ts:102-104` returns `{ hasNoMoreAvailableCredits: false }`, and the same guard repeats in `workflow-executor.workspace-service.ts`, `logic-function-executor.service.ts` and `email-billing.service.ts`. Deleting it removes no behaviour any deployment currently has.
 3. **It is not ours to keep.** 152 of the 198 files under `billing/`, `billing-webhook/` and `usage/` carry `@license Enterprise`. They cannot ship in an AGPL fork at all. "Leave it for later" is not on the menu; the only choices are *delete* or *rewrite from scratch*, and rewriting a Stripe integration for zero customers is indefensible.
 
 Measured, 2026-08-17, at branch `ai-native-crm` HEAD `a0320502fe`:
 
 ```
-$ find twenty-server/src/engine/core-modules/{billing,billing-webhook,usage} -type f | wc -l
+$ find searm-server/src/engine/core-modules/{billing,billing-webhook,usage} -type f | wc -l
 198
-$ grep -rl "@license Enterprise" twenty-server/src/engine/core-modules/{billing,billing-webhook,usage} | wc -l
+$ grep -rl "@license Enterprise" searm-server/src/engine/core-modules/{billing,billing-webhook,usage} | wc -l
 152
 ```
 
@@ -58,7 +58,7 @@ A directed dependency rule has no such hole. A self-hosted instance does not "di
 Not by convention. By a test that fails the build.
 
 ```
-packages/twenty-server/src/engine/__architecture-tests__/billing-isolation.spec.ts
+packages/searm-server/src/engine/__architecture-tests__/billing-isolation.spec.ts
 ```
 
 The test walks every `.ts` file under `src/engine` and `src/modules`, parses its import specifiers, and asserts that no path outside `src/engine/core-modules/billing/` resolves into it. Two allowances, both explicit and both enumerated in the test file itself:
@@ -127,7 +127,7 @@ Custom domains / Cloudflare DNS (Cluster 4.4) is a separate deletion with the sa
 | `core-modules/billing/**` | 150 (114 enterprise, 36 AGPL) | The 36 AGPL files are subscription-update math, price utils, the reminder cron and their specs. They model Stripe's object graph and have no consumer once Stripe is gone. Delete them too. |
 | `core-modules/billing-webhook/**` | 27 (23 enterprise, 4 AGPL) | Inbound Stripe webhook receiver, mounted unauthenticated. |
 | `metadata-modules/ai/ai-billing/**` | all | Credit-ceiling check. See §3.2. |
-| `database/commands/upgrade-version-command/2-4/…migrate-to-billing-v2.command.ts` | 1 | Migrates Twenty Cloud subscriptions between Twenty's own price versions. Meaningless here. |
+| `database/commands/upgrade-version-command/2-4/…migrate-to-billing-v2.command.ts` | 1 | Migrates SeaRM Cloud subscriptions between SeaRM's own price versions. Meaningless here. |
 | `admin-panel/services/admin-panel-billing.service.ts` + its DTO + resolver field | 3 | Cloud-operator tooling. |
 | Front: `pages/settings/billing/**`, `modules/billing/**`, `modules/information-banner/components/billing/**`, the onboarding plan-required path, `billingState`, `billingCheckoutSessionState` | — | See §4.4. |
 
@@ -155,7 +155,7 @@ Grouped by what the edit actually is:
 Note a correction to the audit: **`workspace.entity.ts` has no billing relation.** Verified —
 
 ```
-$ grep -in "billing" twenty-server/src/engine/core-modules/workspace/workspace.entity.ts
+$ grep -in "billing" searm-server/src/engine/core-modules/workspace/workspace.entity.ts
 (no output)
 ```
 
@@ -194,10 +194,10 @@ Confirm the exact table set from the generated migration history before writing 
 
 ### 4.4 Frontend
 
-185 files under `twenty-front/src` mention billing once locale catalogues and generated GraphQL are excluded:
+185 files under `searm-front/src` mention billing once locale catalogues and generated GraphQL are excluded:
 
 ```
-$ grep -rli --include="*.ts" --include="*.tsx" "billing" twenty-front/src | wc -l
+$ grep -rli --include="*.ts" --include="*.tsx" "billing" searm-front/src | wc -l
 217
 $ … | grep -v -e "/locales/" -e "generated-metadata" -e "generated-admin" | wc -l
 185
@@ -214,9 +214,9 @@ The remainder are one-line references (`useAuth.ts`, `SettingsRoutes.tsx`, `curr
 
 The deletion is done when all of these produce recorded output, in this order:
 
-1. `grep -rn "core-modules/billing" packages/twenty-server/src | wc -l` → `0`
-2. `grep -rl "@license Enterprise" packages/twenty-server/src/engine/core-modules | wc -l` → drops by 152
-3. `cd packages/twenty-server && bash ../../scripts/lowmem.sh types` → clean
+1. `grep -rn "core-modules/billing" packages/searm-server/src | wc -l` → `0`
+2. `grep -rl "@license Enterprise" packages/searm-server/src/engine/core-modules | wc -l` → drops by 152
+3. `cd packages/searm-server && bash ../../scripts/lowmem.sh types` → clean
 4. `bash ../../scripts/lowmem.sh test` → no new failures against the §4.0 baseline
 5. Server boots: `/healthz` returns `{"status":"ok"}`, route count recorded, **zero** `Nest can't resolve` lines
 6. GraphQL schema diff reviewed — exactly four fields gone from `Workspace`, nothing else

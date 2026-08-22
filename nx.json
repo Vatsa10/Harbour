@@ -52,12 +52,12 @@
           "command": "npx oxlint --fix -c .oxlintrc.json . && npx oxfmt ."
         }
       },
-      "dependsOn": ["^build", "twenty-oxlint-rules:build"]
+      "dependsOn": ["^build", "searm-oxlint-rules:build"]
     },
     "lint:diff-with-main": {
       "executor": "nx:run-commands",
       "cache": false,
-      "dependsOn": ["twenty-oxlint-rules:build"],
+      "dependsOn": ["searm-oxlint-rules:build"],
       "options": {
         "command": "FILES=$(git diff --name-only --diff-filter=d main -- {projectRoot}/ | grep -E '{args.pattern}'); [ -z \"$FILES\" ] && echo 'No changed files.' || (npx oxlint -c {projectRoot}/.oxlintrc.json $FILES && (npx oxfmt --check $FILES || (echo 'ERROR: oxfmt formatting check failed! Fix with: npx nx lint:diff-with-main --configuration=fix' && false)))",
         "pattern": "\\.(ts|tsx|js|jsx)$"

@@ -4,7 +4,7 @@ Source: `d:/Files/Vatsa/Projects/AI-CRM/crmkit` (Go, ~19k LOC, SQLite/PostgreSQL
 Governed by `d:/Files/Vatsa/Projects/AI-CRM/docs/superpowers/PRODUCT-CHARTER.md`. Per the charter, crmkit's adopted
 capability is: **agent-safe errors, OAuth/MCP access, deterministic API semantics, ticket/campaign workflow models.**
 This document is a complete design inventory — every capability found, ranked, and given exactly one disposition
-(BUILD NOW or DEFER). Nothing is dropped silently. We are extracting *design*, not porting Go code: Twenty is
+(BUILD NOW or DEFER). Nothing is dropped silently. We are extracting *design*, not porting Go code: SeaRM is
 TypeScript/NestJS/GraphQL, multi-tenant, metadata-driven — the reimplementation must fit that shape, not crmkit's.
 
 ---
@@ -131,7 +131,7 @@ call (`GET /contacts`, `?confirm=<token>`, `?cursor=`). This is exactly the char
 (`code, message, hint, allowed_actions, retryable`), missing only explicit `allowed_actions`/`retryable` fields —
 those are implied by the hint text today but not machine-typed.
 
-**What to build instead (target shape for Twenty, since we're not porting Go):**
+**What to build instead (target shape for SeaRM, since we're not porting Go):**
 ```json
 {
   "error": {
@@ -143,12 +143,12 @@ those are implied by the hint text today but not machine-typed.
   }
 }
 ```
-Apply crmkit's pattern (stable code + human message + imperative hint) to Twenty's GraphQL error `extensions` and
+Apply crmkit's pattern (stable code + human message + imperative hint) to SeaRM's GraphQL error `extensions` and
 to the REST/MCP error body; add the two missing structured fields (`retryable: boolean`, `allowedActions: string[]`)
 so a model can branch programmatically instead of parsing English.
 
 **Disposition: BUILD NOW.** This is the cheapest, highest-leverage single capability in the whole audit — it's a
-formatting convention plus a lookup table, applicable across every existing Twenty resolver/controller. Directly
+formatting convention plus a lookup table, applicable across every existing SeaRM resolver/controller. Directly
 required by charter section "Metadata-aware AI and MCP tools: Return machine-readable failures."
 
 ---
@@ -201,7 +201,7 @@ destructiveness** design: not every DELETE gets the same ceremony.
 
 **Disposition: BUILD NOW**, but note the charter already assigns proposal/approval to be the *human* gate for AI
 mutations. crmkit's confirm-token is a *protocol-level* two-step (call, see cost, call again) distinct from and
-complementary to Twenty's `Proposal`/`ProposalItem` approval flow. Recommendation: keep both layers — the
+complementary to SeaRM's `Proposal`/`ProposalItem` approval flow. Recommendation: keep both layers — the
 Proposal contract governs whether an AI-originated delete may execute at all (needs human approval); the
 confirmation-token pattern is the right shape for the **synchronous MCP tool contract itself** (any tool call that
 resolves to a destructive REST verb) so a model can't fat-finger a delete in one shot even before the record ever
@@ -260,9 +260,9 @@ not just a repeat-the-call token, because those actions must not be confirmable 
 requested them (an MCP client with a stolen bearer token can echo back a `?confirm=` token trivially, but it
 can't read the admin's inbox).
 
-**Disposition: BUILD NOW** as a design pattern, mapped onto Twenty's existing SSO/session model: for the two
-classes of action Twenty already has analogues for (role escalation, workspace deletion), require a second-factor
-confirmation channel (email code, or reuse Twenty's existing MFA if present) rather than a single bearer-token
+**Disposition: BUILD NOW** as a design pattern, mapped onto SeaRM's existing SSO/session model: for the two
+classes of action SeaRM already has analogues for (role escalation, workspace deletion), require a second-factor
+confirmation channel (email code, or reuse SeaRM's existing MFA if present) rather than a single bearer-token
 call. This is squarely inside the charter's Principal contract territory — distinguishing "this user, right now,
 freshly re-verified" from "a request bearing this user's token."
 
@@ -328,9 +328,9 @@ version=?` (compare-and-swap at the SQL layer, not read-then-write in applicatio
 `ErrConflict` when zero rows were affected because the version had moved.
 
 **Disposition: BUILD NOW.** This is exactly what an agent needs to safely read-modify-write without last-write-wins
-data loss, and Twenty's GraphQL mutations do not currently expose a version-guard at the API surface (Twenty has
+data loss, and SeaRM's GraphQL mutations do not currently expose a version-guard at the API surface (SeaRM has
 soft-delete/audit but optimistic concurrency for concurrent-agent-and-human edits is not the same thing). Map to
-Twenty as: expose `updatedAt` or a monotonic `version` field on core objects' generated GraphQL types, accept it as
+SeaRM as: expose `updatedAt` or a monotonic `version` field on core objects' generated GraphQL types, accept it as
 an optional mutation argument, translate a mismatch into the error envelope from §1.1 with `code: RECORD_VERSION_CONFLICT`.
 Directly serves the charter's Execution contract ("idempotent... retryable") for the *agent* write path in particular
 (concurrent human-edits-while-agent-drafts is the exact scenario the Proposal contract exists to gate, but once a
@@ -455,14 +455,14 @@ the separator/prefix convention could change without touching storage — and th
 intentionally more permissive than the *emission* side, a defensive asymmetry appropriate for LLM clients that
 don't reliably preserve exact string formats.
 
-**Disposition: PARTIAL BUILD NOW.** Twenty already has UUID primary keys and does not need a second internal-id
+**Disposition: PARTIAL BUILD NOW.** SeaRM already has UUID primary keys and does not need a second internal-id
 layer — that part of crmkit's design exists only because crmkit has no separate display-vs-storage schema. What
 *is* worth taking: (a) a **short, agent-facing display token** for records surfaced through the MCP/agent surface
-specifically (Twenty UUIDs are needlessly long and expensive in agent context/tokens — a workspace-scoped short
+specifically (SeaRM UUIDs are needlessly long and expensive in agent context/tokens — a workspace-scoped short
 alias resolvable back to the UUID is a real token-cost saving over many-tool-call agent sessions), and (b) the
 **liberal-parse-of-any-representation** principle for any tool argument that accepts a record reference. Build the
 short-alias-with-liberal-resolution pattern into the MCP/agent tool layer (Phase 4, "compact agent-oriented
-output"); do not touch Twenty's core id scheme.
+output"); do not touch SeaRM's core id scheme.
 
 ---
 
@@ -537,7 +537,7 @@ what an LLM should see: empty fields are omitted entirely (not `null`, not `""`�
 multi-word values are quoted so the line stays parseable, and a single-record "detail" view pads keys to a common
 width for scanability. This is explicitly optimized for a model reading raw text over a wire, not for a UI renderer.
 
-**Disposition: DEFER**, but not because it's low-value — because it conflicts with Twenty's actual transport
+**Disposition: DEFER**, but not because it's low-value — because it conflicts with SeaRM's actual transport
 (GraphQL over HTTP, not a bespoke plain-text/JSON dual format), and building a parallel plain-text rendering layer
 for an already-GraphQL platform is real, ongoing surface-area cost for a benefit (token savings vs. JSON) that is
 smaller once the MCP layer itself does compaction (§1.6, trimmed/selected fields, pagination). **Trigger to revisit:**
@@ -620,12 +620,12 @@ expression too.
 query on the hot path; the real total is one extra `COUNT(*)` query (`countMatching`), reusing the identical WHERE
 clause so total and page can never diverge from different filter logic.
 
-**Disposition: BUILD NOW.** Twenty's GraphQL API already has cursor pagination in most list resolvers (standard
-Relay-style), so this is less about introducing pagination and more about **auditing whether Twenty's pagination
+**Disposition: BUILD NOW.** SeaRM's GraphQL API already has cursor pagination in most list resolvers (standard
+Relay-style), so this is less about introducing pagination and more about **auditing whether SeaRM's pagination
 gives the model an explicit, reliable "how many more / should I keep paging" signal**, and whether any
 user-suppliable sort parameter is validated against a column whitelist before being interpolated (the same
 injection class applies to any raw-SQL or dynamic-ORM-order-by path). Recommendation: treat this as a hardening
-task against Twenty's existing pagination rather than new construction — verify the whitelist-before-interpolate
+task against SeaRM's existing pagination rather than new construction — verify the whitelist-before-interpolate
 discipline exists wherever agent/MCP tool calls can pass a sort field.
 
 ---
@@ -724,11 +724,11 @@ Every one of these exists because the filter *identifier* (column/expression/JSO
 interpolation target (SQL doesn't parameterize identifiers), while every filter *value* is always a bound `?`
 parameter — the file's comments repeatedly call this out as the single safety invariant the whole layer rests on.
 
-**Disposition: DEFER as literal query-string DSL** (Twenty is GraphQL; the equivalent is Twenty's existing
+**Disposition: DEFER as literal query-string DSL** (SeaRM is GraphQL; the equivalent is SeaRM's existing
 `filter`/`orderBy` GraphQL input types, which already parameterize by construction via the query builder / TypeORM
 — the SQL-injection-via-identifier problem crmkit is solving here is largely moot on a typed GraphQL schema).
 **BUILD NOW the *principle*:** any place the eventual MCP/agent tool layer accepts a free-text sort/filter field
-name from a model (as opposed to routing through Twenty's typed GraphQL filter input), validate it against a
+name from a model (as opposed to routing through SeaRM's typed GraphQL filter input), validate it against a
 closed whitelist before it reaches a query builder, and make an unrecognized field's error list the legal
 vocabulary — that "teach the model the whitelist in the error" trick is worth keeping regardless of transport.
 **Trigger to reconsider building a parallel filter DSL:** if a compact plain-text agent transport (§1.7) is ever
@@ -881,7 +881,7 @@ WWW-Authenticate: Bearer error="invalid_token", resource_metadata="https://host/
 Note the 401 body is a **JSON-RPC error object**, not the §1.1 envelope — a third error dialect, correct for the
 transport. Also note `scopes_supported: ["crm"]` is **advertised but not enforced**: the source says plainly that
 a token grants its workspace's full CRM and the scope exists only because some clients require one. Do not copy
-that — Twenty has real per-scope enforcement (`ALL_OAUTH_SCOPES`) and should use it.
+that — SeaRM has real per-scope enforcement (`ALL_OAUTH_SCOPES`) and should use it.
 
 **Control flow — three load-bearing decisions:**
 1. **Public clients only, PKCE S256 mandatory, no client secrets** (`token_endpoint_auth_methods_supported:
@@ -905,11 +905,11 @@ that — Twenty has real per-scope enforcement (`ALL_OAUTH_SCOPES`) and should u
 `client_name`) so a human reviewing `GET /tokens` can see "this token belongs to Claude Desktop" rather than an
 opaque id — feeds directly into the Principal contract's audit distinguishability requirement.
 
-**Disposition: BUILD NOW — highest-value single item in this repo for Phase 4.** Twenty's own auth is
+**Disposition: BUILD NOW — highest-value single item in this repo for Phase 4.** SeaRM's own auth is
 session/SSO-oriented for human users; it does not yet have this narrow slice (a standards-compliant OAuth AS
 purpose-built for zero-config MCP client bootstrap with workspace-pinned scoping). Recommendation: reimplement the
-four endpoints (protected-resource metadata, AS metadata, DCR, authorize+token+revoke) against Twenty's existing
-user/workspace/session model — reuse Twenty's login mechanism in place of crmkit's email-OTP, but keep: PKCE-only
+four endpoints (protected-resource metadata, AS metadata, DCR, authorize+token+revoke) against SeaRM's existing
+user/workspace/session model — reuse SeaRM's login mechanism in place of crmkit's email-OTP, but keep: PKCE-only
 public clients, workspace-pinning at authorize time with an explicit picker when ambiguous, and refresh-rotation-
 revokes-prior-access-token. This *is* "OAuth-scoped agent credentials" from the charter, close to verbatim.
 
@@ -977,15 +977,15 @@ sites — one per parent entity's activity-create endpoint). **Upserts are not c
 storage. Also: "member seat" usage counts pending invites plus actual members (`workspaceResourceCount`) — an
 org can't evade a seat limit by leaving invites outstanding forever.
 
-**Disposition: DEFER as a bespoke quota subsystem** — Twenty's billing/plan/entitlement system almost certainly
+**Disposition: DEFER as a bespoke quota subsystem** — SeaRM's billing/plan/entitlement system almost certainly
 already governs record-count limits at the platform level (workspace subscription tiers), so building a
 parallel quota table here would duplicate existing product infrastructure. **What's worth keeping conceptually**
 and should inform Phase 2/4 work regardless: an `AgentTask`/`AgentRun` budget check should follow the identical
 pre-write-not-post-write discipline (check the budget before starting the run, not after burning tokens), and
 `GET /whoami`'s "tell the agent its own ceiling proactively" pattern is worth replicating for agent cost/budget
 visibility specifically (surface remaining `AgentTask` budget to the model before it plans a research loop).
-**Trigger to build a literal parallel quota check:** none anticipated — Twenty's entitlements system is the system
-of record for this; only revisit if Twenty's entitlement checks turn out not to cover agent-specific resources
+**Trigger to build a literal parallel quota check:** none anticipated — SeaRM's entitlements system is the system
+of record for this; only revisit if SeaRM's entitlement checks turn out not to cover agent-specific resources
 (e.g., a per-workspace cap on concurrent `AgentTask`s) that don't fit the existing billing model.
 
 ---
@@ -1059,7 +1059,7 @@ POST /tickets/{id}/activities  {"kind":"note","body":"Asked for logs"}
 `requester_id` accepts **any** reference representation (`contact_k7m2q`, `contact/k7m2q`, bare `k7m2q`, or the
 raw internal id) and is resolved leniently via `relationID` — an unresolvable value is **stored as-is** rather
 than rejected, and simply renders unresolved. That leniency is a deliberate agent affordance and also a real data
--integrity hole; on Twenty it should be a hard validation error instead.
+-integrity hole; on SeaRM it should be a hard validation error instead.
 
 **Model, field-by-field, with the reasoning behind each:**
 - `Subject` (required), `Content` (the opening message/body — explicitly the *first* message; comment notes
@@ -1080,15 +1080,15 @@ than rejected, and simply renders unresolved. That leniency is a deliberate agen
   as everything else.
 - `ActivityCount`/`LastActivityAt` computed on read the same way as every other entity (§ fillTicketActivity).
 
-**Disposition: BUILD NOW**, mapped onto Twenty's existing custom-object mechanism per the charter's explicit
+**Disposition: BUILD NOW**, mapped onto SeaRM's existing custom-object mechanism per the charter's explicit
 constraint ("Custom objects are the only extension mechanism for business-specific records. Never add industry
 records to the core schema.") — i.e., Ticket should ship as a **standard object definition** (part of a support
 vertical-app or as a first-class object if the charter's phase-5 framework treats "ticket" as horizontal enough to
-warrant it — worth a product call, not an engineering one). What to actually copy: (a) reuse Twenty's existing
+warrant it — worth a product call, not an engineering one). What to actually copy: (a) reuse SeaRM's existing
 Activity/Timeline/Note mechanism for the conversation instead of inventing a ticket-reply subsystem — same
 principle crmkit used; (b) the closed three-state lifecycle as a starting enum, explicitly marked (as crmkit's own
 comment does) as intentionally incomplete, expandable later; (c) `assignee`-as-identifier-not-required-member-FK is
-almost certainly **wrong for Twenty** — Twenty has real workspace members with permissions, so assignee should be a
+almost certainly **wrong for SeaRM** — SeaRM has real workspace members with permissions, so assignee should be a
 proper member/workspace-user reference, not a bare email string. Call this out explicitly as a **rejected**
 sub-decision (see §3).
 
@@ -1207,11 +1207,11 @@ on every candidate found; duplicates and re-finds are all free no-ops, never err
 **Disposition: BUILD NOW.** This is a genuinely good, minimal model for "AI-driven research/target-list build-up"
 that maps directly onto the charter's "autonomous account monitoring" and "lead to qualified opportunity" workflows
 — a `Campaign` is essentially a lightweight `AgentTask` target list with human-readable intent (the `Description`
-brief) and idempotent membership. Recommendation: build as a Twenty custom object (or a first-class object, same
+brief) and idempotent membership. Recommendation: build as a SeaRM custom object (or a first-class object, same
 open question as Ticket) with (a) the free-text brief field, (b) many-to-many deduped membership to person/company
 records with a `reason` provenance field, (c) idempotent attach semantics on the corresponding GraphQL mutation
 (attach is a no-op, not an error, if already attached), (d) the create-with-attach shortcut pattern applied to
-Twenty's record-creation mutations when a target campaign is specified. This directly powers "Autonomous account
+SeaRM's record-creation mutations when a target campaign is specified. This directly powers "Autonomous account
 monitoring" and target-account-list building in Phase 2/3.
 
 ---
@@ -1323,10 +1323,10 @@ tool should use the purpose-built connectors instead").
 
 **Disposition: SPLIT.**
 - **BUILD NOW:** the allowlist-of-reachable-surface pattern (auth/authz endpoints unreachable by construction
-  through the agent tool, even if technically routable) — apply this directly to Twenty's MCP tool surface: the
-  agent's tool set must never include Twenty's own session/SSO/admin endpoints. Also build the "manual in tool
-  description + full docs on demand" pattern for onboarding a model to Twenty's schema quickly.
-- **DEFER / reject the single-generic-tool shape:** Twenty should expose purpose-built, per-operation MCP tools
+  through the agent tool, even if technically routable) — apply this directly to SeaRM's MCP tool surface: the
+  agent's tool set must never include SeaRM's own session/SSO/admin endpoints. Also build the "manual in tool
+  description + full docs on demand" pattern for onboarding a model to SeaRM's schema quickly.
+- **DEFER / reject the single-generic-tool shape:** SeaRM should expose purpose-built, per-operation MCP tools
   (read record, search, propose-create, propose-update, propose-delete, list-schema, etc.) each individually
   annotated `readOnlyHint`/`destructiveHint` correctly — this is *more* work than crmkit's one-tool trick but is
   required both by the charter (Proposal contract needs per-action typing: create/update/delete/send are distinct
@@ -1359,7 +1359,7 @@ protocol versions rather than forcing crmkit's own default), declares `capabilit
 initialize result that primes the model before its first `tools/list` call.
 
 **Disposition: BUILD NOW** — trivial, correct MCP protocol hygiene; carry the version-echo and honest
-capability-declaration practice into Twenty's MCP server regardless of anything else in this report.
+capability-declaration practice into SeaRM's MCP server regardless of anything else in this report.
 
 ---
 
@@ -1424,8 +1424,8 @@ actually changed as `"field: before -> after"`, joined with `; `. Every audit ac
 `by` is always the resolved actor email (never a raw token or id), and `target` is the stable `kind/internal-id`
 form (§1.6) so history for a record survives even if its short handle were ever regenerated.
 
-**Disposition: BUILD NOW** as a design pattern layered onto Twenty's existing audit/activity infrastructure (Twenty
-already has an audit trail per the charter's "Preserve Twenty as the system of record" list). What's specifically
+**Disposition: BUILD NOW** as a design pattern layered onto SeaRM's existing audit/activity infrastructure (SeaRM
+already has an audit trail per the charter's "Preserve SeaRM as the system of record" list). What's specifically
 worth adding if not already present: (a) the **field-level before→after diff computation on write**, curated per
 entity to exclude noisy fields, rather than dumping full record snapshots; (b) a closed `entity.verb` action-name
 taxonomy for greppability; (c) explicitly distinguishing `.upsert` from `.create`/`.update` as its own audit verb
@@ -1486,7 +1486,7 @@ action, evidence extraction) needs both "which agent/token/workflow actually per
 covered by existing `AgentRun`/audit machinery per the charter) **and** an independent "which human/team this work
 was represented as/for" field, because those are genuinely different questions an auditor or a rep will ask
 ("did the AI do this?" vs. "whose account did this affect/was this framed as?"). Recommend adding an explicit
-`representedPrincipal`/`onBehalfOf` axis to Twenty's Activity/Timeline and to the `Proposal`/audit event shape,
+`representedPrincipal`/`onBehalfOf` axis to SeaRM's Activity/Timeline and to the `Proposal`/audit event shape,
 separate from the existing agent/workflow/user actor field.
 
 ---
@@ -1509,13 +1509,13 @@ before rendering, and `localizedSlice(list, loc)` for pages. Rendering then uses
 which formats in the value's own location — so the localization decision lives entirely at the call site and the
 renderer stays location-agnostic. Storage, filtering (`colTime` → Unix seconds), and cursor values are all UTC.
 
-**Disposition: DEFER — no action needed.** Twenty already has to solve workspace-timezone display somewhere in its
+**Disposition: DEFER — no action needed.** SeaRM already has to solve workspace-timezone display somewhere in its
 existing UI/API layer; there is nothing crmkit does here that isn't standard practice. Not worth a scouting
 recommendation beyond noting it's correctly done (store UTC, localize at read).
 
 ---
 
-### 1.19 Dual-dialect SQL store abstraction (SQLite for local/dev, PostgreSQL for prod) via a small `dialect` interface (rank: LOW for Twenty — architecture mismatch)
+### 1.19 Dual-dialect SQL store abstraction (SQLite for local/dev, PostgreSQL for prod) via a small `dialect` interface (rank: LOW for SeaRM — architecture mismatch)
 
 **Files:** `internal/store/dialect.go`, `internal/store/sqlite.go`, `internal/store/postgres.go`.
 
@@ -1524,9 +1524,9 @@ handful of syntax differences (`LIKE` vs `ILIKE`, JSON extraction functions, etc
 rather than using an ORM. This lets a self-hoster run zero-dependency SQLite while cloud runs Postgres, off one
 codebase.
 
-**Disposition: DROP — architecture mismatch, not applicable.** Twenty is already Postgres-only via TypeORM/NestJS
-with a mature multi-tenant schema-per-workspace (or row-level, per Twenty's actual implementation) model; a
-hand-rolled dual-dialect layer solves a problem Twenty doesn't have and Twenty's ORM already solves better for its
+**Disposition: DROP — architecture mismatch, not applicable.** SeaRM is already Postgres-only via TypeORM/NestJS
+with a mature multi-tenant schema-per-workspace (or row-level, per SeaRM's actual implementation) model; a
+hand-rolled dual-dialect layer solves a problem SeaRM doesn't have and SeaRM's ORM already solves better for its
 stack. No trigger to revisit — this is a permanent no, not a deferred maybe.
 
 ---
@@ -1627,17 +1627,17 @@ allowlist   -> /whoami /search /contacts /companies /deals /tasks /campaigns
 
 | Capability | Where | Reason |
 |---|---|---|
-| Dual SQLite/PostgreSQL store dialect abstraction | `internal/store/dialect.go`, `sqlite.go`, `postgres.go` | Architecture mismatch — Twenty is Postgres/TypeORM already; solves a problem Twenty doesn't have. |
-| Plain-text-by-default HTTP content negotiation (`render.WantJSON`/`Respond`) as a whole-API transport | `internal/render/render.go` | Twenty's transport is GraphQL; a parallel plain-text API is real ongoing surface cost. Compact output belongs at the MCP tool-response layer instead (see §1.7 disposition). |
+| Dual SQLite/PostgreSQL store dialect abstraction | `internal/store/dialect.go`, `sqlite.go`, `postgres.go` | Architecture mismatch — SeaRM is Postgres/TypeORM already; solves a problem SeaRM doesn't have. |
+| Plain-text-by-default HTTP content negotiation (`render.WantJSON`/`Respond`) as a whole-API transport | `internal/render/render.go` | SeaRM's transport is GraphQL; a parallel plain-text API is real ongoing surface cost. Compact output belongs at the MCP tool-response layer instead (see §1.7 disposition). |
 | Free-text query-string filter DSL (`?field=op:value`) as literal implementation | `internal/server/query.go` | GraphQL's typed filter/orderBy inputs already parameterize by construction; the SQL-identifier-injection problem this DSL solves is largely moot on a typed schema. Keep only the whitelist-and-teach-in-error *principle* for the MCP layer. |
-| Internal-id vs. handle two-tier identifier scheme, in full | `internal/protocol/protocol.go` `NewID`/`NewHandle` | Twenty already has UUID PKs; a second internal-id layer is pure duplication. Only the *short agent-facing alias* idea is worth keeping, scoped to the MCP surface. |
-| Email-OTP login as the *general* auth mechanism | `internal/auth/*`, `handlers_auth.go` | Twenty already has its own auth/SSO; crmkit's OTP flow exists only because crmkit has no other login system. Reuse Twenty's login inside the ported OAuth-AS flow (§1.10) instead of porting OTP. |
-| Single-tenant-workspace-per-token bearer model as the whole auth story | Repo-wide | Twenty is natively multi-tenant with roles/permissions/SSO; crmkit's bearer-token-is-the-whole-security-model is strictly weaker and is superseded by Twenty's existing permission system — only the *OAuth issuance flow* around it (§1.10) is worth taking, not the token-is-authority model itself. |
-| Workspace plan/quota subsystem as a literal parallel implementation | `internal/server/quota.go` | Twenty's billing/entitlements system is already the system of record for this; duplicating it here would fight the charter's "Preserve Twenty as the system of record" mandate. |
-| `assignee`/`owner` as bare free-text email strings (not FKs) | `protocol.go` Contact/Ticket/Task | Reasonable in a single-tenant Go service with no real user/permission model; actively wrong for Twenty, which has real workspace members with roles and permissions — assignee should be a proper member reference. Flagged explicitly under Ticket (§1.12) as a rejected sub-decision. |
-| Timezone localization pattern | `protocol.go` `Localized()` | Already-standard practice; Twenty already needs to solve this somewhere. Nothing novel to port. |
+| Internal-id vs. handle two-tier identifier scheme, in full | `internal/protocol/protocol.go` `NewID`/`NewHandle` | SeaRM already has UUID PKs; a second internal-id layer is pure duplication. Only the *short agent-facing alias* idea is worth keeping, scoped to the MCP surface. |
+| Email-OTP login as the *general* auth mechanism | `internal/auth/*`, `handlers_auth.go` | SeaRM already has its own auth/SSO; crmkit's OTP flow exists only because crmkit has no other login system. Reuse SeaRM's login inside the ported OAuth-AS flow (§1.10) instead of porting OTP. |
+| Single-tenant-workspace-per-token bearer model as the whole auth story | Repo-wide | SeaRM is natively multi-tenant with roles/permissions/SSO; crmkit's bearer-token-is-the-whole-security-model is strictly weaker and is superseded by SeaRM's existing permission system — only the *OAuth issuance flow* around it (§1.10) is worth taking, not the token-is-authority model itself. |
+| Workspace plan/quota subsystem as a literal parallel implementation | `internal/server/quota.go` | SeaRM's billing/entitlements system is already the system of record for this; duplicating it here would fight the charter's "Preserve SeaRM as the system of record" mandate. |
+| `assignee`/`owner` as bare free-text email strings (not FKs) | `protocol.go` Contact/Ticket/Task | Reasonable in a single-tenant Go service with no real user/permission model; actively wrong for SeaRM, which has real workspace members with roles and permissions — assignee should be a proper member reference. Flagged explicitly under Ticket (§1.12) as a rejected sub-decision. |
+| Timezone localization pattern | `protocol.go` `Localized()` | Already-standard practice; SeaRM already needs to solve this somewhere. Nothing novel to port. |
 | Single generic MCP `request` tool as the tool-surface shape | `mcp_tools.go` | Fails per-tool safety annotation granularity that MCP hosts/directories and the charter's Proposal typing both require. The file's own comments flag this as a known compromise for a single-agent private CRM, not a target design. Keep only the allowlist-of-reachable-routes and manual-in-description sub-patterns. |
 | crmkit's specific ticket lifecycle enum (`open/pending/solved`) as final | `protocol.go` Ticket.Status | Explicitly marked incomplete by crmkit's own comments ("on-hold, closed and the full lifecycle come later"). Worth using as a starting point, not as the finished state machine — a support-ticket vertical app should design its own complete lifecycle. |
-| Campaign as *only* a collection anchor, no outreach/send mechanism | `protocol.go` Campaign comment | This is crmkit's own acknowledged scope gap ("an email/outreach object attaches to a campaign later" — never built). Not a rejection of the Campaign model itself (§1.13 is BUILD NOW) — flagged here so nobody mistakes the *absence* of outreach/sequencing in crmkit's Campaign for a design decision; it's an unfinished feature, and Twenty's own workflow/outreach mechanisms should fill that gap rather than waiting for a crmkit pattern that doesn't exist yet. |
+| Campaign as *only* a collection anchor, no outreach/send mechanism | `protocol.go` Campaign comment | This is crmkit's own acknowledged scope gap ("an email/outreach object attaches to a campaign later" — never built). Not a rejection of the Campaign model itself (§1.13 is BUILD NOW) — flagged here so nobody mistakes the *absence* of outreach/sequencing in crmkit's Campaign for a design decision; it's an unfinished feature, and SeaRM's own workflow/outreach mechanisms should fill that gap rather than waiting for a crmkit pattern that doesn't exist yet. |
 
 No capability found during this scout was excluded from both §1 (inventory + disposition) and this table.

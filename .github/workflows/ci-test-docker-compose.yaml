@@ -17,7 +17,7 @@ jobs:
     uses: ./.github/workflows/changed-files.yaml
     with:
       files: |
-        packages/twenty-docker/**
+        packages/searm-docker/**
         docker-compose.yml
   test-compose:
     needs: changed-files-check
@@ -38,8 +38,8 @@ jobs:
           echo "Patching docker-compose.yml..."
           yq eval 'del(.services.server.image)' -i docker-compose.yml
           yq eval '.services.server.build.context = "../../"' -i docker-compose.yml
-          yq eval '.services.server.build.dockerfile = "./packages/twenty-docker/twenty/Dockerfile"' -i docker-compose.yml
-          yq eval '.services.server.build.target = "twenty"' -i docker-compose.yml
+          yq eval '.services.server.build.dockerfile = "./packages/searm-docker/searm/Dockerfile"' -i docker-compose.yml
+          yq eval '.services.server.build.target = "searm"' -i docker-compose.yml
           yq eval '.services.server.restart = "no"' -i docker-compose.yml
 
           echo "Setting up .env file..."
@@ -61,10 +61,10 @@ jobs:
 
           echo "Waiting for database to start..."
           count=0
-          while [ ! $(docker inspect --format='{{.State.Health.Status}}' twenty-db-1) = "healthy" ]; do
+          while [ ! $(docker inspect --format='{{.State.Health.Status}}' searm-db-1) = "healthy" ]; do
               sleep 1;
               count=$((count+1));
-              if [ $(docker inspect --format='{{.State.Status}}' twenty-db-1) = "exited" ]; then
+              if [ $(docker inspect --format='{{.State.Status}}' searm-db-1) = "exited" ]; then
                   echo "Database exited"
                   docker compose logs db
                   exit 1
@@ -79,10 +79,10 @@ jobs:
 
           echo "Waiting for server to start..."
           count=0
-          while [ ! $(docker inspect --format='{{.State.Health.Status}}' twenty-server-1) = "healthy" ]; do
+          while [ ! $(docker inspect --format='{{.State.Health.Status}}' searm-server-1) = "healthy" ]; do
               sleep 1;
               count=$((count+1));
-              if [ $(docker inspect --format='{{.State.Status}}' twenty-server-1) = "exited" ]; then
+              if [ $(docker inspect --format='{{.State.Status}}' searm-server-1) = "exited" ]; then
                   echo "Server exited"
                   docker compose logs server
                   exit 1
@@ -94,7 +94,7 @@ jobs:
               fi
               echo "Still waiting for server... (${count}/300s)"
           done
-        working-directory: ./packages/twenty-docker/
+        working-directory: ./packages/searm-docker/
   test-app-dev:
     needs: changed-files-check
     if: needs.changed-files-check.outputs.any_changed == 'true'
@@ -111,24 +111,24 @@ jobs:
           sudo systemctl restart docker
       - name: Create frontend placeholder
         run: |
-          mkdir -p packages/twenty-front/build
-          echo '<html><body>CI placeholder</body></html>' > packages/twenty-front/build/index.html
+          mkdir -p packages/searm-front/build
+          echo '<html><body>CI placeholder</body></html>' > packages/searm-front/build/index.html
       - name: Build app-dev image
         run: |
           docker build \
-            --target twenty-app-dev \
-            -f packages/twenty-docker/twenty/Dockerfile \
-            -t twenty-app-dev-ci \
+            --target searm-app-dev \
+            -f packages/searm-docker/searm/Dockerfile \
+            -t searm-app-dev-ci \
             .
       - name: Start container
         run: |
-          docker run -d --name twenty-app-dev \
+          docker run -d --name searm-app-dev \
             -p 2020:2020 \
-            twenty-app-dev-ci
-          docker logs twenty-app-dev -f &
+            searm-app-dev-ci
+          docker logs searm-app-dev -f &
       - name: Wait for server health
         run: |
-          echo "Waiting for twenty-app-dev to become healthy..."
+          echo "Waiting for searm-app-dev to become healthy..."
           count=0
           while true; do
             status=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:2020/healthz 2>/dev/null || echo "000")
@@ -138,17 +138,17 @@ jobs:
               break
             fi
 
-            container_status=$(docker inspect --format='{{.State.Status}}' twenty-app-dev 2>/dev/null || echo "unknown")
+            container_status=$(docker inspect --format='{{.State.Status}}' searm-app-dev 2>/dev/null || echo "unknown")
             if [ "$container_status" = "exited" ]; then
               echo "Container exited unexpectedly"
-              docker logs twenty-app-dev
+              docker logs searm-app-dev
               exit 1
             fi
 
             count=$((count+1))
             if [ $count -gt 300 ]; then
               echo "Server did not become healthy within 5 minutes"
-              docker logs twenty-app-dev
+              docker logs searm-app-dev
               exit 1
             fi
             echo "Still waiting... (${count}/300s) [HTTP ${status}]"

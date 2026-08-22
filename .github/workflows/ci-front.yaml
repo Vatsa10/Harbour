@@ -26,12 +26,12 @@ jobs:
       files: |
         package.json
         yarn.lock
-        packages/twenty-front/**
-        packages/twenty-front-component-renderer/**
-        packages/twenty-ui/**
-        packages/twenty-shared/**
-        packages/twenty-sdk/**
-        !packages/twenty-sdk/package.json
+        packages/searm-front/**
+        packages/searm-front-component-renderer/**
+        packages/searm-ui/**
+        packages/searm-shared/**
+        packages/searm-sdk/**
+        !packages/searm-sdk/package.json
   front-sb-build:
     needs: changed-files-check
     if: >-
@@ -52,14 +52,14 @@ jobs:
       - name: Diagnostic disk space issue
         run: df -h
       - name: Front / Write .env
-        run: npx nx reset:env twenty-front
+        run: npx nx reset:env searm-front
       - name: Front / Build storybook
-        run: npx nx storybook:build twenty-front
+        run: npx nx storybook:build searm-front
       - name: Upload storybook build
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: storybook-static
-          path: packages/twenty-front/storybook-static
+          path: packages/searm-front/storybook-static
           retention-days: 1
       - name: Save storybook build cache
         uses: ./.github/actions/save-cache
@@ -91,17 +91,17 @@ jobs:
         with:
           key: ${{ env.STORYBOOK_BUILD_CACHE_KEY_FOR_RESTORE_ACTION }}
       - name: Clean stale storybook vitest cache
-        run: rm -rf packages/twenty-front/node_modules/.cache/storybook
+        run: rm -rf packages/searm-front/node_modules/.cache/storybook
       - name: Build dependencies
         run: |
-          npx nx build twenty-shared
-          npx nx build twenty-ui
-          npx nx build twenty-front-component-renderer
+          npx nx build searm-shared
+          npx nx build searm-ui
+          npx nx build searm-front-component-renderer
       - name: Download storybook build
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: storybook-static
-          path: packages/twenty-front/storybook-static
+          path: packages/searm-front/storybook-static
       - name: Resolve Playwright version
         id: playwright-version
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
@@ -114,30 +114,30 @@ jobs:
       - name: Install Playwright
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: |
-          cd packages/twenty-front
+          cd packages/searm-front
           npx playwright install chromium
       - name: Front / Write .env
-        run: npx nx reset:env twenty-front
+        run: npx nx reset:env searm-front
       - name: Serve storybook & run tests
         run: |
-          npx http-server packages/twenty-front/storybook-static --port 6006 --silent &
+          npx http-server packages/searm-front/storybook-static --port 6006 --silent &
           timeout 30 bash -c 'until curl -sf http://localhost:6006 > /dev/null 2>&1; do sleep 1; done'
-          npx nx storybook:test twenty-front --configuration=${{ matrix.storybook_scope }} --shard=${{ matrix.shard }}/${{ env.SHARD_COUNTER }}
+          npx nx storybook:test searm-front --configuration=${{ matrix.storybook_scope }} --shard=${{ matrix.shard }}/${{ env.SHARD_COUNTER }}
       - name: Upload screenshots for visual regression
         if: always() && !cancelled() && matrix.storybook_scope != 'performance'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: argos-screenshots-twenty-front-${{ matrix.storybook_scope }}-${{ matrix.shard }}
-          path: packages/twenty-front/screenshots
+          name: argos-screenshots-searm-front-${{ matrix.storybook_scope }}-${{ matrix.shard }}
+          path: packages/searm-front/screenshots
           retention-days: 1
           overwrite: true
       # - name: Rename coverage file
       #   run: |
-      #     if [ -f "packages/twenty-front/coverage/storybook/coverage-final.json" ]; then
-      #       mv packages/twenty-front/coverage/storybook/coverage-final.json packages/twenty-front/coverage/storybook/coverage-shard-${{matrix.shard}}.json
+      #     if [ -f "packages/searm-front/coverage/storybook/coverage-final.json" ]; then
+      #       mv packages/searm-front/coverage/storybook/coverage-final.json packages/searm-front/coverage/storybook/coverage-shard-${{matrix.shard}}.json
       #     else
       #       echo "Error: coverage-final.json not found"
-      #       ls -la packages/twenty-front/coverage/storybook/ || echo "Coverage directory does not exist"
+      #       ls -la packages/searm-front/coverage/storybook/ || echo "Coverage directory does not exist"
       #       exit 1
       #     fi
       # - name: Upload coverage artifact
@@ -145,13 +145,13 @@ jobs:
       #   with:
       #     retention-days: 1
       #     name: coverage-artifacts-${{ matrix.storybook_scope }}-${{ github.run_id }}-${{ matrix.shard }}
-      #     path: packages/twenty-front/coverage/storybook/coverage-shard-${{matrix.shard}}.json
+      #     path: packages/searm-front/coverage/storybook/coverage-shard-${{matrix.shard}}.json
   # merge-reports-and-check-coverage:
   #   timeout-minutes: 30
   #   runs-on: ubuntu-latest
   #   needs: front-sb-test
   #   env:
-  #     PATH_TO_COVERAGE: packages/twenty-front/coverage/storybook
+  #     PATH_TO_COVERAGE: packages/searm-front/coverage/storybook
   #   strategy:
   #     matrix:
   #       storybook_scope: [modules, pages, performance]
@@ -171,7 +171,7 @@ jobs:
   #         mkdir -p ${{ env.PATH_TO_COVERAGE }}
   #         npx nyc merge coverage-artifacts ${{ env.PATH_TO_COVERAGE }}/coverage-storybook.json
   #     - name: Checking coverage
-  #       run: npx nx storybook:coverage twenty-front --checkCoverage=true --configuration=${{ matrix.storybook_scope }}
+  #       run: npx nx storybook:coverage searm-front --checkCoverage=true --configuration=${{ matrix.storybook_scope }}
   front-sb-screenshots:
     timeout-minutes: 5
     runs-on: ubuntu-latest
@@ -181,13 +181,13 @@ jobs:
       - name: Download shard screenshot artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          pattern: argos-screenshots-twenty-front-*
+          pattern: argos-screenshots-searm-front-*
           merge-multiple: true
           path: screenshots
       - name: Upload merged screenshots artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: argos-screenshots-twenty-front
+          name: argos-screenshots-searm-front
           path: screenshots
           retention-days: 1
           overwrite: true
@@ -245,14 +245,14 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/yarn-install
       - name: Front / Write .env
-        run: npx nx reset:env twenty-front
+        run: npx nx reset:env searm-front
       - name: Build frontend
-        run: npx nx build twenty-front
+        run: npx nx build searm-front
       # - name: Upload frontend build artifact
       #   uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       #   with:
       #     name: frontend-build
-      #     path: packages/twenty-front/build
+      #     path: packages/searm-front/build
       #     retention-days: 1
   ci-front-status-check:
     if: always() && !cancelled()

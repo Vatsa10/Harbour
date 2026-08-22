@@ -48,19 +48,19 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/yarn-install
 
-      - name: Build twenty-shared
-        run: npx nx build twenty-shared
+      - name: Build searm-shared
+        run: npx nx build searm-shared
 
       # Strict mode fails if there are missing website translations.
       - name: Compile website translations
         id: compile_translations_strict
-        run: npx nx run twenty-website:lingui:compile --strict
+        run: npx nx run searm-website:lingui:compile --strict
         continue-on-error: true
 
       - name: Stash any changes before pulling translations
         run: |
           git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@twenty.com'
+          git config --global user.email 'github-actions@searm.com'
           git add .
           git stash
 
@@ -73,7 +73,7 @@ jobs:
           download_translations: true
           export_only_approved: false
           localization_branch_name: i18n-website
-          base_url: 'https://twenty.api.crowdin.com'
+          base_url: 'https://searm.api.crowdin.com'
           auto_approve_imported: false
           import_eq_suggestions: false
           download_sources: false
@@ -99,9 +99,9 @@ jobs:
       - name: Compile website translations
         id: compile_translations
         run: |
-          npx nx run twenty-website:lingui:compile
+          npx nx run searm-website:lingui:compile
           git status
-          git add packages/twenty-website/src/locales
+          git add packages/searm-website/src/locales
           if ! git diff --staged --quiet --exit-code; then
             git commit -m "chore: compile website translations"
             echo "changes_detected=true" >> $GITHUB_OUTPUT
@@ -124,15 +124,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Mint twenty-infra dispatch token
+      - name: Mint searm-infra dispatch token
         id: app-token
         if: steps.compile_translations.outputs.changes_detected == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          client-id: ${{ vars.TWENTY_WORKFLOW_DISPATCHER_CLIENT_ID }}
-          private-key: ${{ secrets.TWENTY_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
-          owner: twentyhq
-          repositories: twenty-infra
+          client-id: ${{ vars.SEARM_WORKFLOW_DISPATCHER_CLIENT_ID }}
+          private-key: ${{ secrets.SEARM_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
+          owner: Vatsa10
+          repositories: searm-infra
           permission-actions: write
 
       - name: Trigger i18n automerge
@@ -140,4 +140,4 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          gh workflow run automerge-i18n.yaml --repo twentyhq/twenty-infra --ref main
+          gh workflow run automerge-i18n.yaml --repo Vatsa10/Harbour-infra --ref main

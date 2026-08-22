@@ -5,13 +5,13 @@ If anything stopped — host crash, session limit, closed laptop — start here.
 ## 1. What state are we in?
 
 ```bash
-cd d:/Files/Vatsa/Projects/AI-CRM/twenty
+cd d:/Files/Vatsa/Projects/AI-CRM/searm
 git log --oneline 6e1c710a7d..HEAD | wc -l     # commit count on the product branch
 git log --oneline -8
 git status --short                              # uncommitted work an agent left behind
 ```
 
-Branch is `ai-native-crm`. Branch point is `6e1c710a7d`. **Never push** — no push remote exists by design, and `upstream` is twentyhq/twenty which must never receive these commits.
+Branch is `ai-native-crm`. Branch point is `6e1c710a7d`. **Never push** — no push remote exists by design, and `upstream` is Vatsa10/Harbour which must never receive these commits.
 
 ## STATE AT 2026-08-18 CHECKPOINT
 
@@ -46,13 +46,13 @@ The session limit stopped 9 of the ship gate's 10 agents mid-run. Nothing was lo
 1. **Start Docker first.** It dies with the host every time, and two reviews have already reported environmental failures as code defects because the database was down.
    ```bash
    # start Docker Desktop, then:
-   cd d:/Files/Vatsa/Projects/AI-CRM/twenty
-   docker compose -f packages/twenty-docker/docker-compose.dev.yml up -d
+   cd d:/Files/Vatsa/Projects/AI-CRM/searm
+   docker compose -f packages/searm-docker/docker-compose.dev.yml up -d
    # wait for 5433 and 6380 to listen before dispatching anything
    ```
 2. **Ship gate** — `Workflow({ scriptPath: "d:/Files/Vatsa/Projects/AI-CRM/docs/superpowers/final-verification-workflow.js", resumeFromRunId: "wf_8260d7e4-15c" })`
    The collision audit replays from cache. Contract audit, execution proof, up to 3 fix→re-verify rounds and the verdict all re-run. The three carried Criticals (C3 fact uniqueness, C4 dead research on upgraded workspaces, C5 model-asserted evidence) are named explicitly in the fix-round prompts.
-3. **Enterprise removal** — `Workflow({ scriptPath: "C:/Users/Vatsa/.claude/projects/D--Files-Vatsa-Projects-AI-CRM-twenty-packages-twenty-server-src/96983ed1-4a2c-48b6-ae79-e19f7b4e4c93/workflows/scripts/searm-enterprise-rewrite-wf_51024019-0b3.js", resumeFromRunId: "wf_51024019-0b3" })`
+3. **Enterprise removal** — `Workflow({ scriptPath: "C:/Users/Vatsa/.claude/projects/D--Files-Vatsa-Projects-AI-CRM-searm-packages-searm-server-src/96983ed1-4a2c-48b6-ae79-e19f7b4e4c93/workflows/scripts/searm-enterprise-rewrite-wf_51024019-0b3.js", resumeFromRunId: "wf_51024019-0b3" })`
    Audit, both specs and both implementations are DONE and cached. Only the removal phase remains: delete the 256 `@license Enterprise` source files now that row-level permissions are rewritten (6 commits, mutation-checked) and billing/SSO are dispositioned.
 4. Then the rebrand, then cleanup and restructure.
 
@@ -81,7 +81,7 @@ The session limit stopped 9 of the ship gate's 10 agents mid-run. Nothing was lo
 - `8fac886b0a` auto-create policy and import dedup
 - `3f6b1d6d72` proposal supersession, failure-envelope helper, gate spec updates
 
-**Still open:** Phase 2's 5 Criticals and Phase 3's 3 Criticals, whose fix waves had not completed when the session ended. Reviews are at `twenty/.superpowers/sdd/finish/phase-{2,3,4}-review.md`.
+**Still open:** Phase 2's 5 Criticals and Phase 3's 3 Criticals, whose fix waves had not completed when the session ended. Reviews are at `searm/.superpowers/sdd/finish/phase-{2,3,4}-review.md`.
 
 **Run status when the session ended:**
 - `wf_326defb6-3fa` (main) — was ACTIVE mid fix-wave. Resume it first.
@@ -101,17 +101,17 @@ Run at most two. When one finishes, start the next from the queue below. The ent
 Completed agents replay from cache, so resuming is cheap and repeats nothing.
 
 ```
-Workflow({ scriptPath: "C:\\Users\\Vatsa\\.claude\\projects\\D--Files-Vatsa-Projects-AI-CRM-twenty\\96983ed1-4a2c-48b6-ae79-e19f7b4e4c93\\workflows\\scripts\\searm-all-remaining-wf_326defb6-3fa.js", resumeFromRunId: "wf_326defb6-3fa" })
+Workflow({ scriptPath: "C:\\Users\\Vatsa\\.claude\\projects\\D--Files-Vatsa-Projects-AI-CRM-searm\\96983ed1-4a2c-48b6-ae79-e19f7b4e4c93\\workflows\\scripts\\searm-all-remaining-wf_326defb6-3fa.js", resumeFromRunId: "wf_326defb6-3fa" })
 ```
 Reviews of phases 2/3/4, their fix waves, nine carried defects, notification primitive, evidence dashboard, whole-branch review.
 
 ```
-Workflow({ scriptPath: "C:\\Users\\Vatsa\\.claude\\projects\\D--Files-Vatsa-Projects-AI-CRM-twenty-packages-twenty-server-src\\96983ed1-4a2c-48b6-ae79-e19f7b4e4c93\\workflows\\scripts\\searm-porting-and-features-wf_478246e7-789.js", resumeFromRunId: "wf_478246e7-789" })
+Workflow({ scriptPath: "C:\\Users\\Vatsa\\.claude\\projects\\D--Files-Vatsa-Projects-AI-CRM-searm-packages-searm-server-src\\96983ed1-4a2c-48b6-ae79-e19f7b4e4c93\\workflows\\scripts\\searm-porting-and-features-wf_478246e7-789.js", resumeFromRunId: "wf_478246e7-789" })
 ```
 Three ported capabilities, record briefs, proposal supersession, stale sweep, apps to `workspace:*`.
 
 ```
-Workflow({ scriptPath: "C:\\Users\\Vatsa\\.claude\\projects\\D--Files-Vatsa-Projects-AI-CRM-twenty-packages-twenty-server-src\\96983ed1-4a2c-48b6-ae79-e19f7b4e4c93\\workflows\\scripts\\searm-enterprise-rewrite-wf_51024019-0b3.js", resumeFromRunId: "wf_51024019-0b3" })
+Workflow({ scriptPath: "C:\\Users\\Vatsa\\.claude\\projects\\D--Files-Vatsa-Projects-AI-CRM-searm-packages-searm-server-src\\96983ed1-4a2c-48b6-ae79-e19f7b4e4c93\\workflows\\scripts\\searm-enterprise-rewrite-wf_51024019-0b3.js", resumeFromRunId: "wf_51024019-0b3" })
 ```
 Audit, spec and reimplement billing / SSO / row-level permissions, then remove the 267 `@license Enterprise` files. Agents in this run are barred from reading those files — they write from our charter and from public standards (SAML 2.0, OIDC, Stripe's public API), because reading-then-reimplementing produces a derivative work. Deleting billing outright is an explicitly allowed conclusion and probably the right one.
 
@@ -130,11 +130,11 @@ All-Opus end-to-end verification: collision audit between the two parallel runs,
 
 ## 5. Environment gotchas that have cost real time here
 
-- **Never run bare `npx jest`** — it defaults to 23 workers on this 24-core box and has OOM-killed the host three times. Use `cd packages/twenty-server && bash ../../scripts/lowmem.sh test|itest|types|full [pattern]`.
+- **Never run bare `npx jest`** — it defaults to 23 workers on this 24-core box and has OOM-killed the host three times. Use `cd packages/searm-server && bash ../../scripts/lowmem.sh test|itest|types|full [pattern]`.
 - Postgres is on **5433**, Redis on **6380** (docker-compose.dev.yml). `:5432` is an unrelated native Windows Postgres that has already fooled two agents into thinking the database was up.
 - Nx targets are broken on Windows here. Use `npx tsgo -p tsconfig.json --noEmit` directly.
 - `npx eslint` has no resolvable flat config. If lint cannot run, say so — do not claim it passed.
-- `twenty dev:build` prints "Build succeeded" while silently dropping units that failed to compile. Inspect the built manifest.
+- `searm dev:build` prints "Build succeeded" while silently dropping units that failed to compile. Inspect the built manifest.
 - A `yarn install` now re-downloads ~3.3GB; the Yarn cache was cleared to reclaim disk.
 
 ## 6. Rules that do not lapse

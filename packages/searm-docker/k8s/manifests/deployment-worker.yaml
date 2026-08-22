@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: searmcrm-worker
+  name: searmcrm-worker
+  namespace: searmcrm
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: searmcrm-worker
+  template:
+    metadata:
+      labels:
+        app: searmcrm-worker
+    spec:
+      containers:
+        - name: searmcrm
+          image: searmcrm/searm:latest
+          imagePullPolicy: Always
+          env:
+            - name: SERVER_URL
+              value: "https://crm.example.com:443"
+            - name: PG_DATABASE_URL
+              value: "postgres://postgres:postgres@searmcrm-db.searmcrm.svc.cluster.local/default"
+            - name: DISABLE_DB_MIGRATIONS
+              value: "false" # it already runs on the server
+            - name: STORAGE_TYPE
+              value: "local"
+            - name: "REDIS_URL"
+              value: "redis://searmcrm-redis.searmcrm.svc.cluster.local:6379"
+            - name: APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: tokens
+                  key: accessToken
+          command:
+            - yarn
+            - worker:prod
+          resources:
+            requests:
+              memory: "1024Mi"
+              cpu: "250m"
+            limits:
+              memory: "2048Mi"
+              cpu: "1000m"
+          stdin: true
+          tty: true
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always

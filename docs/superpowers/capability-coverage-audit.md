@@ -2,21 +2,21 @@
 
 **Date:** 2026-08-17 · **Method:** every row of `docs/superpowers/plans/2026-08-05-phases-2-5-program.md` §6
 (plus one row from §5) checked against the code actually on disk at
-`d:/Files/Vatsa/Projects/AI-CRM/twenty` by grepping for the named symbol, opening the file, and confirming the
+`d:/Files/Vatsa/Projects/AI-CRM/searm` by grepping for the named symbol, opening the file, and confirming the
 symbol has a production caller. **The program table was not trusted.** Where a claim and the disk disagree, the
 disk wins and the row is marked accordingly.
 
 **Result: 101 rows audited — 47 SHIPPED, 52 CUT, 2 MISSING.**
 
 `CUT` here means "deliberately not built", covering both the program's `CUT`-with-a-trigger rows and its `N/A`
-rows (reference-only, or already solved by existing Twenty infrastructure); §6's own framing is that every
+rows (reference-only, or already solved by existing SeaRM infrastructure); §6's own framing is that every
 capability is either built by a named task or in the not-built column, so both collapse to one verified status.
 Verification for a CUT row is the *absence* of the symbol, spot-checked — not merely the absence of a claim.
 
 | Status | Count | Meaning |
 | --- | --- | --- |
 | **SHIPPED** | 47 | Claimed BUILT / ALREADY EXISTS / RESOLVED, and a file on disk proves it |
-| **CUT** | 52 | Claimed CUT or N/A, and verified absent (or verified as pre-existing Twenty infrastructure) |
+| **CUT** | 52 | Claimed CUT or N/A, and verified absent (or verified as pre-existing SeaRM infrastructure) |
 | **MISSING** | 2 | **Claimed built, not found on disk** |
 
 ---
@@ -28,13 +28,13 @@ Verification for a CUT row is the *absence* of the symbol, spot-checked — not 
 | | |
 | --- | --- |
 | **Source repo** | `crm-scout.md` row 25 ("Email/calendar ingestion models"), reinforced by program §2 conflict **C4** and §7 *Inbox and meeting intelligence* step 3 |
-| **Claimed disposition** | **BUILT** — "P3 T3, T4 — Twenty already has messaging/calendar; nothing new modelled". C4 states Phase 3 Task 4 "now calls `EvidenceRecordingService.recordEvidence({ ..., runId: null, sourceType: 'EMAIL_MESSAGE' \| 'CALL_RECORDING' })` before proposing, and Task 1's `createFromExtraction` attaches real `factIds` via `FactLookupService`." §8's Evidence-contract row calls this hole "Closed by C4." |
+| **Claimed disposition** | **BUILT** — "P3 T3, T4 — SeaRM already has messaging/calendar; nothing new modelled". C4 states Phase 3 Task 4 "now calls `EvidenceRecordingService.recordEvidence({ ..., runId: null, sourceType: 'EMAIL_MESSAGE' \| 'CALL_RECORDING' })` before proposing, and Task 1's `createFromExtraction` attaches real `factIds` via `FactLookupService`." §8's Evidence-contract row calls this hole "Closed by C4." |
 | **Verified status** | **MISSING** |
 
 **Evidence of absence.** The module shell exists and contains nothing but the privacy toggle:
 
 ```
-packages/twenty-server/src/modules/structured-extraction/
+packages/searm-server/src/modules/structured-extraction/
   structured-extraction.module.ts
   services/ai-extraction-exclusion.service.ts
   services/__tests__/ai-extraction-exclusion.service.spec.ts
@@ -47,7 +47,7 @@ Four independent greps confirm it:
 
 1. **`recordEvidence` has exactly one production caller**, and it is the agent's own chat tool — not an
    ingestion path:
-   `packages/twenty-server/src/engine/core-modules/tool/tools/record-evidence-tool/record-evidence-tool.ts:50`.
+   `packages/searm-server/src/engine/core-modules/tool/tools/record-evidence-tool/record-evidence-tool.ts:50`.
    Nothing under `modules/messaging/`, `modules/calendar/`, or `modules/structured-extraction/` calls it.
 2. **The `EMAIL_MESSAGE` and `CALL_RECORDING` evidence source types have zero producers.** They are declared in
    `engine/metadata-modules/ai/ai-research/types/evidence.type.ts:8-9` with deliberate `WEAK` strengths and are
@@ -106,7 +106,7 @@ sourceType: string | null;
 ```
 
 The queried shape also differs from the one §5 documents: the front end reads a **flat** `facts { … sourceType }`
-projection (`twenty-front/src/modules/settings/ai-approvals/graphql/queries/pendingProposals.ts:20-25`,
+projection (`searm-front/src/modules/settings/ai-approvals/graphql/queries/pendingProposals.ts:20-25`,
 rendered at `components/ProposalDiffTable.tsx:194-201`), not the nested `facts { evidence { sourceType } }` §5
 describes — consistent with the Phase 2 over-engineering cut recorded in §9 ("replace with a single
 `ProposalItemDTO.facts` resolve field returning a flat projection").
@@ -158,7 +158,7 @@ Legend — **Verified**: `SHIPPED` (file proves it) · `CUT` (verified absent / 
 | 9 | `Evidence` first-class, separate from `Fact` | BUILT P2 T1 | **SHIPPED** | `ai-research/entities/evidence.entity.ts` + `fact.entity.ts`, two tables |
 | 10 | Band-driven apply-vs-propose split | BUILT as propose-always | **SHIPPED** | `ai-write-approval/services/proposal-gate.service.ts` — auto-apply only via explicit `AUTO` policy override |
 | 11 | Permanent dismissal memory | BUILT P2 T2/T9 | **SHIPPED** | `ai-research/services/fact.service.ts:110` `markDismissed`, called at `proposal-execution.service.ts:284` and `:370` (both rejection points) |
-| 12 | Human-authorship supremacy | CUT (review) | CUT | No per-field authorship in Twenty; baseline + dismissal cover it. Trigger: reviewers report proposals over hand-typed values |
+| 12 | Human-authorship supremacy | CUT (review) | CUT | No per-field authorship in SeaRM; baseline + dismissal cover it. Trigger: reviewers report proposals over hand-typed values |
 | 13 | Supersession-not-deletion history | BUILT P2 T2 | **SHIPPED** | `fact.entity.ts:82,85` `supersededAt` / `supersededByFactId`; `types/fact-status.type.ts` |
 | 14 | Two-factor deterministic identity verdict | BUILT P3 T2 | **SHIPPED** | `modules/match-participant/services/identity-resolution.service.ts` (+ spec) |
 | 15 | Record briefs | CUT | CUT | No brief entity or record-page panel. Trigger: a record-page brief surface is scoped |
@@ -167,10 +167,10 @@ Legend — **Verified**: `SHIPPED` (file proves it) · `CUT` (verified absent / 
 | 18 | Durable per-workspace/per-record cost ledger | BUILT P2 T4/T7 | **SHIPPED** | `agent-run.entity.ts:61-70` `elapsedMs`/`inputTokens`/`outputTokens`/`creditsUsedMicro`; written at `agent-task-run.job.ts:137-140` |
 | 19 | `sensitiveWrite` — agent-forbidden actions | BUILT Launch 1 | **SHIPPED** | `ai-write-approval/services/ai-write-policy.service.ts`, `FORBID` mode; gate test "should forbid a write when the policy resolves to FORBID" |
 | 20 | Priority at schedule time (+ per-kind table) | PARTIAL / CUT | **SHIPPED** (field) | `agent-task.entity.ts:51` `priority: number`. The per-kind table stays CUT — one kind exists |
-| 21 | Relevance-scored CRM search | CUT | CUT | Twenty's record search unchanged. Trigger: agents report ranking unusable |
+| 21 | Relevance-scored CRM search | CUT | CUT | SeaRM's record search unchanged. Trigger: agents report ranking unusable |
 | 22 | Per-record `EnrichmentStatus` enum | CUT | CUT | No such enum; derived from `AgentTask`/`AgentRun`. Trigger: the join proves awkward in UI |
 | 23 | Vendor-specific enrichment pipelines | CUT | CUT | No `research_*` vendor tools. Trigger: a vendor is chosen |
-| 24 | `AgentConversation` session bookkeeping | CUT | CUT | Absent. Trigger: Twenty's agent framework proves to lack session continuation |
+| 24 | `AgentConversation` session bookkeeping | CUT | CUT | Absent. Trigger: SeaRM's agent framework proves to lack session continuation |
 | 25 | **Email/calendar ingestion models** | **BUILT P3 T3, T4** | **MISSING** | **See M1.** T3 shipped; T4 (extraction → Evidence → proposal) does not exist |
 | 26 | Suppression / do-not-contact lists | CUT | CUT | Absent. Trigger: outbound send workflows are built |
 | 27 | `AppSetting` singleton | CUT | CUT | Absent. Trigger: never — single-tenant demo plumbing |
@@ -186,9 +186,9 @@ Legend — **Verified**: `SHIPPED` (file proves it) · `CUT` (verified absent / 
 | Fully resolved relation-target labels | CUT | CUT | Trigger: relation-field guesses prove unreliable |
 | `kind`-bucketed diff-field descriptor for the approval UI | CUT | CUT | `ProposalDiffTable.tsx` renders a flat table. Trigger: reviewers report the diff is hard to read |
 | AI-proposable custom-field / schema CRUD | CUT | CUT | Gate treats metadata writes as gated (test: "should gate a metadata write tool"). Trigger: policy overrides used in practice |
-| Full custom-field type taxonomy | N/A | CUT | Twenty has its own field-type system |
+| Full custom-field type taxonomy | N/A | CUT | SeaRM has its own field-type system |
 | Disposable per-import staging store | BUILT P3 T6 | **SHIPPED** | `guided-import/entities/import-batch.entity.ts`, `import-row.entity.ts` |
-| Header-name mapping inference | BUILT (reused) P3 T10 | **SHIPPED** | `twenty-front/src/modules/object-record/spreadsheet-import/hooks/useCreateImportBatch.ts` + `graphql/mutations/{create,prepare,start}ImportBatch.ts` |
+| Header-name mapping inference | BUILT (reused) P3 T10 | **SHIPPED** | `searm-front/src/modules/object-record/spreadsheet-import/hooks/useCreateImportBatch.ts` + `graphql/mutations/{create,prepare,start}ImportBatch.ts` |
 | Sample-value type voting with a confidence floor | CUT | CUT | Trigger: header-only mapping leaves many columns unmapped |
 | Server-side mapping-inference service | CUT (review, phantom) | CUT | Confirmed absent — no `import-mapping-inference.service.ts` anywhere |
 | Own-row identity matching (`MatchableField`) | BUILT P3 T7 | **SHIPPED** | `guided-import/services/import-match-resolution.service.ts`; CREATE/UPDATE/PROPOSE/SKIP consumed at `import-execution.service.ts:147,257` |
@@ -211,13 +211,13 @@ Legend — **Verified**: `SHIPPED` (file proves it) · `CUT` (verified absent / 
 | `WhoAmI` / `ListTeamMembers` / `GuideToPage` tools | N/A | CUT | Agent context already covers these |
 | `AggregateCrm` / `GetCrmSummary` / `SearchCrm` tools | N/A | CUT | `find_many`/`group_by` cover them |
 | AI credit/billing subsystem | N/A | CUT | `AiBillingService` is the system of record |
-| Per-model `write_guard` (api vs prompt) | N/A | CUT | Twenty gates every write server-side |
+| Per-model `write_guard` (api vs prompt) | N/A | CUT | SeaRM gates every write server-side |
 | Chat rate limiting / stream cancellation / retry events | N/A | CUT | Infra hygiene |
 | Chat message feedback (thumbs up/down) | CUT | CUT | Trigger: chat in production, product wants a quality signal |
 | Per-provider prompt caching | N/A | CUT | Provider-level optimisation |
 | Onboarding seed fixtures | N/A | CUT | Fixture data for another schema |
 | `EntityLinkValidator` | N/A | CUT | Folded into import validation |
-| Five hardcoded importer subclasses | N/A | CUT | Twenty's importer is metadata-driven |
+| Five hardcoded importer subclasses | N/A | CUT | SeaRM's importer is metadata-driven |
 
 ### From `crmkit-scout.md` — 6 SHIPPED, 14 CUT
 
@@ -225,7 +225,7 @@ Legend — **Verified**: `SHIPPED` (file proves it) · `CUT` (verified absent / 
 | --- | --- | --- | --- | --- |
 | 1.1 | Agent-safe error envelope | BUILT P4 T1–T4 | **SHIPPED** | `core-modules/tool/types/tool-failure.type.ts`; `tool/utils/build-tool-failure.util.ts` (+ spec); gate FORBID at `proposal-gate.service.ts`; funnel at `tool-provider/services/tool-executor.service.ts` and `tool-provider/utils/tool-error.util.ts`; MCP wire at `engine/api/mcp/services/mcp-tool-executor.service.ts`; end-to-end in `test/integration/graphql/suites/agent-api/agent-api-semantics.integration-spec.ts` |
 | 1.2 | Confirmation-token semantics for destructive actions | BUILT P4 T5 | **SHIPPED** | `ai-write-approval/utils/build-delete-confirmation-token.util.ts` (+ spec); `proposal-gate.service.ts:171,188-190` emits `CONFIRMATION_REQUIRED` on the AUTO-policy delete path only |
-| 1.3 | Email step-up escalation | CUT (review) | CUT | Verified absent: no `escalation_required`, no `stepUp` anywhere in `twenty-server/src`. Trigger: a workspace opts a high-risk *send* into AUTO |
+| 1.3 | Email step-up escalation | CUT (review) | CUT | Verified absent: no `escalation_required`, no `stepUp` anywhere in `searm-server/src`. Trigger: a workspace opts a high-risk *send* into AUTO |
 | 1.4 | Optimistic concurrency (`version` + conditional write) | CUT (review) | CUT | `ProposalItem.baseline` re-check covers it; no agent-visible version protocol. Trigger: AUTO-policy writes become common enough to clobber human edits |
 | 1.5 | Deterministic idempotent-create via upsert-on-natural-key | BUILT (3 mechanisms) | **SHIPPED** | `identity-resolution.service.ts` (P3 T2); `ProposalEntity.sourceKey` used at `import-execution.service.ts:273`; `findDuplicatePendingItem` (P4 T6) |
 | 1.6 | Short opaque handle/ref indirection | CUT | CUT | Verified absent: no `recordAlias`/`shortHandle`. Trigger: token telemetry shows UUID verbosity is material |
@@ -233,18 +233,18 @@ Legend — **Verified**: `SHIPPED` (file proves it) · `CUT` (verified absent / 
 | 1.8 | Cursor keyset pagination + explicit total | BUILT P4 T7 | **SHIPPED** | `record-crud/types/find-records-result.type.ts:4` `hasMore`; computed at `record-crud/services/find-records.service.ts:107,115` |
 | 1.9 | Whitelisted free-text filter DSL | CUT | CUT | GraphQL typed filters parameterize by construction |
 | 1.10 | OAuth 2.1 AS for MCP clients (PKCE, DCR) | ALREADY EXISTS + verified P4 T9 | **SHIPPED** | `engine/api/mcp/guards/mcp-auth.guard.ts` (RFC 9728 challenge); proven by `test/integration/graphql/suites/agent-api/mcp-oauth-scoping.integration-spec.ts` and `test/integration/ai/suites/mcp.controller.integration-spec.ts` |
-| 1.11 | Per-workspace/per-user plan quotas pre-write | CUT | CUT | Twenty's billing/entitlements owns it. Trigger: a load test shows uncapped MCP volume from one OAuth client |
-| 1.12 | Ticket entity and lifecycle | BUILT P5 T3 | **SHIPPED** | `twenty-apps/public/customer-support/src/objects/support-ticket.object.ts` + `support-queue.object.ts`, six relation fields, `indexes/support-ticket-status.index.ts` — a custom object, never core schema |
-| 1.13 | Campaign entity (brief + deduped membership) | CUT (review) | CUT | Verified absent: no `campaigns` app under `twenty-apps/public/`. Trigger: Owner Decision 2, or immediately after Phase 5 proves the framework |
+| 1.11 | Per-workspace/per-user plan quotas pre-write | CUT | CUT | SeaRM's billing/entitlements owns it. Trigger: a load test shows uncapped MCP volume from one OAuth client |
+| 1.12 | Ticket entity and lifecycle | BUILT P5 T3 | **SHIPPED** | `searm-apps/public/customer-support/src/objects/support-ticket.object.ts` + `support-queue.object.ts`, six relation fields, `indexes/support-ticket-status.index.ts` — a custom object, never core schema |
+| 1.13 | Campaign entity (brief + deduped membership) | CUT (review) | CUT | Verified absent: no `campaigns` app under `searm-apps/public/`. Trigger: Owner Decision 2, or immediately after Phase 5 proves the framework |
 | 1.14 | Generic single-tool MCP `request` surface | N/A (split) | CUT | Rejected as a tool shape; per-tool MCP surface with annotations is what shipped |
-| 1.15 | MCP `initialize` server-declared `instructions` | CUT (review) | CUT | `packages/twenty-server/docs/AGENT_API_CONTRACT.md` (P4 T12) is the equivalent. Trigger: a real external MCP client needs in-band guidance |
+| 1.15 | MCP `initialize` server-declared `instructions` | CUT (review) | CUT | `packages/searm-server/docs/AGENT_API_CONTRACT.md` (P4 T12) is the equivalent. Trigger: a real external MCP client needs in-band guidance |
 | 1.16 | Audit log with structured computed diffs | CUT (review) | CUT | `baseline` vs `payload` is the AI-change diff. Trigger: compliance asks for field-level before/after on non-AI writes |
-| 1.17 | `on_behalf_of` delegated-principal axis | CUT (review) | CUT | Verified absent: no `onBehalfOf`/`representedPrincipal` in `twenty-server/src`. Trigger: a delegated-assistant mode |
-| 1.18 | Timezone-aware read-time localization | N/A | CUT | Standard hygiene, already Twenty's problem |
+| 1.17 | `on_behalf_of` delegated-principal axis | CUT (review) | CUT | Verified absent: no `onBehalfOf`/`representedPrincipal` in `searm-server/src`. Trigger: a delegated-assistant mode |
+| 1.18 | Timezone-aware read-time localization | N/A | CUT | Standard hygiene, already SeaRM's problem |
 | 1.19 | Dual SQLite/Postgres dialect abstraction | N/A | CUT | Architecture mismatch — permanent no |
 | §3 | 12 explicitly-rejected items (OTP login, bearer-as-authority, quota subsystem, free-text assignee, internal-id/handle two-tier, …) | N/A | CUT | Each rejected in the scout with a reason; none re-opened, none found on disk |
 
-### From `twenty-anchors.md` — 12 SHIPPED
+### From `searm-anchors.md` — 12 SHIPPED
 
 | Charter entity / open item | Claimed | Verified | Proof |
 | --- | --- | --- | --- |
@@ -257,9 +257,9 @@ Legend — **Verified**: `SHIPPED` (file proves it) · `CUT` (verified absent / 
 | Open item: `ProposalStatus`/`ProposalItemStatus` values | RESOLVED | **SHIPPED** | `ai-write-approval/types/proposal-status.type.ts`, registered at `dtos/proposal.dto.ts:10-12` |
 | Open item: `ActorMetadata` definition | RESOLVED | **SHIPPED** | Reused, not reinvented — `createdByActor: ActorMetadata` on `agent-task.entity.ts:98` and `proposal.entity.ts` |
 | Open item: "approval executes atomically" | RESOLVED (trade-off) | **SHIPPED** | `proposal-execution.service.ts` — per-item durable status + PENDING→APPLYING claim, documented as not-one-transaction |
-| Open item: app-manifest workflow templates | RESOLVED (no; closed by P4 T10) | **SHIPPED** | `modules/workflow/workflow-templates/resolvers/workflow-definition-install.resolver.ts` + `services/workflow-template.service.ts`; consumed by `twenty-apps/public/customer-support/src/utils/seed-workflow.util.ts` |
+| Open item: app-manifest workflow templates | RESOLVED (no; closed by P4 T10) | **SHIPPED** | `modules/workflow/workflow-templates/resolvers/workflow-definition-install.resolver.ts` + `services/workflow-template.service.ts`; consumed by `searm-apps/public/customer-support/src/utils/seed-workflow.util.ts` |
 | Open item: server-side spreadsheet import | RESOLVED (none existed; P3 T6–T10 build it) | **SHIPPED** | `modules/guided-import/` — entities, resolver, validation, match resolution, execution job, failed-rows controller |
-| Open item: `twenty-cli` vs `twenty-sdk` CLI | RESOLVED (`twenty-sdk`) | **SHIPPED** | `twenty-apps/public/customer-support/package.json:25` depends on `twenty-sdk@2.27.0`; build output under `.twenty/output/` |
+| Open item: `searm-cli` vs `searm-sdk` CLI | RESOLVED (`searm-sdk`) | **SHIPPED** | `searm-apps/public/customer-support/package.json:25` depends on `searm-sdk@2.27.0`; build output under `.searm/output/` |
 
 ### Repair-pass rows (§6 C14) — 2 SHIPPED
 

@@ -20,7 +20,7 @@ The join loop consults `hasRowLevelPermissionPredicateApplied` and
 `shouldBypassPermissionChecks`.
 
 Confirmed AGPL call sites:
-- `twenty-orm/repository/workspace-delete-query-builder.ts:27,76`
+- `searm-orm/repository/workspace-delete-query-builder.ts:27,76`
 - `api/common/common-nested-relations-processor/process-nested-relations-v2.helper.ts:510`
 - `api/common/common-query-runners/utils/build-mutation-query-builder.util.ts:46`
 - `api/graphql/graphql-query-runner/group-by/services/group-by-with-records.service.ts:203`
@@ -35,10 +35,10 @@ Confirmed AGPL call sites:
 
 5 specs:
 - `row-level-permission-predicate-graphql-api-exception-handler.util.spec.ts`
-- `twenty-orm/utils/__tests__/apply-row-level-permission-predicates*`
-- `twenty-orm/utils/__tests__/build-row-level-permission-record-filter*`
-- `twenty-orm/utils/__tests__/is-record-matching-rls-row-level-permission-predicate*`
-- `twenty-orm/utils/__tests__/render-row-level-permission-filter-to-sql*`
+- `searm-orm/utils/__tests__/apply-row-level-permission-predicates*`
+- `searm-orm/utils/__tests__/build-row-level-permission-record-filter*`
+- `searm-orm/utils/__tests__/is-record-matching-rls-row-level-permission-predicate*`
+- `searm-orm/utils/__tests__/render-row-level-permission-filter-to-sql*`
 
 ## FORBIDDEN to open
 `validate-row-level-permission-rule-ownership.util.spec.ts` — re-confirmed

@@ -10,7 +10,7 @@ on:
   push:
     branches: ['main']
     paths:
-      - 'packages/twenty-website/**'
+      - 'packages/searm-website/**'
       - '.github/crowdin-website.yml'
       - '.github/workflows/website-i18n-push.yaml'
 
@@ -38,17 +38,17 @@ jobs:
         uses: ./.github/actions/yarn-install
 
       - name: Build dependencies
-        run: npx nx build twenty-shared
+        run: npx nx build searm-shared
 
       - name: Extract website translations
-        run: npx nx run twenty-website:lingui:extract
+        run: npx nx run searm-website:lingui:extract
 
       - name: Check and commit extracted files
         id: check_extract_changes
         run: |
           git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@twenty.com'
-          git add packages/twenty-website/src/locales
+          git config --global user.email 'github-actions@searm.com'
+          git add packages/searm-website/src/locales
           if ! git diff --staged --quiet --exit-code; then
             git commit -m "chore: extract website translations"
             echo "changes_detected=true" >> $GITHUB_OUTPUT
@@ -57,14 +57,14 @@ jobs:
           fi
 
       - name: Compile website translations
-        run: npx nx run twenty-website:lingui:compile
+        run: npx nx run searm-website:lingui:compile
 
       - name: Check and commit compiled files
         id: check_compile_changes
         run: |
           git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@twenty.com'
-          git add packages/twenty-website/src/locales/generated
+          git config --global user.email 'github-actions@searm.com'
+          git add packages/searm-website/src/locales/generated
           if ! git diff --staged --quiet --exit-code; then
             git commit -m "chore: compile website translations"
             echo "changes_detected=true" >> $GITHUB_OUTPUT
@@ -85,7 +85,7 @@ jobs:
           upload_translations: true
           download_translations: false
           localization_branch_name: i18n-website
-          base_url: 'https://twenty.api.crowdin.com'
+          base_url: 'https://searm.api.crowdin.com'
           config: '.github/crowdin-website.yml'
         env:
           # Website translations project
@@ -103,15 +103,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Mint twenty-infra dispatch token
+      - name: Mint searm-infra dispatch token
         id: app-token
         if: steps.check_extract_changes.outputs.changes_detected == 'true' || steps.check_compile_changes.outputs.changes_detected == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          client-id: ${{ vars.TWENTY_WORKFLOW_DISPATCHER_CLIENT_ID }}
-          private-key: ${{ secrets.TWENTY_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
-          owner: twentyhq
-          repositories: twenty-infra
+          client-id: ${{ vars.SEARM_WORKFLOW_DISPATCHER_CLIENT_ID }}
+          private-key: ${{ secrets.SEARM_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
+          owner: Vatsa10
+          repositories: searm-infra
           permission-actions: write
 
       - name: Trigger i18n automerge
@@ -119,4 +119,4 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          gh workflow run automerge-i18n.yaml --repo twentyhq/twenty-infra --ref main
+          gh workflow run automerge-i18n.yaml --repo Vatsa10/Harbour-infra --ref main

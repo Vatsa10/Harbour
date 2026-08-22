@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Twenty is an open-source CRM built with modern technologies in a monorepo structure. The codebase is organized as an Nx workspace with multiple packages.
+SeaRM is an open-source CRM built with modern technologies in a monorepo structure. The codebase is organized as an Nx workspace with multiple packages.
 
 ## Key Commands
 
@@ -14,9 +14,9 @@ Twenty is an open-source CRM built with modern technologies in a monorepo struct
 yarn start
 
 # Individual package development
-npx nx start twenty-front     # Start frontend dev server
-npx nx start twenty-server    # Start backend server
-npx nx run twenty-server:worker  # Start background worker
+npx nx start searm-front     # Start frontend dev server
+npx nx start searm-server    # Start backend server
+npx nx run searm-server:worker  # Start background worker
 ```
 
 ### Testing
@@ -25,15 +25,15 @@ npx nx run twenty-server:worker  # Start background worker
 npx jest path/to/test.test.ts --config=packages/PROJECT/jest.config.mjs
 
 # Run all tests for a package
-npx nx test twenty-front      # Frontend unit tests
-npx nx test twenty-server     # Backend unit tests
-npx nx run twenty-server:test:integration:with-db-reset  # Integration tests with DB reset
+npx nx test searm-front      # Frontend unit tests
+npx nx test searm-server     # Backend unit tests
+npx nx run searm-server:test:integration:with-db-reset  # Integration tests with DB reset
 # To run an individual test or a pattern of tests, use the following command:
 cd packages/{workspace} && npx jest "pattern or filename"
 
 # Storybook
-npx nx storybook:build twenty-front
-npx nx storybook:test twenty-front
+npx nx storybook:build searm-front
+npx nx storybook:test searm-front
 
 # When testing the UI end to end, click on "Continue with Email" and use the prefilled credentials.
 ```
@@ -41,40 +41,40 @@ npx nx storybook:test twenty-front
 ### Code Quality
 ```bash
 # Linting (diff with main - fastest, always prefer this)
-npx nx lint:diff-with-main twenty-front
-npx nx lint:diff-with-main twenty-server
-npx nx lint:diff-with-main twenty-front --configuration=fix  # Auto-fix
+npx nx lint:diff-with-main searm-front
+npx nx lint:diff-with-main searm-server
+npx nx lint:diff-with-main searm-front --configuration=fix  # Auto-fix
 
 # Linting (full project - slower, use only when needed)
-npx nx lint twenty-front
-npx nx lint twenty-server
+npx nx lint searm-front
+npx nx lint searm-server
 
 # Type checking
-npx nx typecheck twenty-front
-npx nx typecheck twenty-server
+npx nx typecheck searm-front
+npx nx typecheck searm-server
 
 # Format code
-npx nx fmt twenty-front
-npx nx fmt twenty-server
+npx nx fmt searm-front
+npx nx fmt searm-server
 ```
 
 ### Build
 ```bash
-# Build packages (twenty-shared must be built first)
-npx nx build twenty-shared
-npx nx build twenty-front
-npx nx build twenty-server
+# Build packages (searm-shared must be built first)
+npx nx build searm-shared
+npx nx build searm-front
+npx nx build searm-server
 ```
 
 ### Database Operations
 ```bash
 # Database management
-npx nx database:reset twenty-server         # Reset database
-npx nx run twenty-server:database:init:prod # Initialize database
-npx nx run twenty-server:database:migrate:prod # Run instance commands (fast only)
+npx nx database:reset searm-server         # Reset database
+npx nx run searm-server:database:init:prod # Initialize database
+npx nx run searm-server:database:migrate:prod # Run instance commands (fast only)
 
 # Generate an instance command (fast or slow)
-npx nx run twenty-server:database:migrate:generate --name <name> --type <fast|slow>
+npx nx run searm-server:database:migrate:generate --name <name> --type <fast|slow>
 ```
 
 ### Database Inspection (Postgres MCP)
@@ -91,8 +91,8 @@ This server is read-only — for write operations (reset, migrations, sync), use
 ### GraphQL
 ```bash
 # Generate GraphQL types (run after schema changes)
-npx nx run twenty-front:graphql:generate
-npx nx run twenty-front:graphql:generate --configuration=metadata
+npx nx run searm-front:graphql:generate
+npx nx run searm-front:graphql:generate --configuration=metadata
 ```
 
 ## Architecture Overview
@@ -105,15 +105,15 @@ npx nx run twenty-front:graphql:generate --configuration=metadata
 ### Package Structure
 ```
 packages/
-├── twenty-front/          # React frontend application
-├── twenty-server/         # NestJS backend API
-├── twenty-ui/             # Shared UI components library
-├── twenty-shared/         # Common types and utilities
-├── twenty-emails/         # Email templates with React Email
-├── twenty-website/    # Next.js marketing website
-├── twenty-docs/           # Documentation website
-├── twenty-zapier/         # Zapier integration
-└── twenty-e2e-testing/    # Playwright E2E tests
+├── searm-front/          # React frontend application
+├── searm-server/         # NestJS backend API
+├── searm-ui/             # Shared UI components library
+├── searm-shared/         # Common types and utilities
+├── searm-emails/         # Email templates with React Email
+├── searm-website/    # Next.js marketing website
+├── searm-docs/           # Documentation website
+├── searm-zapier/         # Zapier integration
+└── searm-e2e-testing/    # Playwright E2E tests
 ```
 
 ### Key Development Principles
@@ -169,10 +169,10 @@ packages/
 - Commands use `@RegisteredInstanceCommand` and `@RegisteredWorkspaceCommand` decorators for automatic discovery
 - Include both `up` and `down` logic in instance commands
 - Never delete or rewrite committed instance command `up`/`down` logic
-- See `packages/twenty-server/docs/UPGRADE_COMMANDS.md` for full documentation
+- See `packages/searm-server/docs/UPGRADE_COMMANDS.md` for full documentation
 
 ### Utility Helpers
-Use existing helpers from `twenty-shared` instead of manual type guards:
+Use existing helpers from `searm-shared` instead of manual type guards:
 - `isDefined()`, `isNonEmptyString()`, `isNonEmptyArray()`
 
 ## Development Workflow
@@ -205,12 +205,12 @@ IMPORTANT: Use Context7 for code generation, setup or configuration steps, or li
 All dev environments (Claude Code web, Cursor, local) use one script:
 
 ```bash
-bash packages/twenty-utils/setup-dev-env.sh
+bash packages/searm-utils/setup-dev-env.sh
 ```
 
 This handles everything: starts Postgres + Redis (auto-detects local services vs Docker), creates databases, copies `.env` files, and initializes the database schema (runs migrations) on a fresh database. Idempotent — safe to run multiple times.
 
-- `--docker` — force Docker mode (uses `packages/twenty-docker/docker-compose.dev.yml`)
+- `--docker` — force Docker mode (uses `packages/searm-docker/docker-compose.dev.yml`)
 - `--down` — stop services
 - `--reset` — wipe data and restart fresh
 - **Skip the setup script** for tasks that only read code — architecture questions, code review, documentation, etc.

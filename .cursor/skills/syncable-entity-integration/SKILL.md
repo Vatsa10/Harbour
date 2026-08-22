@@ -1,6 +1,6 @@
 ---
 name: syncable-entity-integration
-description: Wire syncable entity services into NestJS modules, create service layer and resolvers for Twenty entities. Use when registering builders, validators, and action handlers in modules, creating business services, or exposing entities via GraphQL API with proper exception handling.
+description: Wire syncable entity services into NestJS modules, create service layer and resolvers for SeaRM entities. Use when registering builders, validators, and action handlers in modules, creating business services, or exposing entities via GraphQL API with proper exception handling.
 ---
 
 # Syncable Entity: Integration (Step 5/6)
@@ -111,7 +111,7 @@ export class WorkspaceSchemaMigrationRunnerActionHandlersModule {}
 
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'searm-shared/utils';
 
 import { type FlatMyEntity } from 'src/engine/metadata-modules/flat-my-entity/types/flat-my-entity.type';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';

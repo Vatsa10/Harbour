@@ -23,7 +23,7 @@ on:
         default: false
   pull_request:
     paths:
-      - 'packages/twenty-docs/**'
+      - 'packages/searm-docs/**'
       - '.github/crowdin-docs.yml'
       - '.github/workflows/docs-i18n-pull.yaml'
 
@@ -55,7 +55,7 @@ jobs:
       - name: Configure git
         run: |
           git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@twenty.com'
+          git config --global user.email 'github-actions@searm.com'
 
       - name: Stash any changes before pulling translations
         if: github.event_name != 'pull_request'
@@ -71,7 +71,7 @@ jobs:
       - name: Pre-translate untranslated strings
         if: github.event_name != 'pull_request' && (inputs.force_pull == true || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         run: |
-          COMMON="--config .github/crowdin-docs.yml --token $CROWDIN_PERSONAL_TOKEN --base-url https://twenty.api.crowdin.com --translate-untranslated-only --no-progress"
+          COMMON="--config .github/crowdin-docs.yml --token $CROWDIN_PERSONAL_TOKEN --base-url https://searm.api.crowdin.com --translate-untranslated-only --no-progress"
           echo "=== TM pre-translate (perfect matches only) ==="
           crowdin pre-translate --method tm --translate-with-perfect-match-only $COMMON || echo "::warning::TM pre-translate failed (non-blocking)"
           echo "=== MT pre-translate (engine 2: Crowdin Translate) ==="
@@ -87,7 +87,7 @@ jobs:
         id: pull
         if: github.event_name != 'pull_request' && (inputs.force_pull == true || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         run: |
-          # Languages supported by Mintlify (see packages/twenty-docs/src/shared/supported-languages.ts)
+          # Languages supported by Mintlify (see packages/searm-docs/src/shared/supported-languages.ts)
           LANGUAGES="fr ar cs de es it ja ko pt ro ru tr zh-CN"
 
           FAILED_LANGUAGES=""
@@ -97,7 +97,7 @@ jobs:
             if ! crowdin download \
               --config .github/crowdin-docs.yml \
               --token "$CROWDIN_PERSONAL_TOKEN" \
-              --base-url "https://twenty.api.crowdin.com" \
+              --base-url "https://searm.api.crowdin.com" \
               --language "$lang" \
               --skip-untranslated-strings=false \
               --skip-untranslated-files=false \
@@ -119,7 +119,7 @@ jobs:
         run: sudo chown -R runner:docker . || true
 
       - name: Fix translated documentation links
-        run: bash packages/twenty-docs/scripts/fix-translated-links.sh
+        run: bash packages/searm-docs/scripts/fix-translated-links.sh
       - name: Prune orphan localized translations
         if: github.event_name != 'pull_request' && (inputs.force_pull == true || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         run: yarn docs:prune-orphans --apply
@@ -137,7 +137,7 @@ jobs:
       - name: Commit artifacts to pull request branch
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         run: |
-          git add packages/twenty-docs/docs.json packages/twenty-docs/navigation/navigation.template.json packages/twenty-shared/src/constants/DocumentationPaths.ts
+          git add packages/searm-docs/docs.json packages/searm-docs/navigation/navigation.template.json packages/searm-shared/src/constants/DocumentationPaths.ts
           if git diff --staged --quiet --exit-code; then
             echo "No navigation/doc changes to commit."
             exit 0
@@ -174,15 +174,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Mint twenty-infra dispatch token
+      - name: Mint searm-infra dispatch token
         id: app-token
         if: github.event_name != 'pull_request' && steps.check_changes.outputs.changes_detected == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          client-id: ${{ vars.TWENTY_WORKFLOW_DISPATCHER_CLIENT_ID }}
-          private-key: ${{ secrets.TWENTY_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
-          owner: twentyhq
-          repositories: twenty-infra
+          client-id: ${{ vars.SEARM_WORKFLOW_DISPATCHER_CLIENT_ID }}
+          private-key: ${{ secrets.SEARM_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
+          owner: Vatsa10
+          repositories: searm-infra
           permission-actions: write
 
       - name: Trigger i18n automerge
@@ -190,7 +190,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          gh workflow run automerge-i18n.yaml --repo twentyhq/twenty-infra --ref main
+          gh workflow run automerge-i18n.yaml --repo Vatsa10/Harbour-infra --ref main
 
       - name: Fail run if any language failed to download
         if: always() && steps.pull.outputs.failed_languages != ''

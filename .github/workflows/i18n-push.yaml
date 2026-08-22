@@ -34,19 +34,19 @@ jobs:
         uses: ./.github/actions/yarn-install
 
       - name: Build dependencies
-        run: npx nx build twenty-shared
+        run: npx nx build searm-shared
 
       - name: Extract translations
         run: |
-          npx nx run twenty-server:lingui:extract
-          npx nx run twenty-emails:lingui:extract
-          npx nx run twenty-front:lingui:extract
+          npx nx run searm-server:lingui:extract
+          npx nx run searm-emails:lingui:extract
+          npx nx run searm-front:lingui:extract
 
       - name: Check and commit extracted files
         id: check_extract_changes
         run: |
           git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@twenty.com'
+          git config --global user.email 'github-actions@searm.com'
           git add .
           if ! git diff --staged --quiet --exit-code; then
             git commit -m "chore: extract translations"
@@ -57,15 +57,15 @@ jobs:
 
       - name: Compile translations
         run: |
-          npx nx run twenty-server:lingui:compile
-          npx nx run twenty-emails:lingui:compile
-          npx nx run twenty-front:lingui:compile
+          npx nx run searm-server:lingui:compile
+          npx nx run searm-emails:lingui:compile
+          npx nx run searm-front:lingui:compile
 
       - name: Check and commit compiled files
         id: check_compile_changes
         run: |
           git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@twenty.com'
+          git config --global user.email 'github-actions@searm.com'
           git add .
           if ! git diff --staged --quiet --exit-code; then
             git commit -m "chore: compile translations"
@@ -87,7 +87,7 @@ jobs:
           upload_translations: true
           download_translations: false
           localization_branch_name: i18n
-          base_url: 'https://twenty.api.crowdin.com'
+          base_url: 'https://searm.api.crowdin.com'
           config: '.github/crowdin-app.yml'
         env:
           # App translations project
@@ -104,15 +104,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Mint twenty-infra dispatch token
+      - name: Mint searm-infra dispatch token
         id: app-token
         if: steps.check_extract_changes.outputs.changes_detected == 'true' || steps.check_compile_changes.outputs.changes_detected == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          client-id: ${{ vars.TWENTY_WORKFLOW_DISPATCHER_CLIENT_ID }}
-          private-key: ${{ secrets.TWENTY_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
-          owner: twentyhq
-          repositories: twenty-infra
+          client-id: ${{ vars.SEARM_WORKFLOW_DISPATCHER_CLIENT_ID }}
+          private-key: ${{ secrets.SEARM_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
+          owner: Vatsa10
+          repositories: searm-infra
           permission-actions: write
 
       - name: Trigger i18n automerge
@@ -120,4 +120,4 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          gh workflow run automerge-i18n.yaml --repo twentyhq/twenty-infra --ref main
+          gh workflow run automerge-i18n.yaml --repo Vatsa10/Harbour-infra --ref main

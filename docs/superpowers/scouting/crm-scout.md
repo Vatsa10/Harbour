@@ -1,7 +1,7 @@
 # Scouting report: `crm` repo (NestJS + Next.js + Prisma + eve)
 
 Source repo: `d:/Files/Vatsa/Projects/AI-CRM/crm`
-Scope: extract design worth porting into Twenty. No code is portable — Twenty is
+Scope: extract design worth porting into SeaRM. No code is portable — SeaRM is
 NestJS/TypeORM/GraphQL on its own workspace-schema-per-tenant model, `crm` is
 Prisma/single-schema with an `eve`-framework agent runtime (`node_modules/eve`,
 a third-party durable-agent-session framework, not written in this repo). Every
@@ -11,7 +11,7 @@ Also note: there is **no bespoke durable job-queue engine** here — the actual
 task queue (`AgentTask`) is homegrown Postgres-row leasing, described below.
 The agent *sessions* themselves (LLM loop, retries of individual tool calls,
 conversation persistence) are delegated to the `eve` npm package, which this
-repo does not implement and which is irrelevant to port (it's Twenty's
+repo does not implement and which is irrelevant to port (it's SeaRM's
 job to build or buy its own session runtime, not reproduce eve).
 
 **Archive status.** This report is the only surviving record of this codebase.
@@ -180,13 +180,13 @@ no visible mechanism revoking its outstanding `AgentTask` rows (they'd just
 fail to find the contact and self-complete via the `runDirect` fallback
 `"The record this names is gone."` for the direct lane only — the research
 lane has no equivalent guard visible in what was read). Worth doing better
-in Twenty: an explicit `cancelledAt` / status enum rather than relying on
+in SeaRM: an explicit `cancelledAt` / status enum rather than relying on
 downstream 404s.
 
 ### What's genuinely worth porting
 
 - The **lease-based claim query** (single `UPDATE...FROM...SELECT...FOR UPDATE
-  SKIP LOCKED...RETURNING`) as the pattern for any durable job table Twenty
+  SKIP LOCKED...RETURNING`) as the pattern for any durable job table SeaRM
   builds — it's DB-native, horizontally safe, and needs no external queue
   broker.
 - The **two-lane split** by whether work needs an LLM session or not.
@@ -204,7 +204,7 @@ downstream 404s.
   reconciled, or read back onto the `AgentTask` row itself. It's really a
   per-session spend cap, not a durable budget ledger. Don't port the DB column
   literally; port the concept as "spend cap passed into the session," and if
-  Twenty wants durable accounting, track actual spend server-side (see §4's
+  SeaRM wants durable accounting, track actual spend server-side (see §4's
   "what NOT to port").
 - The `eve` framework itself (session runtime, `defineDynamic`, `defineState`)
   is a third-party product this repo depends on, not something built here —
@@ -361,7 +361,7 @@ outweighed by piling on more supporting evidence in the same batch.
   enrichment (models self-reporting confidence, which is uncalibrated and
   ungameable-to-verify) and makes score computation independently testable
   and explainable to a human via the tooltip-ready `rationale` string.
-  **This is the one mechanism most worth reimplementing in Twenty verbatim
+  **This is the one mechanism most worth reimplementing in SeaRM verbatim
   as a concept**, regardless of stack.
 - **Noisy-OR combination**, not sum/average — correctly models "any one strong
   independent source is enough," while still letting several weak sources
@@ -399,8 +399,8 @@ outweighed by piling on more supporting evidence in the same batch.
   primary gate), not these literal values.
 - `evidence: Json` with no schema enforcement beyond the Zod tool-input
   validation at write time is a reasonable pragmatic choice here (single
-  Postgres schema, small team) but Twenty should model evidence as a proper
-  related table/JSONB with an explicit versioned shape, since Twenty's
+  Postgres schema, small team) but SeaRM should model evidence as a proper
+  related table/JSONB with an explicit versioned shape, since SeaRM's
   workspace-schema system already has patterns for this and untyped JSON
   columns are a known long-term maintenance cost.
 
@@ -463,7 +463,7 @@ The closest things to deterministic identity rules found:
 - **Two-factor, both-required verdict** (employer + name), not a single
   fuzzy score — deliberately avoids the "half a match" pathology where an
   identity resolution system slowly accumulates false-positive merges from
-  partial signals. Directly maps onto Twenty's duplicate-detection UX as "a
+  partial signals. Directly maps onto SeaRM's duplicate-detection UX as "a
   match needs an independent employer signal AND an independent name signal,
   not a similarity score."
 - **A failed match becomes a low-value evidence entry offered to a human**
@@ -474,11 +474,11 @@ The closest things to deterministic identity rules found:
 ### What NOT to port
 
 - There is no deterministic company-name/person-name similarity algorithm to
-  extract — don't assume one exists to copy. If Twenty needs classic
+  extract — don't assume one exists to copy. If SeaRM needs classic
   deterministic dedup (e.g. exact-domain-match, normalized-name +
   fuzzy-threshold merge suggestions), that has to be designed fresh; this
   repo's approach is fully LLM-procedure-driven and depends on paid vendor
-  lookups (LinkedIn), which is not something to depend on for Twenty's
+  lookups (LinkedIn), which is not something to depend on for SeaRM's
   baseline dedup story.
 - The literal LinkedIn-scraping tool set (`resolve_linkedin_profile`,
   `get_linkedin_profile`) is vendor/product-specific plumbing, not a
@@ -488,7 +488,7 @@ The closest things to deterministic identity rules found:
 
 ## 4. Research budgets and cost accounting
 
-This is thin and in-memory, not durable — worth flagging as a place Twenty
+This is thin and in-memory, not durable — worth flagging as a place SeaRM
 should improve on rather than copy directly.
 
 `apps/agent/agent/lib/focus.ts`:
@@ -537,7 +537,7 @@ export function setBudget(budget: number): void {
 
 - **The "only paid calls spend budget, DB reads are free" split** is a good
   cost model for any agent doing internal-CRM-read + external-vendor-lookup
-  work — worth carrying into Twenty's design even though the accounting
+  work — worth carrying into SeaRM's design even though the accounting
   itself needs to be durable there.
 - **"Running out of budget is success, not failure"** as an explicit framing
   in the system prompt — a good UX/product principle: the agent is told to
@@ -548,11 +548,11 @@ export function setBudget(budget: number): void {
 
 - The mechanism itself (in-memory counter, no persistence, no cross-session
   aggregation, no actual dollar-cost tracking — it counts *call units*, not
-  money) is not real cost accounting. If Twenty wants research budgets, it
+  money) is not real cost accounting. If SeaRM wants research budgets, it
   needs a durable per-workspace/per-record ledger with real persisted spend,
   not a per-session in-memory int. This repo's version would not survive a
   crashed session (spend is simply lost/reset) and cannot answer "how much
-  have we spent on this account this month" — a real requirement Twenty
+  have we spent on this account this month" — a real requirement SeaRM
   should design for that this repo does not solve.
 
 ---
@@ -628,7 +628,7 @@ record."`), and is written via `db.contactBrief.upsert()` inside
 - **"Write nothing" as an explicit, celebrated first-class outcome** — this
   repo repeatedly treats "no output" as success, not failure, for both facts
   (§2, `PROPOSED`/not-stored) and briefs. Worth carrying as a UX principle
-  into any Twenty auto-brief feature: an agent that knows when to stay quiet
+  into any SeaRM auto-brief feature: an agent that knows when to stay quiet
   is more trustworthy than one that always produces prose.
 - **One brief per record, always replaced** (no versioning) is a deliberate
   simplicity choice appropriate for a "current state" panel — unlike facts,
@@ -637,7 +637,7 @@ record."`), and is written via `db.contactBrief.upsert()` inside
 
 ### What NOT to port
 
-- No revision history on `ContactBrief` — if Twenty wants an audit trail of
+- No revision history on `ContactBrief` — if SeaRM wants an audit trail of
   "what did the brief used to say," that has to be added; this repo doesn't
   need it because the brief is explicitly non-authoritative narrative, not a
   system of record.
@@ -702,7 +702,7 @@ record status is always a projection of the queue, never set independently.
 worth recording:** a derived status can reproduce PENDING/RUNNING/COMPLETE/FAILED
 from task rows, but it cannot reproduce `SKIPPED` + a specific
 `enrichmentError` string, because "we deliberately did not try, and here is
-why" is a *tool-level* judgement that never reaches the queue row. If Twenty
+why" is a *tool-level* judgement that never reaches the queue row. If SeaRM
 derives the chip from joins, it still needs somewhere to put that sentence.
 
 ### 6.2 Vendor enrichment pipelines (triage row 23)
@@ -769,7 +769,7 @@ for any "we fetched a logo, will it disappear on dark mode" problem.
 **Cost:** brand enrichment charges `spend(2)` (§4), i.e. one vendor pipeline is
 worth two units of a default budget of four.
 
-**Verdict unchanged (CUT until a vendor is chosen)** — but if Twenty ever
+**Verdict unchanged (CUT until a vendor is chosen)** — but if SeaRM ever
 wires an enrichment vendor, reuse the three-way outcome union, the
 re-read-inside-the-transaction `stillFillable` write, and the asset mirroring.
 The vendor-specific field mapping is genuinely disposable.
@@ -832,7 +832,7 @@ completion signal than a tool the model must remember to call.
 
 ### 6.4 Email and calendar ingestion (triage row 25)
 
-Program disposition says "BUILT on Twenty's existing messaging/calendar
+Program disposition says "BUILT on SeaRM's existing messaging/calendar
 entities — nothing new modelled." The entities are indeed replaceable. The
 **sync-state machine and the auto-create policy** are not, and are recorded
 here in full.
@@ -996,7 +996,7 @@ here in full so nothing is lost by deleting the repo.
 ### 7.1 Relevance-scored CRM search (was triage row 21)
 
 `apps/agent/agent/lib/lookup.ts` (`searchCrm`) is a ~250-line hand-rolled
-search over three entity types. It is not worth porting: Twenty has record
+search over three entity types. It is not worth porting: SeaRM has record
 search, and this implementation has no index behind it (`contains` +
 `mode: "insensitive"` = sequential scan on every column) — it would be a
 regression at any real data volume.
@@ -1028,11 +1028,11 @@ say "using the default" rather than showing a blank.
 
 Not worth porting, and this is now a firm "never," not a deferral:
 
-- It is structurally single-tenant. Twenty's equivalents (workspace settings,
+- It is structurally single-tenant. SeaRM's equivalents (workspace settings,
   connected-account credentials, feature flags) are all workspace-scoped;
   a fixed-id row cannot be made multi-tenant without becoming a different table.
 - **The vendor API key is stored in plaintext in a Postgres column.** The only
-  protection is `maskKey()` (`••••` + last 4) at the presentation layer. Twenty
+  protection is `maskKey()` (`••••` + last 4) at the presentation layer. SeaRM
   must not copy this; it already has encrypted credential storage.
 
 The single idea worth keeping is one line: pair a nullable stored model id with
@@ -1048,37 +1048,37 @@ a hardcoded default and return an `isDefault` flag, so "unconfigured" and
    fact-scoring pipeline (§2) — this is the single highest-value idea in the
    repo and is stack-agnostic.
 2. The lease-based `SELECT ... FOR UPDATE SKIP LOCKED` durable task-claim
-   pattern (§1), generalized to whatever job table Twenty builds.
+   pattern (§1), generalized to whatever job table SeaRM builds.
 3. The "suggestion, not silence" principle applied consistently to facts,
    identity matches, and briefs — never auto-discard low-confidence findings,
    never auto-apply them either; surface them as a decision for a human.
 4. The identity-matching two-factor (employer + name), both-required verdict
    procedure, and its "guess the query, never the answer" principle (§3).
 5. The brief-writing constraints (length floor/ceiling, banned adjectives,
-   "write nothing" as success) as product/UX guidance for any Twenty
+   "write nothing" as success) as product/UX guidance for any SeaRM
    auto-generated summary feature (§5).
 6. The "DB reads are free, vendor calls cost budget" cost model as a
-   framing principle for any Twenty research-agent budget feature (§4),
+   framing principle for any SeaRM research-agent budget feature (§4),
    reimplemented with durable persistence.
 
 **Do NOT port:**
-- The literal Prisma schema/columns — Twenty's data model, tenancy, and
+- The literal Prisma schema/columns — SeaRM's data model, tenancy, and
   ORM are fundamentally different.
 - The `eve` framework dependency and its state/session primitives
   (`defineState`, `defineDynamic`) — third-party, not this repo's IP.
 - The in-memory, per-session, non-durable budget accounting (§4) — copy the
   concept, not the mechanism; it's under-built for real cost tracking.
 - The specific evidence-kind vocabulary and weight constants — tuned to this
-  product's specific vendors (LinkedIn, Gmail sync); Twenty will need its own
+  product's specific vendors (LinkedIn, Gmail sync); SeaRM will need its own
   vocabulary matched to its own data sources.
 - Any expectation of a deterministic fuzzy-matching identity algorithm — it
   doesn't exist here; identity resolution is agent-procedural, not a
-  reusable function, and Twenty will need to build real deterministic dedup
+  reusable function, and SeaRM will need to build real deterministic dedup
   separately if that's a hard requirement.
 - `AgentTask.budget` as a literal column semantics — it's dead weight beyond
   being a session-start parameter; don't assume it's a ledger.
 - The implicit (non-)cancellation of tasks (§1) — a known gap, not a pattern
-  to repeat; Twenty should design explicit cancellation into its job model.
+  to repeat; SeaRM should design explicit cancellation into its job model.
 
 ## Ranked inventory with explicit dispositions (per charter's triage rule)
 
@@ -1097,7 +1097,7 @@ a hardcoded default and return an `isDefault` flag, so "unconfigured" and
 | 11 | Permanent dismissal memory (never re-propose an exact value a human rejected) | High | BUILD NOW | Cheap, real trust-preservation; prevents "AI keeps suggesting what I said no to." |
 | 12 | Human-authorship supremacy (agent never overwrites a manually entered field, narrow derived-name exception) | High | BUILD NOW | Matches charter's approval ethos extended to "never silently override a human entry." |
 | 13 | Supersession-not-deletion history on facts | High | BUILD NOW | Directly matches charter's "current or superseded" Fact requirement. |
-| 14 | Two-factor (employer+name) both-required identity verdict, "guess the query never the answer" principle | High | BUILD NOW — design fresh | Named target capability; source has no deterministic algorithm, only an LLM procedure plus DB unique constraints (`Company.domain`, `Contact.email`). Reuse the *principle*, build Twenty's actual deterministic resolver from scratch per the charter's "Lead to qualified opportunity" step 2. |
+| 14 | Two-factor (employer+name) both-required identity verdict, "guess the query never the answer" principle | High | BUILD NOW — design fresh | Named target capability; source has no deterministic algorithm, only an LLM procedure plus DB unique constraints (`Company.domain`, `Contact.email`). Reuse the *principle*, build SeaRM's actual deterministic resolver from scratch per the charter's "Lead to qualified opportunity" step 2. |
 | 15 | Record brief: narrative + structured sections, evidence-gated, length floor/ceiling, "write nothing" as success | High | BUILD NOW | Directly is the charter's "record briefs" deliverable. |
 | 16 | Workspace-level self-profile brief (`WorkspaceProfile`, same shape, describes the tenant org itself) | Medium | BUILD NOW | Cheap, reusable context for every outreach/prep task; not one of the charter's six named entities but fits naturally as a workspace-scoped Fact/Brief pair. |
 | 17 | "DB reads free, vendor calls cost budget" cost-model framing | High | BUILD NOW (concept only) | Good cost model to reuse; source implementation is in-memory/non-durable — build durable version. |
@@ -1108,7 +1108,7 @@ a hardcoded default and return an `isDefault` flag, so "unconfigured" and
 | 22 | Per-record `EnrichmentStatus` enum mirrored onto Contact/Company | Medium | DEFER — **fully documented, §6.1** | Still derive from `AgentTask`/`AgentRun` joins. One caveat recorded: a derived status cannot reproduce `SKIPPED` + a specific `enrichmentError` sentence, which is a tool-level judgement that never reaches the queue row. Also archived: the `onlyIfRunning` compare-and-set ("first, more specific terminal state wins") and the `updateMany`-tolerates-deleted-record choice. |
 | 23 | Vendor-specific enrichment pipelines (brand/logo, portrait/headshot, context.dev, LinkedIn scraping, Perplexity) | Low as tools, **medium as an adapter contract** | DEFER — **fully documented, §6.2** | The tools are disposable; the contract is not. Archived: the `found｜skipped｜failed{retryable}` vendor union mapping 1:1 onto terminal enrichment states, the `stillFillable` fill-only-empty write re-read *inside* the transaction, own-blob asset mirroring, and the `iconTone` saturation/luminance heuristic. Trigger: when a specific enrichment vendor is chosen. |
 | 24 | `AgentConversation`/session continuation bookkeeping (`sessionId`, `continuationToken`, `streamIndex`) | Medium | DEFER — **fully documented, §6.3** | Still coupled to `eve`. Archived because two ideas outlive it: the table stores a *bookmark, not a transcript*, and `continuationToken` doubles as the correlation key tying a fire-and-forget session back to its queue row — with `session.waiting` (the agent went quiet) as the completion signal instead of a tool the model must remember to call. |
-| 25 | Email/calendar ingestion (`MailboxSync`, `EmailThread`, `EmailMessage`, `CalendarEvent`, `CalendarAttendee`) | Medium as entities, **high as a sync state machine + auto-create policy** | DEFER — **fully documented, §6.4** | The entities map onto Twenty's existing messaging/calendar. What does *not* map, and is archived in full: the five-transition `MailboxSync` state machine (incl. `NEEDS_RECONNECT` excluded from the due-query rather than back-off-scheduled), watch-from-now with no historical backfill, expired-cursor treated as success, cursor advancing only when a tick drains fully (at-least-once + unique-key dedupe), and the three uniqueness keys and why each was chosen. |
+| 25 | Email/calendar ingestion (`MailboxSync`, `EmailThread`, `EmailMessage`, `CalendarEvent`, `CalendarAttendee`) | Medium as entities, **high as a sync state machine + auto-create policy** | DEFER — **fully documented, §6.4** | The entities map onto SeaRM's existing messaging/calendar. What does *not* map, and is archived in full: the five-transition `MailboxSync` state machine (incl. `NEEDS_RECONNECT` excluded from the due-query rather than back-off-scheduled), watch-from-now with no historical backfill, expired-cursor treated as success, cursor advancing only when a tick drains fully (at-least-once + unique-key dedupe), and the three uniqueness keys and why each was chosen. |
 | 26 | `SuppressedDomain`/`SuppressedContact` | Medium-high | DEFER — **mis-scouted; corrected in §6.4** | **These are not do-not-contact lists for outbound.** Their only consumers are the Gmail/Calendar sync services: they are the tenant-editable layer of an *inbound ingestion noise filter* (`externalParticipants()`), sitting on top of four hardcoded layers — ~32 automated local-parts, opaque/UUID local-parts, ~21 free-email domains, machine domains/suffixes — plus the `dominantDomain` majority-vote-with-known-domain-bonus and the `autoCreate && repliedTo` reciprocity gate. The original trigger ("when outbound send workflows are built") is wrong and would never fire; the real trigger is **the same phase that builds inbound ingestion**. |
 | 27 | `AppSetting` singleton (model selection, vendor API keys) | None | **NOT WORTH PORTING** (was DEFER) | Reclassified to a firm never — see §7.2. Structurally single-tenant (fixed `id = "app"`), and it stores the vendor API key in **plaintext** with only a `maskKey()` presentation-layer mask. One line worth keeping (nullable stored value + hardcoded default + `isDefault` flag) is recorded there. |
 

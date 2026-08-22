@@ -1,12 +1,12 @@
 ---
-description: Main guide for creating syncable entities in Twenty's workspace migration system
+description: Main guide for creating syncable entities in SeaRM's workspace migration system
 globs: ["**/metadata-modules/**", "**/workspace-migration/**"]
 alwaysApply: false
 ---
 
 # Creating a New Syncable Entity - Main Guide
 
-This is the main guide for creating **syncable entities** in Twenty's workspace migration architecture.
+This is the main guide for creating **syncable entities** in SeaRM's workspace migration architecture.
 
 ## Documentation Structure
 
@@ -165,10 +165,10 @@ For parallel development:
 ### File Locations
 
 ```
-packages/twenty-shared/src/metadata/
+packages/searm-shared/src/metadata/
 └── all-metadata-name.constant.ts
 
-packages/twenty-server/src/engine/metadata-modules/
+packages/searm-server/src/engine/metadata-modules/
 ├── my-entity/                           # Step 1
 │   └── entities/
 ├── flat-my-entity/                      # Steps 1-2
@@ -182,7 +182,7 @@ packages/twenty-server/src/engine/metadata-modules/
     ├── all-many-to-one-metadata-foreign-key.constant.ts
     └── all-many-to-one-metadata-relations.constant.ts
 
-packages/twenty-server/src/engine/workspace-manager/workspace-migration/
+packages/searm-server/src/engine/workspace-manager/workspace-migration/
 ├── workspace-migration-builder/         # Step 3
 │   ├── builders/my-entity/
 │   └── validators/services/

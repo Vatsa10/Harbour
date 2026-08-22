@@ -5,7 +5,7 @@
 
 ## C7 — importer wrote with no role and no principal (FIXED)
 
-- `RolePermissionConfig` verified at `packages/twenty-server/src/engine/twenty-orm/types/role-permission-config.ts:3-6` — closed union, `{ shouldBypassPermissionChecks: false }` is not a member.
+- `RolePermissionConfig` verified at `packages/searm-server/src/engine/searm-orm/types/role-permission-config.ts:3-6` — closed union, `{ shouldBypassPermissionChecks: false }` is not a member.
 - `ProposalExecutionService.buildApproverContext` verified at `services/proposal-execution.service.ts:355-418` — the exact shape (`buildUserAuthContext`, `UserRoleService.getRoleIdForUserWorkspace`, `WorkspaceCacheService.getOrRecompute(['flatWorkspaceMemberMaps'])`, `{ unionOf: [roleId] }`, `createdBy`/`updatedBy: actorMetadata`) copied into a new `ImportExecutionService.buildImportActorContext` private method.
 - Task 9 rewritten: constructor gains `UserRoleService`, `WorkspaceCacheService`, `@InjectRepository(UserWorkspaceEntity)`, `@InjectRepository(UserEntity)`; `processRow`/`executeBatch` now thread an `ImportActorContext` (real `authContext`, `rolePermissionConfig: { unionOf: [roleId] }`, `createdBy`/`updatedBy`) into `CreateRecordService.execute`/`UpdateRecordService.execute` instead of the invalid literal. `readBaseline`'s `{ shouldBypassPermissionChecks: true }` read was left as-is (a pre-write staleness read, not an attributed write — matches Launch 1's own `hasBaselineConflict` pattern).
 - Added two new tests: role/actor-attribution assertion, and a permission-refusal test (`createRecordService.execute` returns `success: false` → row marked `FAILED`).

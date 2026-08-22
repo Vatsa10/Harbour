@@ -48,22 +48,22 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/yarn-install
 
-      - name: Build twenty-shared
-        run: npx nx build twenty-shared
+      - name: Build searm-shared
+        run: npx nx build searm-shared
 
       # Strict mode fails if there are missing translations.
       - name: Compile translations
         id: compile_translations_strict
         run: |
-          npx nx run twenty-server:lingui:compile --strict
-          npx nx run twenty-emails:lingui:compile --strict
-          npx nx run twenty-front:lingui:compile --strict
+          npx nx run searm-server:lingui:compile --strict
+          npx nx run searm-emails:lingui:compile --strict
+          npx nx run searm-front:lingui:compile --strict
         continue-on-error: true
 
       - name: Stash any changes before pulling translations
         run: |
           git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@twenty.com'
+          git config --global user.email 'github-actions@searm.com'
           git add .
           git stash
 
@@ -76,7 +76,7 @@ jobs:
           download_translations: true
           export_only_approved: false
           localization_branch_name: i18n
-          base_url: 'https://twenty.api.crowdin.com'
+          base_url: 'https://searm.api.crowdin.com'
           auto_approve_imported: false
           import_eq_suggestions: false
           download_sources: false
@@ -101,7 +101,7 @@ jobs:
 
       # Fix encoding issues (escaped Unicode like \u62db -> 招) and push fixes back to Crowdin
       - name: Fix translation encoding and sync to Crowdin
-        run: npx ts-node packages/twenty-utils/fix-crowdin-translations.ts
+        run: npx ts-node packages/searm-utils/fix-crowdin-translations.ts
         env:
           CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
 
@@ -110,9 +110,9 @@ jobs:
         # Because we have set English as a fallback locale, this condition does not work anymore
         # if: inputs.force_pull || steps.compile_translations_strict.outcome == 'failure'
         run: |
-          npx nx run twenty-server:lingui:compile
-          npx nx run twenty-emails:lingui:compile
-          npx nx run twenty-front:lingui:compile
+          npx nx run searm-server:lingui:compile
+          npx nx run searm-emails:lingui:compile
+          npx nx run searm-front:lingui:compile
           git status
           git add .
           if ! git diff --staged --quiet --exit-code; then
@@ -137,15 +137,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Mint twenty-infra dispatch token
+      - name: Mint searm-infra dispatch token
         id: app-token
         if: steps.compile_translations.outputs.changes_detected == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          client-id: ${{ vars.TWENTY_WORKFLOW_DISPATCHER_CLIENT_ID }}
-          private-key: ${{ secrets.TWENTY_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
-          owner: twentyhq
-          repositories: twenty-infra
+          client-id: ${{ vars.SEARM_WORKFLOW_DISPATCHER_CLIENT_ID }}
+          private-key: ${{ secrets.SEARM_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
+          owner: Vatsa10
+          repositories: searm-infra
           permission-actions: write
 
       - name: Trigger i18n automerge
@@ -153,4 +153,4 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          gh workflow run automerge-i18n.yaml --repo twentyhq/twenty-infra --ref main
+          gh workflow run automerge-i18n.yaml --repo Vatsa10/Harbour-infra --ref main

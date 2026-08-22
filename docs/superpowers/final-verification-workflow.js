@@ -11,7 +11,7 @@ export const meta = {
   ],
 }
 
-const REPO = 'd:/Files/Vatsa/Projects/AI-CRM/twenty'
+const REPO = 'd:/Files/Vatsa/Projects/AI-CRM/searm'
 const DOCS = 'd:/Files/Vatsa/Projects/AI-CRM/docs/superpowers'
 const WS = `${REPO}/.superpowers/sdd/final`
 const BASE = '6e1c710a7d'
@@ -22,7 +22,7 @@ Repo: ${REPO}. Branch: ai-native-crm. Branch point ${BASE}. Never push.
 Governing document: ${DOCS}/PRODUCT-CHARTER.md. Also read ${DOCS}/REMAINING-WORK.md and every review under ${REPO}/.superpowers/sdd/.
 
 MEMORY: 16GB machine, OOM-killed three times. Never bare \`npx jest\` (defaults to 23 workers). Use:
-  cd packages/twenty-server && bash ../../scripts/lowmem.sh test|itest|types|full [pattern]
+  cd packages/searm-server && bash ../../scripts/lowmem.sh test|itest|types|full [pattern]
 Nx is broken. PG 5433 / Redis 6380; :5432 is an unrelated native Postgres.
 
 THE STANDARD: paste the real command and its real output for every claim. This project's defining failure mode is a green suite over broken code — three Criticals shipped that way, hidden by mocks that doubled the exact seam that was broken. Assertions without evidence are treated as unverified.
@@ -70,7 +70,7 @@ ${COMMON}
 1. **Trace EVERY AI write path end to end** and prove each passes \`ProposalGateService\`: agent chat, agent runs, MCP tools/call, execute_tool, workflow AI-agent nodes, ingestion listeners, structured extraction, guided import, the customer-support app's agent, and the stale-record sweep. For each, name the file and line where the gate is entered. **Any path that reaches a CRM record without it is Critical** — it is the single property this product sells.
 
 2. **The five contracts**, verdict each with evidence:
-   - Record: every action uses Twenty objects, fields, relations, permissions
+   - Record: every action uses SeaRM objects, fields, relations, permissions
    - Execution: versioned, idempotent, cancellable, leased, retryable, budgeted; a retry never duplicates a fact, notification, or record change
    - Evidence: no fact without a traceable observation
    - Proposal: visible diffs supporting approve, reject, expiry, supersession, batch execution

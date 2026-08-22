@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** AI-originated writes in Twenty become human-reviewable proposals instead of applying directly to records.
+**Goal:** AI-originated writes in SeaRM become human-reviewable proposals instead of applying directly to records.
 
 **Architecture:** A single gate in `ToolExecutorService.dispatch()` — the sole funnel for every AI write (chat, agent runs, MCP, `execute_tool`, workflow AI-agent nodes) plus the `send_email` / `create_calendar_event` tools. A per-workspace JSON policy decides AUTO / PROPOSE / FORBID per object-field or tool. Proposed writes land in two new core-schema entities and are applied later by an approval service running as the approving user, so existing permission enforcement does the authorization work.
 
@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-05-ai-write-approval-design.md`
 
-**Working directory for all paths below:** `d:\Files\Vatsa\Projects\AI-CRM\twenty`
+**Working directory for all paths below:** `d:\Files\Vatsa\Projects\AI-CRM\searm`
 
 ## Global Constraints
 
@@ -20,22 +20,22 @@ Copied from the repo's `CLAUDE.md` and the spec. Every task's requirements impli
 - **No `any`.** Strict TypeScript enforced.
 - **Types over interfaces**, except when extending a third-party interface.
 - **String literal unions over enums**, except GraphQL enums (which must be real TS enums registered with `registerEnumType`).
-- **Functional components only** in `twenty-front`.
+- **Functional components only** in `searm-front`.
 - **File naming:** kebab-case with suffix — `.service.ts`, `.entity.ts`, `.dto.ts`, `.module.ts`, `.resolver.ts`. Front components are PascalCase `.tsx`.
 - **Comments:** short-form `//` only, no JSDoc blocks. Explain WHY, not WHAT.
 - **Import order:** external libraries, then internal `@/` or `src/`, then relative.
-- **Use `isDefined()` from `twenty-shared/utils`** rather than hand-rolled null checks.
+- **Use `isDefined()` from `searm-shared/utils`** rather than hand-rolled null checks.
 - **Services under 500 lines, components under 300 lines.**
 - **Entity registration is automatic** — `core.datasource.ts` globs `engine/metadata-modules/**/*.entity.{ts,js}`. Do not add entities to any registry list.
-- **Schema changes ship as instance commands**, not TypeORM migrations. The TypeORM migration system in this repo is frozen. Generate with `npx nx run twenty-server:database:migrate:generate --name <name> --type fast`.
+- **Schema changes ship as instance commands**, not TypeORM migrations. The TypeORM migration system in this repo is frozen. Generate with `npx nx run searm-server:database:migrate:generate --name <name> --type fast`.
 - **Never gate reads.** `find_many`, `find_one`, `group_by` must pass through untouched.
 - **Never gate the four deterministic workflow record-crud actions.** Only AI-originated writes are proposed.
 - **The gate must return `success: true` for proposed writes.** An agent that reads failure will retry and duplicate.
-- Lint and typecheck after each task: `npx nx lint:diff-with-main twenty-server` and `npx nx typecheck twenty-server`.
+- Lint and typecheck after each task: `npx nx lint:diff-with-main searm-server` and `npx nx typecheck searm-server`.
 
 ## File Structure
 
-**New — server** (all under `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/`):
+**New — server** (all under `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/`):
 
 | File | Responsibility |
 | --- | --- |
@@ -65,13 +65,13 @@ Copied from the repo's `CLAUDE.md` and the spec. Every task's requirements impli
 
 | File | Responsibility |
 | --- | --- |
-| `packages/twenty-front/src/pages/settings/ai/SettingsAiApprovals.tsx` | Page shell + route target |
-| `packages/twenty-front/src/modules/settings/ai-approvals/graphql/queries/pendingProposals.ts` | Query document |
-| `packages/twenty-front/src/modules/settings/ai-approvals/graphql/mutations/approveProposal.ts` | Mutation documents |
-| `packages/twenty-front/src/modules/settings/ai-approvals/components/ProposalList.tsx` | Pending proposals list |
-| `packages/twenty-front/src/modules/settings/ai-approvals/components/ProposalDiffTable.tsx` | Per-item diff + checkboxes + actions |
+| `packages/searm-front/src/pages/settings/ai/SettingsAiApprovals.tsx` | Page shell + route target |
+| `packages/searm-front/src/modules/settings/ai-approvals/graphql/queries/pendingProposals.ts` | Query document |
+| `packages/searm-front/src/modules/settings/ai-approvals/graphql/mutations/approveProposal.ts` | Mutation documents |
+| `packages/searm-front/src/modules/settings/ai-approvals/components/ProposalList.tsx` | Pending proposals list |
+| `packages/searm-front/src/modules/settings/ai-approvals/components/ProposalDiffTable.tsx` | Per-item diff + checkboxes + actions |
 
-**Modified — front:** `packages/twenty-shared/src/types/SettingsPath.ts`, `packages/twenty-front/src/modules/app/components/SettingsRoutes.tsx`.
+**Modified — front:** `packages/searm-shared/src/types/SettingsPath.ts`, `packages/searm-front/src/modules/app/components/SettingsRoutes.tsx`.
 
 ---
 
@@ -80,9 +80,9 @@ Copied from the repo's `CLAUDE.md` and the spec. Every task's requirements impli
 The policy decides whether a given write is AUTO, PROPOSE, or FORBID. It is stored as one JSON blob per workspace in the existing `keyValuePair` table — no new table, no migration.
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service.ts`
-- Test: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/ai-write-policy.service.spec.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/types/ai-write-policy.type.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/ai-write-policy.service.ts`
+- Test: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/ai-write-policy.service.spec.ts`
 
 **Interfaces:**
 - Consumes: `KeyValuePairService` from `src/engine/core-modules/key-value-pair/key-value-pair.service`, `KeyValuePairType` from `src/engine/core-modules/key-value-pair/key-value-pair.entity`.
@@ -214,7 +214,7 @@ describe('AiWritePolicyService', () => {
 - [ ] **Step 3: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest ai-write-policy.service.spec
+cd packages/searm-server && npx jest ai-write-policy.service.spec
 ```
 
 Expected: FAIL — `Cannot find module '.../ai-write-policy.service'`.
@@ -226,7 +226,7 @@ Create `services/ai-write-policy.service.ts`:
 ```ts
 import { Injectable } from '@nestjs/common';
 
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'searm-shared/utils';
 
 import { KeyValuePairType } from 'src/engine/core-modules/key-value-pair/key-value-pair.entity';
 import { KeyValuePairService } from 'src/engine/core-modules/key-value-pair/key-value-pair.service';
@@ -287,7 +287,7 @@ export class AiWritePolicyService {
 - [ ] **Step 5: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest ai-write-policy.service.spec
+cd packages/searm-server && npx jest ai-write-policy.service.spec
 ```
 
 Expected: PASS, 7 tests.
@@ -297,9 +297,9 @@ If `keyValuePairService.get` rejects the `userId: null` argument on a type level
 - [ ] **Step 6: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval
 git commit -m "feat(ai-write-approval): add per-workspace AI write policy"
 ```
 
@@ -308,9 +308,9 @@ git commit -m "feat(ai-write-approval): add per-workspace AI write policy"
 ### Task 2: Proposal entities and schema migration
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/types/proposal-status.type.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/types/proposal-status.type.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/entities/proposal.entity.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity.ts`
 - Create: an instance command (generated — exact path produced by the generator)
 
 **Interfaces:**
@@ -367,7 +367,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-import { type ActorMetadata } from 'twenty-shared/types';
+import { type ActorMetadata } from 'searm-shared/types';
 
 import { ProposalItemEntity } from 'src/engine/metadata-modules/ai/ai-write-approval/entities/proposal-item.entity';
 import { ProposalStatus } from 'src/engine/metadata-modules/ai/ai-write-approval/types/proposal-status.type';
@@ -497,7 +497,7 @@ export class ProposalItemEntity {
 - [ ] **Step 4: Generate the instance command**
 
 ```bash
-npx nx run twenty-server:database:migrate:generate --name add-ai-write-approval --type fast
+npx nx run searm-server:database:migrate:generate --name add-ai-write-approval --type fast
 ```
 
 This writes a new instance command file. Open the generated file and confirm its `up` creates both tables. If the generator produced an empty shell, fill `up` with:
@@ -545,12 +545,12 @@ CREATE INDEX "IDX_proposalItem_proposalId" ON "core"."proposalItem" ("proposalId
 
 And `down` with `DROP TABLE "core"."proposalItem"; DROP TABLE "core"."proposal";`.
 
-Read `packages/twenty-server/docs/UPGRADE_COMMANDS.md` before editing the generated file. Never rewrite a committed command's `up`/`down`.
+Read `packages/searm-server/docs/UPGRADE_COMMANDS.md` before editing the generated file. Never rewrite a committed command's `up`/`down`.
 
 - [ ] **Step 5: Apply and verify the schema**
 
 ```bash
-npx nx run twenty-server:database:migrate:prod
+npx nx run searm-server:database:migrate:prod
 ```
 
 Then verify both tables exist using the read-only Postgres MCP server configured in `.mcp.json`, or:
@@ -564,8 +564,8 @@ Expected: both tables present with the columns above.
 - [ ] **Step 6: Typecheck and commit**
 
 ```bash
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval packages/twenty-server/src/database
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval packages/searm-server/src/database
 git commit -m "feat(ai-write-approval): add proposal and proposal item entities"
 ```
 
@@ -576,11 +576,11 @@ git commit -m "feat(ai-write-approval): add proposal and proposal item entities"
 Decides what happens to a write and, when the answer is PROPOSE, captures it. This is the heart of the feature.
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts`
-- Test: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-gate.service.spec.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts`
+- Test: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-gate.service.spec.ts`
 
 **Interfaces:**
-- Consumes: `AiWritePolicyService.getPolicy` / `.resolveMode` (Task 1), `ProposalEntity` / `ProposalItemEntity` (Task 2), `FindRecordsService` from `src/engine/core-modules/record-crud/services/find-records.service`, `buildSystemAuthContext` from `src/engine/twenty-orm/utils/build-system-auth-context.util`.
+- Consumes: `AiWritePolicyService.getPolicy` / `.resolveMode` (Task 1), `ProposalEntity` / `ProposalItemEntity` (Task 2), `FindRecordsService` from `src/engine/core-modules/record-crud/services/find-records.service`, `buildSystemAuthContext` from `src/engine/searm-orm/utils/build-system-auth-context.util`.
 - Produces:
   - `type GateDecision = { kind: 'ALLOW' } | { kind: 'FORBID'; message: string } | { kind: 'PROPOSED'; output: ToolOutput }`
   - `ProposalGateService.evaluate(params: { descriptor: ToolIndexEntry | ToolDescriptor; args: Record<string, unknown>; context: ToolProviderContext }): Promise<GateDecision>`
@@ -812,7 +812,7 @@ describe('ProposalGateService', () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-gate.service.spec
+cd packages/searm-server && npx jest proposal-gate.service.spec
 ```
 
 Expected: FAIL — module not found.
@@ -825,7 +825,7 @@ Create `services/proposal-gate.service.ts`:
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'searm-shared/utils';
 import { Repository } from 'typeorm';
 
 import { FindRecordsService } from 'src/engine/core-modules/record-crud/services/find-records.service';
@@ -842,7 +842,7 @@ import {
   ProposalItemStatus,
   ProposalStatus,
 } from 'src/engine/metadata-modules/ai/ai-write-approval/types/proposal-status.type';
-import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { buildSystemAuthContext } from 'src/engine/searm-orm/utils/build-system-auth-context.util';
 
 export type GateDecision =
   | { kind: 'ALLOW' }
@@ -1142,7 +1142,7 @@ export class ProposalGateService {
 - [ ] **Step 4: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-gate.service.spec
+cd packages/searm-server && npx jest proposal-gate.service.spec
 ```
 
 Expected: PASS, 7 tests.
@@ -1152,9 +1152,9 @@ If the `getRepositoryToken(Entity, 'core')` connection name is wrong, find the c
 - [ ] **Step 5: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval
 git commit -m "feat(ai-write-approval): add proposal gate service"
 ```
 
@@ -1165,10 +1165,10 @@ git commit -m "feat(ai-write-approval): add proposal gate service"
 Three lines in one method. This is where the feature becomes real — and where a mistake breaks every AI feature in the product, so the regression suite matters more than the new test.
 
 **Files:**
-- Modify: `packages/twenty-server/src/engine/core-modules/tool-provider/services/tool-executor.service.ts` (the `dispatch` method, lines 62-85)
-- Modify: `packages/twenty-server/src/engine/core-modules/tool-provider/tool-provider.module.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/ai-write-approval.module.ts`
-- Test: `packages/twenty-server/src/engine/core-modules/tool-provider/services/__tests__/tool-executor-gate.spec.ts`
+- Modify: `packages/searm-server/src/engine/core-modules/tool-provider/services/tool-executor.service.ts` (the `dispatch` method, lines 62-85)
+- Modify: `packages/searm-server/src/engine/core-modules/tool-provider/tool-provider.module.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/ai-write-approval.module.ts`
+- Test: `packages/searm-server/src/engine/core-modules/tool-provider/services/__tests__/tool-executor-gate.spec.ts`
 
 **Interfaces:**
 - Consumes: `ProposalGateService.evaluate` (Task 3).
@@ -1361,7 +1361,7 @@ describe('ToolExecutorService gating', () => {
 - [ ] **Step 3: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest tool-executor-gate.spec
+cd packages/searm-server && npx jest tool-executor-gate.spec
 ```
 
 Expected: FAIL — Nest cannot resolve `ProposalGateService` for `ToolExecutorService`.
@@ -1434,7 +1434,7 @@ In `tool-provider.module.ts`, add `AiWriteApprovalModule` to the `imports` array
 - [ ] **Step 5: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest tool-executor-gate.spec
+cd packages/searm-server && npx jest tool-executor-gate.spec
 ```
 
 Expected: PASS, 4 tests.
@@ -1442,8 +1442,8 @@ Expected: PASS, 4 tests.
 - [ ] **Step 6: Run the surrounding suites for regressions**
 
 ```bash
-cd packages/twenty-server && npx jest tool-provider
-cd packages/twenty-server && npx jest tool-executor
+cd packages/searm-server && npx jest tool-provider
+cd packages/searm-server && npx jest tool-executor
 ```
 
 Expected: PASS. Existing `ToolExecutorService` tests that construct the service directly will now fail on the missing constructor argument — add a `ProposalGateService` mock returning `{ kind: 'ALLOW' }` to each.
@@ -1451,9 +1451,9 @@ Expected: PASS. Existing `ToolExecutorService` tests that construct the service 
 - [ ] **Step 7: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine
 git commit -m "feat(ai-write-approval): gate AI writes in the tool executor"
 ```
 
@@ -1464,9 +1464,9 @@ git commit -m "feat(ai-write-approval): gate AI writes in the tool executor"
 Validate every selected item, abort the whole batch if any conflict, then apply sequentially as the approving user.
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-execution.service.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/ai-write-approval.module.ts`
-- Test: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-execution.service.spec.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-execution.service.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/ai-write-approval.module.ts`
+- Test: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/__tests__/proposal-execution.service.spec.ts`
 
 **Interfaces:**
 - Consumes: `ProposalEntity` / `ProposalItemEntity` (Task 2), `FindRecordsService`, `CreateRecordService`, `UpdateRecordService`, `DeleteRecordService` from `src/engine/core-modules/record-crud/services/`, `UserRoleService` from `src/engine/metadata-modules/user-role/user-role.service`.
@@ -1697,7 +1697,7 @@ describe('ProposalExecutionService', () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-execution.service.spec
+cd packages/searm-server && npx jest proposal-execution.service.spec
 ```
 
 Expected: FAIL — module not found.
@@ -1710,7 +1710,7 @@ Create `services/proposal-execution.service.ts`:
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'searm-shared/utils';
 import { In, Repository } from 'typeorm';
 
 import { CreateRecordService } from 'src/engine/core-modules/record-crud/services/create-record.service';
@@ -1728,8 +1728,8 @@ import {
   ProposalStatus,
 } from 'src/engine/metadata-modules/ai/ai-write-approval/types/proposal-status.type';
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
-import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
-import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { type RolePermissionConfig } from 'src/engine/searm-orm/types/role-permission-config';
+import { buildSystemAuthContext } from 'src/engine/searm-orm/utils/build-system-auth-context.util';
 
 export type ApprovalResult = {
   proposalId: string;
@@ -2037,7 +2037,7 @@ Confirm the `SendEmailTool` and `CreateCalendarEventTool` import paths and that 
 - [ ] **Step 4: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-server && npx jest proposal-execution.service.spec
+cd packages/searm-server && npx jest proposal-execution.service.spec
 ```
 
 Expected: PASS, 7 tests.
@@ -2051,9 +2051,9 @@ Add `ProposalExecutionService` to `providers` and `exports` in `ai-write-approva
 - [ ] **Step 6: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-server
-npx nx typecheck twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval
+npx nx lint:diff-with-main searm-server
+npx nx typecheck searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval
 git commit -m "feat(ai-write-approval): add proposal approval execution"
 ```
 
@@ -2062,12 +2062,12 @@ git commit -m "feat(ai-write-approval): add proposal approval execution"
 ### Task 6: GraphQL API
 
 **Files:**
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/dtos/proposal.dto.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/dtos/approve-proposal.input.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/dtos/ai-write-policy.dto.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/resolvers/proposal.resolver.ts`
-- Create: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/resolvers/ai-write-policy.resolver.ts`
-- Modify: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/ai-write-approval.module.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/dtos/proposal.dto.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/dtos/approve-proposal.input.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/dtos/ai-write-policy.dto.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/resolvers/proposal.resolver.ts`
+- Create: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/resolvers/ai-write-policy.resolver.ts`
+- Modify: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/ai-write-approval.module.ts`
 
 **Interfaces:**
 - Consumes: `ProposalExecutionService.approve` / `.reject` (Task 5), `AiWritePolicyService` (Task 1).
@@ -2220,7 +2220,7 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query } from '@nestjs/graphql';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { PermissionFlagType } from 'twenty-shared/constants';
+import { PermissionFlagType } from 'searm-shared/constants';
 import { Repository } from 'typeorm';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
@@ -2309,7 +2309,7 @@ Create `resolvers/ai-write-policy.resolver.ts`. Note the different guard: policy
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query } from '@nestjs/graphql';
 
-import { PermissionFlagType } from 'twenty-shared/constants';
+import { PermissionFlagType } from 'searm-shared/constants';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
@@ -2361,8 +2361,8 @@ Add `ProposalResolver` and `AiWritePolicyResolver` to `providers` in `ai-write-a
 - [ ] **Step 5: Verify the schema builds**
 
 ```bash
-npx nx typecheck twenty-server
-npx nx start twenty-server
+npx nx typecheck searm-server
+npx nx start searm-server
 ```
 
 Expected: server boots with no GraphQL schema errors. Open the metadata GraphQL playground and confirm `pendingProposals`, `approveProposal`, `rejectProposal`, `aiWritePolicy`, and `updateAiWritePolicy` appear.
@@ -2370,9 +2370,9 @@ Expected: server boots with no GraphQL schema errors. Open the metadata GraphQL 
 - [ ] **Step 6: Regenerate front types and commit**
 
 ```bash
-npx nx run twenty-front:graphql:generate --configuration=metadata
-npx nx lint:diff-with-main twenty-server
-git add packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval packages/twenty-front/src/generated-metadata
+npx nx run searm-front:graphql:generate --configuration=metadata
+npx nx lint:diff-with-main searm-server
+git add packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval packages/searm-front/src/generated-metadata
 git commit -m "feat(ai-write-approval): expose proposal and policy graphql api"
 ```
 
@@ -2383,13 +2383,13 @@ git commit -m "feat(ai-write-approval): expose proposal and policy graphql api"
 One settings page. Ships inside Settings because that routing path is well-trodden and costs nothing to extend — a dedicated top-level surface is a later refinement, not a launch requirement.
 
 **Files:**
-- Modify: `packages/twenty-shared/src/types/SettingsPath.ts`
-- Modify: `packages/twenty-front/src/modules/app/components/SettingsRoutes.tsx`
-- Create: `packages/twenty-front/src/pages/settings/ai/SettingsAiApprovals.tsx`
-- Create: `packages/twenty-front/src/modules/settings/ai-approvals/graphql/queries/pendingProposals.ts`
-- Create: `packages/twenty-front/src/modules/settings/ai-approvals/graphql/mutations/approveProposal.ts`
-- Create: `packages/twenty-front/src/modules/settings/ai-approvals/components/ProposalDiffTable.tsx`
-- Test: `packages/twenty-front/src/modules/settings/ai-approvals/components/__tests__/ProposalDiffTable.test.tsx`
+- Modify: `packages/searm-shared/src/types/SettingsPath.ts`
+- Modify: `packages/searm-front/src/modules/app/components/SettingsRoutes.tsx`
+- Create: `packages/searm-front/src/pages/settings/ai/SettingsAiApprovals.tsx`
+- Create: `packages/searm-front/src/modules/settings/ai-approvals/graphql/queries/pendingProposals.ts`
+- Create: `packages/searm-front/src/modules/settings/ai-approvals/graphql/mutations/approveProposal.ts`
+- Create: `packages/searm-front/src/modules/settings/ai-approvals/components/ProposalDiffTable.tsx`
+- Test: `packages/searm-front/src/modules/settings/ai-approvals/components/__tests__/ProposalDiffTable.test.tsx`
 
 **Interfaces:**
 - Consumes: the GraphQL operations from Task 6 via generated metadata hooks.
@@ -2397,7 +2397,7 @@ One settings page. Ships inside Settings because that routing path is well-trodd
 
 - [ ] **Step 1: Add the route path**
 
-In `packages/twenty-shared/src/types/SettingsPath.ts`, add to the `SettingsPath` enum next to the other AI entries:
+In `packages/searm-shared/src/types/SettingsPath.ts`, add to the `SettingsPath` enum next to the other AI entries:
 
 ```ts
   AiApprovals = 'ai/approvals',
@@ -2519,7 +2519,7 @@ describe('ProposalDiffTable', () => {
 - [ ] **Step 4: Run the test to verify it fails**
 
 ```bash
-cd packages/twenty-front && npx jest ProposalDiffTable
+cd packages/searm-front && npx jest ProposalDiffTable
 ```
 
 Expected: FAIL — cannot resolve `ProposalDiffTable`.
@@ -2532,7 +2532,7 @@ Create `modules/settings/ai-approvals/components/ProposalDiffTable.tsx`:
 import { useState } from 'react';
 import styled from '@emotion/styled';
 
-import { Button } from 'twenty-ui/input';
+import { Button } from 'searm-ui/input';
 
 type ProposalItem = {
   id: string;
@@ -2625,12 +2625,12 @@ export const ProposalDiffTable = ({
 };
 ```
 
-Confirm the `Button` import path and its props against an existing settings component — `packages/twenty-front/src/pages/settings/ai/SettingsAI.tsx` is the nearest reference. This repo uses Linaria/emotion styling; match whatever that file imports.
+Confirm the `Button` import path and its props against an existing settings component — `packages/searm-front/src/pages/settings/ai/SettingsAI.tsx` is the nearest reference. This repo uses Linaria/emotion styling; match whatever that file imports.
 
 - [ ] **Step 6: Run the test to verify it passes**
 
 ```bash
-cd packages/twenty-front && npx jest ProposalDiffTable
+cd packages/searm-front && npx jest ProposalDiffTable
 ```
 
 Expected: PASS, 2 tests.
@@ -2736,9 +2736,9 @@ Sign in via "Continue with Email" using the prefilled credentials, navigate to S
 - [ ] **Step 9: Lint, typecheck, commit**
 
 ```bash
-npx nx lint:diff-with-main twenty-front
-npx nx typecheck twenty-front
-git add packages/twenty-front packages/twenty-shared
+npx nx lint:diff-with-main searm-front
+npx nx typecheck searm-front
+git add packages/searm-front packages/searm-shared
 git commit -m "feat(ai-write-approval): add approval inbox settings page"
 ```
 
@@ -2749,7 +2749,7 @@ git commit -m "feat(ai-write-approval): add approval inbox settings page"
 Proves the whole path against a real database.
 
 **Files:**
-- Create: `packages/twenty-server/test/integration/graphql/suites/ai-write-approval/proposal-approval.integration-spec.ts`
+- Create: `packages/searm-server/test/integration/graphql/suites/ai-write-approval/proposal-approval.integration-spec.ts`
 
 **Interfaces:**
 - Consumes: everything from Tasks 1-7.
@@ -2818,7 +2818,7 @@ Assertions, in order:
 - [ ] **Step 2: Run the integration suite**
 
 ```bash
-npx nx run twenty-server:test:integration:with-db-reset
+npx nx run searm-server:test:integration:with-db-reset
 ```
 
 Expected: the new suite passes and no existing suite regresses.
@@ -2826,12 +2826,12 @@ Expected: the new suite passes and no existing suite regresses.
 - [ ] **Step 3: Full regression check**
 
 ```bash
-npx nx test twenty-server
-npx nx test twenty-front
-npx nx lint:diff-with-main twenty-server
-npx nx lint:diff-with-main twenty-front
-npx nx typecheck twenty-server
-npx nx typecheck twenty-front
+npx nx test searm-server
+npx nx test searm-front
+npx nx lint:diff-with-main searm-server
+npx nx lint:diff-with-main searm-front
+npx nx typecheck searm-server
+npx nx typecheck searm-front
 ```
 
 Expected: all green. The gate sits on a hot path used by every AI feature — a red suite here means the gate is wrong, not that the suite is stale.
@@ -2839,7 +2839,7 @@ Expected: all green. The gate sits on a hot path used by every AI feature — a 
 - [ ] **Step 4: Manual end-to-end verification**
 
 ```bash
-npx nx database:reset twenty-server
+npx nx database:reset searm-server
 yarn start
 ```
 
@@ -2848,7 +2848,7 @@ Sign in with "Continue with Email" and the prefilled credentials. In AI chat, in
 - [ ] **Step 5: Commit**
 
 ```bash
-git add packages/twenty-server
+git add packages/searm-server
 git commit -m "feat(ai-write-approval): add end-to-end integration coverage"
 ```
 

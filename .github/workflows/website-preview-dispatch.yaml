@@ -7,7 +7,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, closed, labeled]
     paths:
-      - packages/twenty-website/**
+      - packages/searm-website/**
       - .github/workflows/website-preview-dispatch.yaml
 
 concurrency:
@@ -39,9 +39,9 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          client-id: ${{ vars.TWENTY_WORKFLOW_DISPATCHER_CLIENT_ID }}
-          private-key: ${{ secrets.TWENTY_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
-          owner: twentyhq
+          client-id: ${{ vars.SEARM_WORKFLOW_DISPATCHER_CLIENT_ID }}
+          private-key: ${{ secrets.SEARM_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
+          owner: Vatsa10
           repositories: ci-privileged
           permission-actions: write
 
@@ -52,7 +52,7 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          gh workflow run website-preview.yaml --repo twentyhq/ci-privileged --ref main \
+          gh workflow run website-preview.yaml --repo Vatsa10/ci-privileged --ref main \
             -f action=build \
             -f pr_number="$PR_NUMBER" \
             -f pr_head_sha="$PR_HEAD_SHA" \
@@ -73,9 +73,9 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          client-id: ${{ vars.TWENTY_WORKFLOW_DISPATCHER_CLIENT_ID }}
-          private-key: ${{ secrets.TWENTY_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
-          owner: twentyhq
+          client-id: ${{ vars.SEARM_WORKFLOW_DISPATCHER_CLIENT_ID }}
+          private-key: ${{ secrets.SEARM_WORKFLOW_DISPATCHER_PRIVATE_KEY }}
+          owner: Vatsa10
           repositories: ci-privileged
           permission-actions: write
 
@@ -84,6 +84,6 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          gh workflow run website-preview.yaml --repo twentyhq/ci-privileged --ref main \
+          gh workflow run website-preview.yaml --repo Vatsa10/ci-privileged --ref main \
             -f action=cleanup \
             -f pr_number="$PR_NUMBER"

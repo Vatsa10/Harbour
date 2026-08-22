@@ -10,13 +10,13 @@ The winning principle: **competitors sell autonomous agents; we sell accountable
 
 ## Base and sources
 
-Built in `twenty` at verified clean commit `6e1c710`. Twenty remains the AGPL platform core for both cloud and self-hosted deployment.
+Built in `searm` at verified clean commit `6e1c710`. SeaRM remains the AGPL platform core for both cloud and self-hosted deployment.
 
-**Do not Git-merge the other repositories.** Reimplement their differentiated capabilities against Twenty's metadata, permissions, workflows, audit trail, APIs, and UI.
+**Do not Git-merge the other repositories.** Reimplement their differentiated capabilities against SeaRM's metadata, permissions, workflows, audit trail, APIs, and UI.
 
 | Source | Adopted capability |
 | --- | --- |
-| `twenty` | CRM core, custom objects, views, dashboards, workflow engine, apps, integrations, tenancy, SSO, permissions |
+| `searm` | CRM core, custom objects, views, dashboards, workflow engine, apps, integrations, tenancy, SSO, permissions |
 | `crm` | Durable autonomous research, evidence-backed facts, identity resolution, research budgets, agent briefs |
 | `relaticle` | Approval-gated AI proposal batches, custom-field-aware AI tools, guided import review |
 | `crmkit` | Agent-safe errors, OAuth/MCP access, deterministic API semantics, ticket/campaign workflow models |
@@ -37,9 +37,9 @@ These are reconciled by **inventory completely, triage explicitly, drop nothing 
 
 This gives a complete map to market from, and a shippable first release.
 
-## Preserve Twenty as the system of record
+## Preserve SeaRM as the system of record
 
-- Keep Twenty's workspace, role, field-permission, metadata, record CRUD, audit, dashboard, layout, search, import, connected-account, workflow, application, and deployment systems.
+- Keep SeaRM's workspace, role, field-permission, metadata, record CRUD, audit, dashboard, layout, search, import, connected-account, workflow, application, and deployment systems.
 - Custom objects are the only extension mechanism for business-specific records. **Never add industry records to the core schema.**
 - All customer-visible business functionality stays workspace-scoped and permission-checked.
 - Cloud and self-hosted ship from the same codebase. Hosted billing and provisioning stay optional and never become a dependency of self-hosting.
@@ -57,11 +57,11 @@ Platform entities, all workspace-scoped:
 | `Proposal` | Approval envelope: creator, run/workflow source, target records, status, expiry, reviewer |
 | `ProposalItem` | Typed create/update/delete/send action: old value, proposed value, related evidence, validation result |
 
-Where Twenty already implements one of these (it has `AgentRun`, turns, and cost accounting today), **extend it — do not build a parallel one.**
+Where SeaRM already implements one of these (it has `AgentRun`, turns, and cost accounting today), **extend it — do not build a parallel one.**
 
 ### The five non-negotiable contracts
 
-1. **Record contract** — every action uses Twenty objects, fields, relations, and permissions.
+1. **Record contract** — every action uses SeaRM objects, fields, relations, and permissions.
 2. **Execution contract** — all workflows and agents are versioned, idempotent, cancellable, leased, retryable, and budgeted.
 3. **Evidence contract** — facts are never written without traceable observations.
 4. **Proposal contract** — AI changes are visible diffs supporting approve, reject, expiry, supersession, and atomic batch execution.
@@ -74,7 +74,7 @@ A plan that violates any of these is rejected regardless of how well it reads.
 - Create, lease, complete, retry, and cancel agent tasks.
 - Record evidence and derive facts **without directly mutating user records**.
 - Create proposals and proposal items from agents, workflows, imports, or connected accounts.
-- Approve or reject a proposal batch; approval executes through Twenty's ordinary record path and emits normal audit events.
+- Approve or reject a proposal batch; approval executes through SeaRM's ordinary record path and emits normal audit events.
 - Query record history, evidence, facts, proposals, and agent runs by workspace and record.
 
 ## Trust layer meets workflows and AI
@@ -157,7 +157,7 @@ State verified **2026-08-17** against branch `ai-native-crm` at HEAD `807fc8a4aa
 
 ### What each state rests on
 
-**Phase 0 — NOT PROVEN.** There was never a Phase 0 execution; work began at Phase 1. No architecture-test suite for isolation/permissions/audit/proposals/evidence/agent execution exists under any name. Local startup was proven once, on 2026-08-08 at commit `9cdf25aa6c`: `/healthz` returned `{"status":"ok"}`, 161 routes mapped, zero `Nest can't resolve` lines. **That proof does not extend to HEAD** — two commits have landed since, `node_modules` is currently empty in the checkout, and neither commit has been booted, typechecked, or unit-tested. Self-hosted startup against the documented Neon/Upstash contract has never been attempted. CI has never run on this fork. `LICENSE` and Twenty's copyright headers are intact, but no AGPL distribution/attribution document has been written.
+**Phase 0 — NOT PROVEN.** There was never a Phase 0 execution; work began at Phase 1. No architecture-test suite for isolation/permissions/audit/proposals/evidence/agent execution exists under any name. Local startup was proven once, on 2026-08-08 at commit `9cdf25aa6c`: `/healthz` returned `{"status":"ok"}`, 161 routes mapped, zero `Nest can't resolve` lines. **That proof does not extend to HEAD** — two commits have landed since, `node_modules` is currently empty in the checkout, and neither commit has been booted, typechecked, or unit-tested. Self-hosted startup against the documented Neon/Upstash contract has never been attempted. CI has never run on this fork. `LICENSE` and SeaRM's copyright headers are intact, but no AGPL distribution/attribution document has been written.
 
 **Phase 1 — PROVEN for the bypass clause.** `ProposalGateService` is the first statement of `ToolExecutorService.dispatch()` and is a denylist, so an unclassified tool is gated by default. Reviewed twice (3 Criticals found, then a 4th by the fix wave; re-review `MERGE_READY` after independent mutation testing). The 2026-08-08 Phase 2 review re-proved gate coverage by live execution and found two later regressions — `create_one` and every outbound send threw instead of proposing, and the gate's `CONFIRMATION_REQUIRED` verdict was ignored so an AUTO-policy delete executed. Both are fixed on disk and covered by a mutation-tested integration suite (9/9 green). *Not proven:* the gate wording's **quota** and **audit** clauses were never separately tested. *Open:* no partial unique index on `proposal (workspaceId, threadId, status)` or on `proposal.sourceKey`, so concurrent agents can double-create; `SendEmailTool` carries no idempotency key.
 
@@ -167,7 +167,7 @@ State verified **2026-08-17** against branch `ai-native-crm` at HEAD `807fc8a4aa
 
 **Phase 4 — NOT PROVEN.** Nine integration tests pass with a recorded mutation check, covering role-scoped discovery, gated `create_one`, confirmation-gated delete, the `UNKNOWN_TOOL` failure envelope, and pagination. They ran in a throwaway worktree resolving services out of the app container — **not over the MCP/OAuth transport an external agent would use.** The suite that does test that transport, `mcp-oauth-scoping`, failed 2 of 4 on a genuine security regression: a role with zero object permissions was advertised the full 138-tool CRUD catalog. The fix is committed at HEAD but verified only by running one utility under `tsx`; its jest spec, the typecheck, and the integration suite were **not executed**. The phase's documentation half (self-hosting, admin, security) was not written; only `AGENT_API_CONTRACT.md` exists. The phase has had **no code review**.
 
-**Phase 5 — structure PROVEN, behaviour NOT.** The customer-support app is 31 files with **zero edits** to `twenty-server`, `twenty-front`, `twenty-shared`, `twenty-sdk`, or `twenty-standard-application`, and the fix wave held that line rather than reaching into the core. That is the gate's core claim and it holds. The behavioural half does not: Task 11, the install/upgrade/uninstall proof, was never written — neither test file the brief names exists — and the workflow templates and post-install seeding have never been run against a live workspace. The review found 4 Criticals, all from a 15-version-stale SDK pin in the app template; 3 were fixed, 1 deliberately deferred, and no re-review followed. The phase also surfaced an upstream toolchain bug worth carrying: `twenty dev:build` prints "Build succeeded" while silently emitting an empty `logicFunctions` array.
+**Phase 5 — structure PROVEN, behaviour NOT.** The customer-support app is 31 files with **zero edits** to `searm-server`, `searm-front`, `searm-shared`, `searm-sdk`, or `searm-standard-application`, and the fix wave held that line rather than reaching into the core. That is the gate's core claim and it holds. The behavioural half does not: Task 11, the install/upgrade/uninstall proof, was never written — neither test file the brief names exists — and the workflow templates and post-install seeding have never been run against a live workspace. The review found 4 Criticals, all from a 15-version-stale SDK pin in the app template; 3 were fixed, 1 deliberately deferred, and no re-review followed. The phase also surfaced an upstream toolchain bug worth carrying: `searm dev:build` prints "Build succeeded" while silently emitting an empty `logicFunctions` array.
 
 Vertical waves after the framework exists: (1) customer support, target-account campaigns; (2) fundraising/nonprofit, events/conferences; (3) real estate, partner management, reusable templates.
 
@@ -207,7 +207,7 @@ What makes it top-tier:
 
 ## Standing assumptions
 
-- Twenty remains the direct AGPL base.
+- SeaRM remains the direct AGPL base.
 - The other three repos stay read-only reference implementations. Their Git histories and incompatible source are never merged.
 - All industries ship through the vertical-app framework, never as hard-coded CRM modules.
 - Human approval is mandatory for every AI-originated mutation and outbound communication.

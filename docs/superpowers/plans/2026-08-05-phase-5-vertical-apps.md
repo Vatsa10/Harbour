@@ -2,40 +2,40 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Prove that a vertical industry ships as an installable Twenty application — objects, relations, views, roles, agent policy, dashboards, seed data, workflow templates, upgrade, uninstall — with **zero changes to `packages/twenty-server`'s core code, `twenty-shared`'s metadata registry, or `twenty-standard-application`**. Build the first vertical, customer support, end to end as the proof.
+**Goal:** Prove that a vertical industry ships as an installable SeaRM application — objects, relations, views, roles, agent policy, dashboards, seed data, workflow templates, upgrade, uninstall — with **zero changes to `packages/searm-server`'s core code, `searm-shared`'s metadata registry, or `searm-standard-application`**. Build the first vertical, customer support, end to end as the proof.
 
-**Headline finding (from the anchors report and this plan's own verification):** Twenty's application framework already does almost all of this. `defineObject`/`defineField`/`defineView`/`defineRole`/`defineAgent`/`defineSkill`/`definePageLayout`/`defineIndex`/`defineNavigationMenuItem` plus pre-install/post-install/uninstall logic function hooks, plus `appBuild`/`appDeploy`/`appInstall`/`appUninstall` CLI operations, plus a working `upgradeApplication` mutation and version-check cron, are all real, already-shipped, already-tested machinery (`packages/twenty-apps/examples/hello-world`, `packages/twenty-apps/fixtures/rich-app`, `packages/twenty-apps/public/last-contact` are working proof). **There is exactly one real gap: app manifests have no declarative workflow-template unit** (confirmed by an exhaustive listing of `packages/twenty-server/src/engine/core-modules/application/application-manifest/converters/` — every other manifest unit type listed in the anchors report has a `from-*-manifest-to-universal-flat-*.util.ts` converter; workflow does not). This plan closes that gap the KISS way — an app declares its workflows as data and installs them with a single call to `installWorkflowDefinition`, the public mutation Phase 4 Task 10 exposes, from the app's post-install logic function — rather than inventing a new manifest unit, a new converter, or any change to `twenty-server`/`twenty-shared` **in this plan**. That decision, and the alternative it rejects, is recorded in "What was deliberately cut."
+**Headline finding (from the anchors report and this plan's own verification):** SeaRM's application framework already does almost all of this. `defineObject`/`defineField`/`defineView`/`defineRole`/`defineAgent`/`defineSkill`/`definePageLayout`/`defineIndex`/`defineNavigationMenuItem` plus pre-install/post-install/uninstall logic function hooks, plus `appBuild`/`appDeploy`/`appInstall`/`appUninstall` CLI operations, plus a working `upgradeApplication` mutation and version-check cron, are all real, already-shipped, already-tested machinery (`packages/searm-apps/examples/hello-world`, `packages/searm-apps/fixtures/rich-app`, `packages/searm-apps/public/last-contact` are working proof). **There is exactly one real gap: app manifests have no declarative workflow-template unit** (confirmed by an exhaustive listing of `packages/searm-server/src/engine/core-modules/application/application-manifest/converters/` — every other manifest unit type listed in the anchors report has a `from-*-manifest-to-universal-flat-*.util.ts` converter; workflow does not). This plan closes that gap the KISS way — an app declares its workflows as data and installs them with a single call to `installWorkflowDefinition`, the public mutation Phase 4 Task 10 exposes, from the app's post-install logic function — rather than inventing a new manifest unit, a new converter, or any change to `searm-server`/`searm-shared` **in this plan**. That decision, and the alternative it rejects, is recorded in "What was deliberately cut."
 
-Because the framework already exists, this plan is deliberately small: 11 tasks, almost entirely declarative config files plus one ~60-line reusable TypeScript helper and its install-time caller. There is no service, resolver, or entity to write in `twenty-server` anywhere in this plan.
+Because the framework already exists, this plan is deliberately small: 11 tasks, almost entirely declarative config files plus one ~60-line reusable TypeScript helper and its install-time caller. There is no service, resolver, or entity to write in `searm-server` anywhere in this plan.
 
-**Architecture:** One new standalone package, `packages/twenty-apps/public/customer-support/`, built and versioned independently of the `twenty-server`/`twenty-front` Nx build (same as `last-contact`, `slack`, `call-recorder` today — it has its own `package.json`, `tsconfig.json`, `yarn.lock`, and is compiled/tested with `vitest`, not `nx`). It defines two new custom objects (`supportTicket`, `supportQueue`), four relation fields onto three *standard* objects (`company`, `person`, `workspaceMember` — relation pointers only, never scalar business fields, per the charter), two views, a dashboard, two roles, one AI agent bound to a scoped role, one skill, and two workflow templates seeded at install time. Every write the AI agent or the AI-agent-driven workflow step performs already funnels through Launch 1's `ToolExecutorService.dispatch()` → `ProposalGateService` — this plan adds no new write path and no new approval mechanism.
+**Architecture:** One new standalone package, `packages/searm-apps/public/customer-support/`, built and versioned independently of the `searm-server`/`searm-front` Nx build (same as `last-contact`, `slack`, `call-recorder` today — it has its own `package.json`, `tsconfig.json`, `yarn.lock`, and is compiled/tested with `vitest`, not `nx`). It defines two new custom objects (`supportTicket`, `supportQueue`), four relation fields onto three *standard* objects (`company`, `person`, `workspaceMember` — relation pointers only, never scalar business fields, per the charter), two views, a dashboard, two roles, one AI agent bound to a scoped role, one skill, and two workflow templates seeded at install time. Every write the AI agent or the AI-agent-driven workflow step performs already funnels through Launch 1's `ToolExecutorService.dispatch()` → `ProposalGateService` — this plan adds no new write path and no new approval mechanism.
 
-**Tech Stack:** `twenty-sdk` (define + CLI), `twenty-client-sdk` (CoreApiClient/MetadataApiClient), TypeScript, Vitest. No NestJS, no TypeORM, no GraphQL schema code in this plan — those are Twenty platform code this plan does not touch.
+**Tech Stack:** `searm-sdk` (define + CLI), `searm-client-sdk` (CoreApiClient/MetadataApiClient), TypeScript, Vitest. No NestJS, no TypeORM, no GraphQL schema code in this plan — those are SeaRM platform code this plan does not touch.
 
-**Depends on:** **Phase 4 Task 10** (`WorkflowTemplateService.installDefinition` + the `installWorkflowDefinition` mutation) must be live before Task 9's post-install workflow seeding runs — Tasks 1–8 and 10 are unaffected and can be built first. Launch 1 (`docs/superpowers/plans/2026-08-05-ai-write-approval.md`) must be merged and its `ProposalGateService` live in the target environment before Task 11's end-to-end verification can show a `PENDING` proposal — every other task in this plan (objects, views, roles, agent, workflows) is independent of Launch 1 and can be built first. Nothing in this plan modifies `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/**`.
+**Depends on:** **Phase 4 Task 10** (`WorkflowTemplateService.installDefinition` + the `installWorkflowDefinition` mutation) must be live before Task 9's post-install workflow seeding runs — Tasks 1–8 and 10 are unaffected and can be built first. Launch 1 (`docs/superpowers/plans/2026-08-05-ai-write-approval.md`) must be merged and its `ProposalGateService` live in the target environment before Task 11's end-to-end verification can show a `PENDING` proposal — every other task in this plan (objects, views, roles, agent, workflows) is independent of Launch 1 and can be built first. Nothing in this plan modifies `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/**`.
 
-**Spec inputs:** `docs/superpowers/PRODUCT-CHARTER.md` (Phase 5 exit gate, five contracts, Feature Completion Standard), `docs/superpowers/scouting/twenty-anchors.md` §6 and §7.
+**Spec inputs:** `docs/superpowers/PRODUCT-CHARTER.md` (Phase 5 exit gate, five contracts, Feature Completion Standard), `docs/superpowers/scouting/searm-anchors.md` §6 and §7.
 
-**Working directory for all paths below:** `d:\Files\Vatsa\Projects\AI-CRM\twenty`
+**Working directory for all paths below:** `d:\Files\Vatsa\Projects\AI-CRM\searm`
 
 ## Global Constraints
 
-- **Never touch `twenty-server`'s core schema, `twenty-shared/src/metadata/*`, or `twenty-standard-application/*`.** Every object, field, view, role, agent, skill, page layout, and index in this plan is a manifest file inside `packages/twenty-apps/public/customer-support/src/`, installed and uninstalled per-workspace through the existing application lifecycle. If a task in this plan is found to require a core-code change, that is a design failure — stop and report it, do not silently add the change.
-- **Relation fields onto standard objects are the one sanctioned exception**, and only as relation pointers (never a scalar business field). `packages/twenty-apps/public/last-contact/src/fields/last-contact-at.field.ts` is the live precedent: an app-owned field, installed/uninstalled with the app, referencing `STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.person.universalIdentifier` as its `objectUniversalIdentifier`. This plan uses the same mechanism for `supportTicket.company` / `supportTicket.requester` / `supportTicket.assignee` and their reverse pointers — never for a field like "supportTier" that would encode support-specific *data* on `Person`/`Company`.
+- **Never touch `searm-server`'s core schema, `searm-shared/src/metadata/*`, or `searm-standard-application/*`.** Every object, field, view, role, agent, skill, page layout, and index in this plan is a manifest file inside `packages/searm-apps/public/customer-support/src/`, installed and uninstalled per-workspace through the existing application lifecycle. If a task in this plan is found to require a core-code change, that is a design failure — stop and report it, do not silently add the change.
+- **Relation fields onto standard objects are the one sanctioned exception**, and only as relation pointers (never a scalar business field). `packages/searm-apps/public/last-contact/src/fields/last-contact-at.field.ts` is the live precedent: an app-owned field, installed/uninstalled with the app, referencing `STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.person.universalIdentifier` as its `objectUniversalIdentifier`. This plan uses the same mechanism for `supportTicket.company` / `supportTicket.requester` / `supportTicket.assignee` and their reverse pointers — never for a field like "supportTier" that would encode support-specific *data* on `Person`/`Company`.
 - **Named exports only. No `any`. Types over interfaces** except where extending a third-party type. String literal unions over hand-rolled enums where the SDK already exports a real TS enum (`FieldType`, `RelationType`, `ViewType`, `WidgetType`, `PageLayoutType`, `WorkflowActionType` — use the SDK's own enum, do not redeclare it).
-- **File naming:** kebab-case, one manifest unit per file, suffix matches unit kind — `*.object.ts`, `*.field.ts`, `*.view.ts`, `*.role.ts`, `*.index.ts`, `*.agent.ts` (module path `agents/`), `*.skill.ts` (module path `skills/`), `*-logic-function.ts` or `pre-install.ts`/`post-install.ts`/`uninstall.ts`, `*.page-layout.ts`. This matches the convention in `packages/twenty-apps/examples/hello-world/src/` exactly.
+- **File naming:** kebab-case, one manifest unit per file, suffix matches unit kind — `*.object.ts`, `*.field.ts`, `*.view.ts`, `*.role.ts`, `*.index.ts`, `*.agent.ts` (module path `agents/`), `*.skill.ts` (module path `skills/`), `*-logic-function.ts` or `pre-install.ts`/`post-install.ts`/`uninstall.ts`, `*.page-layout.ts`. This matches the convention in `packages/searm-apps/examples/hello-world/src/` exactly.
 - **Comments:** short-form `//` only, explaining WHY.
-- **Every `universalIdentifier` is a fixed, hand-assigned UUID committed to source** — never generated at build time. Twenty's sync engine diffs by `universalIdentifier` across installs/upgrades; regenerating one on every build would make every upgrade look like a delete+recreate.
-- **Do not run `appPublish`.** This plan installs and verifies the app against a local/dev Twenty instance. Listing it in a public marketplace is a go-to-market decision, out of scope here (see "deliberately cut").
-- Lint and typecheck after each task: `cd packages/twenty-apps/public/customer-support && yarn lint && yarn typecheck` (scripts defined in Task 1).
+- **Every `universalIdentifier` is a fixed, hand-assigned UUID committed to source** — never generated at build time. SeaRM's sync engine diffs by `universalIdentifier` across installs/upgrades; regenerating one on every build would make every upgrade look like a delete+recreate.
+- **Do not run `appPublish`.** This plan installs and verifies the app against a local/dev SeaRM instance. Listing it in a public marketplace is a go-to-market decision, out of scope here (see "deliberately cut").
+- Lint and typecheck after each task: `cd packages/searm-apps/public/customer-support && yarn lint && yarn typecheck` (scripts defined in Task 1).
 
 ## File Structure
 
-**New package** — `packages/twenty-apps/public/customer-support/`:
+**New package** — `packages/searm-apps/public/customer-support/`:
 
 | File | Responsibility |
 | --- | --- |
-| `package.json`, `tsconfig.json`, `tsconfig.spec.json`, `vitest.config.ts`, `.gitignore`, `.oxlintrc.json` | Package scaffold, mirrors `packages/twenty-apps/examples/hello-world/` |
+| `package.json`, `tsconfig.json`, `tsconfig.spec.json`, `vitest.config.ts`, `.gitignore`, `.oxlintrc.json` | Package scaffold, mirrors `packages/searm-apps/examples/hello-world/` |
 | `src/application-config.ts` | `defineApplication` — app identity, default role |
 | `src/constants/universal-identifiers.ts` | Every fixed `universalIdentifier` UUID, one place, exported by name |
 | `src/objects/support-queue.object.ts` | `supportQueue` object + its scalar fields |
@@ -66,34 +66,34 @@ Because the framework already exists, this plan is deliberately small: 11 tasks,
 | `src/__tests__/app-install.integration-test.ts` | Build → deploy → install → verify → uninstall → verify teardown |
 | `src/__tests__/app-upgrade.integration-test.ts` | Install v1 → bump version, add a field → upgrade → verify |
 
-Nothing under `packages/twenty-server/`, `packages/twenty-front/`, or `packages/twenty-shared/` is created or modified by this plan.
+Nothing under `packages/searm-server/`, `packages/searm-front/`, or `packages/searm-shared/` is created or modified by this plan.
 
 ---
 
 ### Task 1: Scaffold the app package
 
 **Files:**
-- Create: `packages/twenty-apps/public/customer-support/package.json`
-- Create: `packages/twenty-apps/public/customer-support/tsconfig.json`
-- Create: `packages/twenty-apps/public/customer-support/tsconfig.spec.json`
-- Create: `packages/twenty-apps/public/customer-support/vitest.config.ts`
-- Create: `packages/twenty-apps/public/customer-support/.gitignore`
-- Create: `packages/twenty-apps/public/customer-support/.oxlintrc.json`
-- Create: `packages/twenty-apps/public/customer-support/src/constants/universal-identifiers.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/roles/app-default.role.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/application-config.ts`
+- Create: `packages/searm-apps/public/customer-support/package.json`
+- Create: `packages/searm-apps/public/customer-support/tsconfig.json`
+- Create: `packages/searm-apps/public/customer-support/tsconfig.spec.json`
+- Create: `packages/searm-apps/public/customer-support/vitest.config.ts`
+- Create: `packages/searm-apps/public/customer-support/.gitignore`
+- Create: `packages/searm-apps/public/customer-support/.oxlintrc.json`
+- Create: `packages/searm-apps/public/customer-support/src/constants/universal-identifiers.ts`
+- Create: `packages/searm-apps/public/customer-support/src/roles/app-default.role.ts`
+- Create: `packages/searm-apps/public/customer-support/src/application-config.ts`
 
 **Interfaces:**
-- Consumes: `defineApplication`, `defineRole` from `twenty-sdk/define` (verified real exports, `packages/twenty-sdk/src/sdk/define/index.ts`).
+- Consumes: `defineApplication`, `defineRole` from `searm-sdk/define` (verified real exports, `packages/searm-sdk/src/sdk/define/index.ts`).
 - Produces: `APPLICATION_UNIVERSAL_IDENTIFIER`, `APP_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER` — every later task's manifest files reference these.
 
 - [ ] **Step 1: Copy the package scaffold**
 
-Copy the shape of `packages/twenty-apps/examples/hello-world/package.json` exactly (same `engines`, same script names), renamed:
+Copy the shape of `packages/searm-apps/examples/hello-world/package.json` exactly (same `engines`, same script names), renamed:
 
 ```json
 {
-  "name": "@twentyhq/customer-support",
+  "name": "@Vatsa10/customer-support",
   "version": "1.0.0",
   "license": "MIT",
   "engines": {
@@ -103,7 +103,7 @@ Copy the shape of `packages/twenty-apps/examples/hello-world/package.json` exact
   },
   "packageManager": "yarn@4.13.0",
   "scripts": {
-    "twenty": "twenty",
+    "searm": "searm",
     "lint": "oxlint -c .oxlintrc.json .",
     "lint:fix": "oxlint --fix -c .oxlintrc.json .",
     "typecheck": "tsc --noEmit -p tsconfig.spec.json",
@@ -116,15 +116,15 @@ Copy the shape of `packages/twenty-apps/examples/hello-world/package.json` exact
     "@types/react": "^18.2.0",
     "oxlint": "^0.16.0",
     "react": "^18.2.0",
-    "twenty-client-sdk": "2.13.0",
-    "twenty-sdk": "2.13.0",
+    "searm-client-sdk": "2.13.0",
+    "searm-sdk": "2.13.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.0"
   }
 }
 ```
 
-Copy `tsconfig.json`, `tsconfig.spec.json`, `vitest.config.ts`, `.gitignore`, `.oxlintrc.json` byte-for-byte from `packages/twenty-apps/examples/hello-world/` (read each file first, then write the copy — do not guess their contents).
+Copy `tsconfig.json`, `tsconfig.spec.json`, `vitest.config.ts`, `.gitignore`, `.oxlintrc.json` byte-for-byte from `packages/searm-apps/examples/hello-world/` (read each file first, then write the copy — do not guess their contents).
 
 - [ ] **Step 2: Write the universal-identifiers constants file**
 
@@ -132,7 +132,7 @@ One file holding every fixed UUID this app uses, so no manifest file ever hand-w
 
 ```ts
 // customer-support/src/constants/universal-identifiers.ts
-// Every identifier here is permanent once committed — Twenty's app sync
+// Every identifier here is permanent once committed — SeaRM's app sync
 // engine diffs installs/upgrades by universalIdentifier. Never regenerate one.
 
 export const APPLICATION_UNIVERSAL_IDENTIFIER =
@@ -257,13 +257,13 @@ export const SLA_RISK_SWEEP_STEP_UNIVERSAL_IDENTIFIER =
 
 - [ ] **Step 3: Write the app-default role**
 
-This is the role the app's own logic functions (pre/post-install, uninstall) run as — broad by necessity, since post-install must create queue and workflow records. It is never assigned to a human. Pattern copied from `packages/twenty-apps/examples/hello-world/src/roles/default-role.ts`.
+This is the role the app's own logic functions (pre/post-install, uninstall) run as — broad by necessity, since post-install must create queue and workflow records. It is never assigned to a human. Pattern copied from `packages/searm-apps/examples/hello-world/src/roles/default-role.ts`.
 
-**Program integration (repair pass, C12):** post-install also calls the `installWorkflowDefinition` core-schema mutation (Task 9), which is guarded by `SettingsPermissionGuard(PermissionFlagType.WORKFLOWS)` (verified: `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/resolvers/proposal.resolver.ts:26` shows the same guard pattern applied at the resolver class level; Phase 4 Task 10 Step 5c applies it to the standalone `WorkflowDefinitionInstallResolver`, `@CoreResolver()`-scoped — see Task 9 Step 1's program-integration note for why this mutation is core, not metadata). Without the `WORKFLOWS` permission flag, that call is rejected and neither workflow installs. `SystemPermissionFlag.WORKFLOWS` (`'6189e7bd-4051-5752-b6b1-5f31358fbaf1'`, verified `packages/twenty-shared/src/constants/SystemPermissionFlag.ts:10`) is the flag's universal identifier, and `permissionFlagUniversalIdentifiers` is the real `RoleConfig`/`RoleManifest` property (verified `packages/twenty-sdk/src/sdk/define/roles/role-config.ts:12` and used identically in production: `packages/twenty-apps/public/people-data-labs/src/roles/default-function.role.ts:40` sets `permissionFlagUniversalIdentifiers: [SystemPermissionFlag.WORKFLOWS]` for the same reason — a post-install hook that installs a workflow):
+**Program integration (repair pass, C12):** post-install also calls the `installWorkflowDefinition` core-schema mutation (Task 9), which is guarded by `SettingsPermissionGuard(PermissionFlagType.WORKFLOWS)` (verified: `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/resolvers/proposal.resolver.ts:26` shows the same guard pattern applied at the resolver class level; Phase 4 Task 10 Step 5c applies it to the standalone `WorkflowDefinitionInstallResolver`, `@CoreResolver()`-scoped — see Task 9 Step 1's program-integration note for why this mutation is core, not metadata). Without the `WORKFLOWS` permission flag, that call is rejected and neither workflow installs. `SystemPermissionFlag.WORKFLOWS` (`'6189e7bd-4051-5752-b6b1-5f31358fbaf1'`, verified `packages/searm-shared/src/constants/SystemPermissionFlag.ts:10`) is the flag's universal identifier, and `permissionFlagUniversalIdentifiers` is the real `RoleConfig`/`RoleManifest` property (verified `packages/searm-sdk/src/sdk/define/roles/role-config.ts:12` and used identically in production: `packages/searm-apps/public/people-data-labs/src/roles/default-function.role.ts:40` sets `permissionFlagUniversalIdentifiers: [SystemPermissionFlag.WORKFLOWS]` for the same reason — a post-install hook that installs a workflow):
 
 ```ts
 // customer-support/src/roles/app-default.role.ts
-import { defineRole, SystemPermissionFlag } from 'twenty-sdk/define';
+import { defineRole, SystemPermissionFlag } from 'searm-sdk/define';
 
 import { APP_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identifiers';
 
@@ -286,7 +286,7 @@ export default defineRole({
 
 ```ts
 // customer-support/src/application-config.ts
-import { defineApplication } from 'twenty-sdk/define';
+import { defineApplication } from 'searm-sdk/define';
 
 import {
   APPLICATION_UNIVERSAL_IDENTIFIER,
@@ -298,7 +298,7 @@ export default defineApplication({
   displayName: 'Customer Support',
   description:
     'Tickets, queues, SLAs, and AI triage for support teams — objects, views, roles, and workflows, installed without touching the CRM core.',
-  author: 'Twenty',
+  author: 'SeaRM',
   category: 'Support',
   defaultRoleUniversalIdentifier: APP_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
 });
@@ -307,7 +307,7 @@ export default defineApplication({
 - [ ] **Step 5: Install dependencies and typecheck**
 
 ```bash
-cd packages/twenty-apps/public/customer-support
+cd packages/searm-apps/public/customer-support
 yarn install
 yarn typecheck
 ```
@@ -317,7 +317,7 @@ Expected: no errors (only two manifest files exist so far, both self-contained).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/twenty-apps/public/customer-support
+git add packages/searm-apps/public/customer-support
 git commit -m "feat(customer-support): scaffold app package and identity"
 ```
 
@@ -326,19 +326,19 @@ git commit -m "feat(customer-support): scaffold app package and identity"
 ### Task 2: The `supportQueue` object
 
 **Files:**
-- Create: `packages/twenty-apps/public/customer-support/src/objects/support-queue.object.ts`
+- Create: `packages/searm-apps/public/customer-support/src/objects/support-queue.object.ts`
 
 **Interfaces:**
-- Consumes: `defineObject`, `FieldType` from `twenty-sdk/define`.
+- Consumes: `defineObject`, `FieldType` from `searm-sdk/define`.
 - Produces: `supportQueue` object with fields `name`, `description`, `slaFirstResponseMinutes`, `slaResolutionMinutes`, `isDefault` — Task 4's relation field and Task 5's queue view reference this object and its field identifiers.
 
 - [ ] **Step 1: Write the object**
 
-Pattern copied from `packages/twenty-apps/examples/hello-world/src/objects/example-object.ts` and `packages/twenty-apps/fixtures/rich-app/src/objects/post-card.object.ts` (verified real files, both read in full):
+Pattern copied from `packages/searm-apps/examples/hello-world/src/objects/example-object.ts` and `packages/searm-apps/fixtures/rich-app/src/objects/post-card.object.ts` (verified real files, both read in full):
 
 ```ts
 // customer-support/src/objects/support-queue.object.ts
-import { defineObject, FieldType } from 'twenty-sdk/define';
+import { defineObject, FieldType } from 'searm-sdk/define';
 
 import {
   QUEUE_DESCRIPTION_FIELD_UNIVERSAL_IDENTIFIER,
@@ -413,9 +413,9 @@ export default defineObject({
 - [ ] **Step 2: Validate with the SDK's own build**
 
 ```bash
-cd packages/twenty-apps/public/customer-support
+cd packages/searm-apps/public/customer-support
 yarn typecheck
-npx twenty app build
+npx searm app build
 ```
 
 Expected: `app build` reports the manifest as valid (no `errors` in its `ValidationResult` output) — it will warn about a still-empty app in other respects, that is expected until later tasks add more units.
@@ -423,7 +423,7 @@ Expected: `app build` reports the manifest as valid (no `errors` in its `Validat
 - [ ] **Step 3: Commit**
 
 ```bash
-git add packages/twenty-apps/public/customer-support/src/objects/support-queue.object.ts
+git add packages/searm-apps/public/customer-support/src/objects/support-queue.object.ts
 git commit -m "feat(customer-support): add supportQueue object"
 ```
 
@@ -432,19 +432,19 @@ git commit -m "feat(customer-support): add supportQueue object"
 ### Task 3: The `supportTicket` object
 
 **Files:**
-- Create: `packages/twenty-apps/public/customer-support/src/objects/support-ticket.object.ts`
+- Create: `packages/searm-apps/public/customer-support/src/objects/support-ticket.object.ts`
 
 **Interfaces:**
-- Consumes: `defineObject`, `FieldType` from `twenty-sdk/define`.
+- Consumes: `defineObject`, `FieldType` from `searm-sdk/define`.
 - Produces: `supportTicket` object with fields `subject`, `status`, `priority`, `channel`, `description`, `slaFirstResponseDueAt`, `slaResolutionDueAt`, `firstRespondedAt`, `resolvedAt`, `aiTriageSummary`. Task 4's four relation fields, Task 5's index and views, and Task 9's workflow templates all reference this object.
 
 - [ ] **Step 1: Write the object**
 
-`SELECT` field shape (options, `defaultValue` as a quoted enum literal string) copied verbatim from `packages/twenty-apps/fixtures/rich-app/src/objects/post-card.object.ts`'s `status` field:
+`SELECT` field shape (options, `defaultValue` as a quoted enum literal string) copied verbatim from `packages/searm-apps/fixtures/rich-app/src/objects/post-card.object.ts`'s `status` field:
 
 ```ts
 // customer-support/src/objects/support-ticket.object.ts
-import { defineObject, FieldType } from 'twenty-sdk/define';
+import { defineObject, FieldType } from 'searm-sdk/define';
 
 import {
   SUPPORT_TICKET_OBJECT_UNIVERSAL_IDENTIFIER,
@@ -655,10 +655,10 @@ export default defineObject({
 - [ ] **Step 2: Validate and commit**
 
 ```bash
-cd packages/twenty-apps/public/customer-support
+cd packages/searm-apps/public/customer-support
 yarn typecheck
-npx twenty app build
-git add packages/twenty-apps/public/customer-support/src/objects/support-ticket.object.ts
+npx searm app build
+git add packages/searm-apps/public/customer-support/src/objects/support-ticket.object.ts
 git commit -m "feat(customer-support): add supportTicket object"
 ```
 
@@ -666,27 +666,27 @@ git commit -m "feat(customer-support): add supportTicket object"
 
 ### Task 4: Relation fields — the only touch on standard objects, and only as pointers
 
-This is the task the charter's "never add industry records to the core schema" rule binds hardest. Every field below is a `RELATION` field. None adds a scalar column carrying support-specific data to `company`, `person`, or `workspaceMember` — each pair is a pointer and its reverse pointer, exactly the pattern `packages/twenty-apps/public/last-contact/src/fields/last-contact-for-people-on-message.field.ts` already ships in production.
+This is the task the charter's "never add industry records to the core schema" rule binds hardest. Every field below is a `RELATION` field. None adds a scalar column carrying support-specific data to `company`, `person`, or `workspaceMember` — each pair is a pointer and its reverse pointer, exactly the pattern `packages/searm-apps/public/last-contact/src/fields/last-contact-for-people-on-message.field.ts` already ships in production.
 
 **Files:**
-- Create: `packages/twenty-apps/public/customer-support/src/fields/queue-on-ticket.field.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/fields/tickets-on-queue.field.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/fields/company-on-ticket.field.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/fields/support-tickets-on-company.field.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/fields/requester-on-ticket.field.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/fields/support-tickets-on-person.field.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/fields/assignee-on-ticket.field.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/fields/assigned-tickets-on-workspace-member.field.ts`
+- Create: `packages/searm-apps/public/customer-support/src/fields/queue-on-ticket.field.ts`
+- Create: `packages/searm-apps/public/customer-support/src/fields/tickets-on-queue.field.ts`
+- Create: `packages/searm-apps/public/customer-support/src/fields/company-on-ticket.field.ts`
+- Create: `packages/searm-apps/public/customer-support/src/fields/support-tickets-on-company.field.ts`
+- Create: `packages/searm-apps/public/customer-support/src/fields/requester-on-ticket.field.ts`
+- Create: `packages/searm-apps/public/customer-support/src/fields/support-tickets-on-person.field.ts`
+- Create: `packages/searm-apps/public/customer-support/src/fields/assignee-on-ticket.field.ts`
+- Create: `packages/searm-apps/public/customer-support/src/fields/assigned-tickets-on-workspace-member.field.ts`
 
 **Interfaces:**
-- Consumes: `defineField`, `FieldType`, `RelationType`, `OnDeleteAction`, `STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS` from `twenty-sdk/define` (all verified real exports and real usage in `packages/twenty-apps/fixtures/rich-app/src/fields/recipient-on-post-card-recipient.field.ts` and `packages/twenty-apps/public/last-contact/src/fields/last-contact-for-people-on-message.field.ts`).
+- Consumes: `defineField`, `FieldType`, `RelationType`, `OnDeleteAction`, `STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS` from `searm-sdk/define` (all verified real exports and real usage in `packages/searm-apps/fixtures/rich-app/src/fields/recipient-on-post-card-recipient.field.ts` and `packages/searm-apps/public/last-contact/src/fields/last-contact-for-people-on-message.field.ts`).
 - Produces: `supportTicket.queue`, `supportQueue.tickets`, `supportTicket.company`, `company.supportTickets`, `supportTicket.requester`, `person.supportTickets`, `supportTicket.assignee`, `workspaceMember.assignedSupportTickets` — Task 5's views and Task 6's role field permissions reference these by field name.
 
 - [ ] **Step 1: `supportTicket.queue` ↔ `supportQueue.tickets`**
 
 ```ts
 // customer-support/src/fields/queue-on-ticket.field.ts
-import { defineField, FieldType, RelationType } from 'twenty-sdk/define';
+import { defineField, FieldType, RelationType } from 'searm-sdk/define';
 
 import {
   SUPPORT_QUEUE_OBJECT_UNIVERSAL_IDENTIFIER,
@@ -715,7 +715,7 @@ export default defineField({
 
 ```ts
 // customer-support/src/fields/tickets-on-queue.field.ts
-import { defineField, FieldType, RelationType } from 'twenty-sdk/define';
+import { defineField, FieldType, RelationType } from 'searm-sdk/define';
 
 import {
   SUPPORT_QUEUE_OBJECT_UNIVERSAL_IDENTIFIER,
@@ -750,7 +750,7 @@ import {
   FieldType,
   RelationType,
   STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS,
-} from 'twenty-sdk/define';
+} from 'searm-sdk/define';
 
 import {
   SUPPORT_TICKET_OBJECT_UNIVERSAL_IDENTIFIER,
@@ -785,7 +785,7 @@ import {
   FieldType,
   RelationType,
   STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS,
-} from 'twenty-sdk/define';
+} from 'searm-sdk/define';
 
 import {
   SUPPORT_TICKET_OBJECT_UNIVERSAL_IDENTIFIER,
@@ -822,7 +822,7 @@ import {
   FieldType,
   RelationType,
   STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS,
-} from 'twenty-sdk/define';
+} from 'searm-sdk/define';
 
 import {
   SUPPORT_TICKET_OBJECT_UNIVERSAL_IDENTIFIER,
@@ -855,7 +855,7 @@ import {
   FieldType,
   RelationType,
   STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS,
-} from 'twenty-sdk/define';
+} from 'searm-sdk/define';
 
 import {
   SUPPORT_TICKET_OBJECT_UNIVERSAL_IDENTIFIER,
@@ -892,7 +892,7 @@ import {
   FieldType,
   RelationType,
   STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS,
-} from 'twenty-sdk/define';
+} from 'searm-sdk/define';
 
 import {
   SUPPORT_TICKET_OBJECT_UNIVERSAL_IDENTIFIER,
@@ -925,7 +925,7 @@ import {
   FieldType,
   RelationType,
   STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS,
-} from 'twenty-sdk/define';
+} from 'searm-sdk/define';
 
 import {
   SUPPORT_TICKET_OBJECT_UNIVERSAL_IDENTIFIER,
@@ -954,20 +954,20 @@ export default defineField({
 });
 ```
 
-**Repair pass (N7).** `STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.workspaceMember` is confirmed present and correctly camelCased: `packages/twenty-sdk/src/sdk/define/objects/standard-object-ids.ts` re-exports `STANDARD_OBJECTS` from `twenty-shared/metadata`, and `packages/twenty-shared/src/metadata/constants/standard-object-universal-identifiers.constant.ts:26` reads `workspaceMember: '20202020-3319-4234-a34c-82d5c0e881a6'`. `STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.workspaceMember.universalIdentifier` above is real and resolves to that UUID; no fallback is needed.
+**Repair pass (N7).** `STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.workspaceMember` is confirmed present and correctly camelCased: `packages/searm-sdk/src/sdk/define/objects/standard-object-ids.ts` re-exports `STANDARD_OBJECTS` from `searm-shared/metadata`, and `packages/searm-shared/src/metadata/constants/standard-object-universal-identifiers.constant.ts:26` reads `workspaceMember: '20202020-3319-4234-a34c-82d5c0e881a6'`. `STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.workspaceMember.universalIdentifier` above is real and resolves to that UUID; no fallback is needed.
 
 - [ ] **Step 5: Validate and commit**
 
 ```bash
-cd packages/twenty-apps/public/customer-support
+cd packages/searm-apps/public/customer-support
 yarn typecheck
-npx twenty app build
+npx searm app build
 ```
 
 Expected: build succeeds; both sides of each relation resolve (the SDK's `defineField` validator checks that `relationTargetFieldMetadataUniversalIdentifier` points at a field that itself points back — if it reports an unresolved reverse pointer, check that both files in the pair use the exact same two UUIDs, swapped).
 
 ```bash
-git add packages/twenty-apps/public/customer-support/src/fields
+git add packages/searm-apps/public/customer-support/src/fields
 git commit -m "feat(customer-support): relate tickets to company, person, workspace member, queue"
 ```
 
@@ -976,23 +976,23 @@ git commit -m "feat(customer-support): relate tickets to company, person, worksp
 ### Task 5: Index, views, navigation
 
 **Files:**
-- Create: `packages/twenty-apps/public/customer-support/src/indexes/support-ticket-status.index.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/views/all-tickets.view.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/views/tickets-by-status.view.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/views/queue-overview.view.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/navigation-menu-items/support-tickets.navigation-menu-item.ts`
+- Create: `packages/searm-apps/public/customer-support/src/indexes/support-ticket-status.index.ts`
+- Create: `packages/searm-apps/public/customer-support/src/views/all-tickets.view.ts`
+- Create: `packages/searm-apps/public/customer-support/src/views/tickets-by-status.view.ts`
+- Create: `packages/searm-apps/public/customer-support/src/views/queue-overview.view.ts`
+- Create: `packages/searm-apps/public/customer-support/src/navigation-menu-items/support-tickets.navigation-menu-item.ts`
 
 **Interfaces:**
-- Consumes: `defineIndex`, `defineView`, `defineNavigationMenuItem`, `ViewType` from `twenty-sdk/define`; `NavigationMenuItemType` from `twenty-shared/types` (verified real import in `packages/twenty-apps/examples/hello-world/src/navigation-menu-items/example-navigation-menu-item.ts`).
+- Consumes: `defineIndex`, `defineView`, `defineNavigationMenuItem`, `ViewType` from `searm-sdk/define`; `NavigationMenuItemType` from `searm-shared/types` (verified real import in `packages/searm-apps/examples/hello-world/src/navigation-menu-items/example-navigation-menu-item.ts`).
 - Produces: three views and one navigation entry, reachable in the workspace UI after install.
 
 - [ ] **Step 1: Index on ticket status**
 
-Pattern from `packages/twenty-apps/fixtures/rich-app/src/indexes/post-card-status.index.ts`:
+Pattern from `packages/searm-apps/fixtures/rich-app/src/indexes/post-card-status.index.ts`:
 
 ```ts
 // customer-support/src/indexes/support-ticket-status.index.ts
-import { defineIndex } from 'twenty-sdk/define';
+import { defineIndex } from 'searm-sdk/define';
 
 import {
   SUPPORT_TICKET_OBJECT_UNIVERSAL_IDENTIFIER,
@@ -1015,11 +1015,11 @@ export default defineIndex({
 
 - [ ] **Step 2: All Tickets table view**
 
-Pattern from `packages/twenty-apps/examples/hello-world/src/views/example-view.ts`:
+Pattern from `packages/searm-apps/examples/hello-world/src/views/example-view.ts`:
 
 ```ts
 // customer-support/src/views/all-tickets.view.ts
-import { defineView, ViewType } from 'twenty-sdk/define';
+import { defineView, ViewType } from 'searm-sdk/define';
 
 import {
   ALL_TICKETS_VIEW_PRIORITY_FIELD_UNIVERSAL_IDENTIFIER,
@@ -1068,11 +1068,11 @@ export default defineView({
 
 - [ ] **Step 3: Tickets by status Kanban view**
 
-`mainGroupByFieldMetadataUniversalIdentifier` is the Kanban grouping field (verified field on `ViewManifest`, `packages/twenty-shared/src/application/viewManifestType.ts`):
+`mainGroupByFieldMetadataUniversalIdentifier` is the Kanban grouping field (verified field on `ViewManifest`, `packages/searm-shared/src/application/viewManifestType.ts`):
 
 ```ts
 // customer-support/src/views/tickets-by-status.view.ts
-import { defineView, ViewType } from 'twenty-sdk/define';
+import { defineView, ViewType } from 'searm-sdk/define';
 
 import {
   SUPPORT_TICKET_OBJECT_UNIVERSAL_IDENTIFIER,
@@ -1117,7 +1117,7 @@ export default defineView({
 
 ```ts
 // customer-support/src/views/queue-overview.view.ts
-import { defineView, ViewType } from 'twenty-sdk/define';
+import { defineView, ViewType } from 'searm-sdk/define';
 
 import {
   QUEUE_NAME_FIELD_UNIVERSAL_IDENTIFIER,
@@ -1159,8 +1159,8 @@ export default defineView({
 
 ```ts
 // customer-support/src/navigation-menu-items/support-tickets.navigation-menu-item.ts
-import { defineNavigationMenuItem } from 'twenty-sdk/define';
-import { NavigationMenuItemType } from 'twenty-shared/types';
+import { defineNavigationMenuItem } from 'searm-sdk/define';
+import { NavigationMenuItemType } from 'searm-shared/types';
 
 import {
   ALL_TICKETS_VIEW_UNIVERSAL_IDENTIFIER,
@@ -1181,10 +1181,10 @@ export default defineNavigationMenuItem({
 - [ ] **Step 6: Validate and commit**
 
 ```bash
-cd packages/twenty-apps/public/customer-support
+cd packages/searm-apps/public/customer-support
 yarn typecheck
-npx twenty app build
-git add packages/twenty-apps/public/customer-support/src/indexes packages/twenty-apps/public/customer-support/src/views packages/twenty-apps/public/customer-support/src/navigation-menu-items
+npx searm app build
+git add packages/searm-apps/public/customer-support/src/indexes packages/searm-apps/public/customer-support/src/views packages/searm-apps/public/customer-support/src/navigation-menu-items
 git commit -m "feat(customer-support): add index, views, navigation"
 ```
 
@@ -1195,22 +1195,22 @@ git commit -m "feat(customer-support): add index, views, navigation"
 The scoped role (`support-agent.role.ts`) is assigned to both human support reps and, in Task 7, the AI triage agent. This is the one role that governs what the AI can *see and touch at all* — the AI write policy (Launch 1) then governs, on top of that, whether a touch it's permitted to make executes immediately or becomes a proposal.
 
 **Files:**
-- Create: `packages/twenty-apps/public/customer-support/src/roles/support-agent.role.ts`
+- Create: `packages/searm-apps/public/customer-support/src/roles/support-agent.role.ts`
 
 **Interfaces:**
-- Consumes: `defineRole`, `STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS` from `twenty-sdk/define`.
+- Consumes: `defineRole`, `STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS` from `searm-sdk/define`.
 - Produces: `SUPPORT_AGENT_ROLE_UNIVERSAL_IDENTIFIER` — Task 7's agent definition references it as `roleUniversalIdentifier`.
 
 - [ ] **Step 1: Write the role**
 
-Pattern from `packages/twenty-apps/fixtures/rich-app/src/roles/default-function.role.ts` (`objectPermissions`/`fieldPermissions` array shape verified in full):
+Pattern from `packages/searm-apps/fixtures/rich-app/src/roles/default-function.role.ts` (`objectPermissions`/`fieldPermissions` array shape verified in full):
 
 ```ts
 // customer-support/src/roles/support-agent.role.ts
 import {
   defineRole,
   STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS,
-} from 'twenty-sdk/define';
+} from 'searm-sdk/define';
 
 import {
   SUPPORT_AGENT_ROLE_UNIVERSAL_IDENTIFIER,
@@ -1266,15 +1266,15 @@ export default defineRole({
 });
 ```
 
-`canBeAssignedToAgents: true` is what makes this role legal to bind to `defineAgent`'s `roleUniversalIdentifier` in Task 7 — the SDK's `defineAgent` validator (`packages/twenty-sdk/src/sdk/define/agents/define-agent.ts`) only checks the identifier is a well-formed UUID, so if the install-time server-side validator rejects a role not flagged assignable to agents, this field is why; it is included from the start to avoid that failure mode.
+`canBeAssignedToAgents: true` is what makes this role legal to bind to `defineAgent`'s `roleUniversalIdentifier` in Task 7 — the SDK's `defineAgent` validator (`packages/searm-sdk/src/sdk/define/agents/define-agent.ts`) only checks the identifier is a well-formed UUID, so if the install-time server-side validator rejects a role not flagged assignable to agents, this field is why; it is included from the start to avoid that failure mode.
 
 - [ ] **Step 2: Validate and commit**
 
 ```bash
-cd packages/twenty-apps/public/customer-support
+cd packages/searm-apps/public/customer-support
 yarn typecheck
-npx twenty app build
-git add packages/twenty-apps/public/customer-support/src/roles/support-agent.role.ts
+npx searm app build
+git add packages/searm-apps/public/customer-support/src/roles/support-agent.role.ts
 git commit -m "feat(customer-support): add scoped support-agent role"
 ```
 
@@ -1285,20 +1285,20 @@ git commit -m "feat(customer-support): add scoped support-agent role"
 Every write this agent attempts — updating `status`, `priority`, or `aiTriageSummary` on a ticket — is dispatched through `ToolExecutorService.dispatch()`, which is Launch 1's single gate. Nothing in this task creates a new write path; it creates an agent whose writes are automatically subject to the existing one.
 
 **Files:**
-- Create: `packages/twenty-apps/public/customer-support/src/agents/support-triage-agent.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/skills/support-triage-skill.ts`
+- Create: `packages/searm-apps/public/customer-support/src/agents/support-triage-agent.ts`
+- Create: `packages/searm-apps/public/customer-support/src/skills/support-triage-skill.ts`
 
 **Interfaces:**
-- Consumes: `defineAgent`, `defineSkill` from `twenty-sdk/define`.
+- Consumes: `defineAgent`, `defineSkill` from `searm-sdk/define`.
 - Produces: `SUPPORT_TRIAGE_AGENT_UNIVERSAL_IDENTIFIER` — Task 9's workflow templates reference this as the `agentId` input of an `AI_AGENT` workflow step.
 
 - [ ] **Step 1: Write the skill**
 
-Pattern from `packages/twenty-apps/examples/hello-world/src/skills/example-skill.ts`:
+Pattern from `packages/searm-apps/examples/hello-world/src/skills/example-skill.ts`:
 
 ```ts
 // customer-support/src/skills/support-triage-skill.ts
-import { defineSkill } from 'twenty-sdk/define';
+import { defineSkill } from 'searm-sdk/define';
 
 import { SUPPORT_TRIAGE_SKILL_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identifiers';
 
@@ -1325,11 +1325,11 @@ effect; state your reasoning as if someone will read it before approving.`,
 
 - [ ] **Step 2: Write the agent**
 
-Pattern from `packages/twenty-apps/examples/hello-world/src/agents/example-agent.ts`, with `roleUniversalIdentifier` added (verified real config field, `packages/twenty-sdk/src/sdk/define/agents/define-agent.ts`):
+Pattern from `packages/searm-apps/examples/hello-world/src/agents/example-agent.ts`, with `roleUniversalIdentifier` added (verified real config field, `packages/searm-sdk/src/sdk/define/agents/define-agent.ts`):
 
 ```ts
 // customer-support/src/agents/support-triage-agent.ts
-import { defineAgent } from 'twenty-sdk/define';
+import { defineAgent } from 'searm-sdk/define';
 
 import {
   SUPPORT_AGENT_ROLE_UNIVERSAL_IDENTIFIER,
@@ -1358,10 +1358,10 @@ do not describe a change as already applied.`,
 - [ ] **Step 3: Validate and commit**
 
 ```bash
-cd packages/twenty-apps/public/customer-support
+cd packages/searm-apps/public/customer-support
 yarn typecheck
-npx twenty app build
-git add packages/twenty-apps/public/customer-support/src/agents packages/twenty-apps/public/customer-support/src/skills
+npx searm app build
+git add packages/searm-apps/public/customer-support/src/agents packages/searm-apps/public/customer-support/src/skills
 git commit -m "feat(customer-support): add support triage agent and skill"
 ```
 
@@ -1374,18 +1374,18 @@ git commit -m "feat(customer-support): add support triage agent and skill"
 > **Repair pass (I22, I23).** This task's step numbering originally started at "Step 2" — a renumbering bug from the pre-install cut, fixed below by starting at Step 1. It also originally wrote `post-install.ts` here and told the implementer *"do not run `yarn typecheck` yet — the two workflow-template imports do not resolve until Task 9,"* directly contradicting this plan's own Global Constraint ("Lint and typecheck after each task"). Fixed by moving the entire `post-install.ts` write into Task 9 (its Step 4, after `seedNewTicketTriageWorkflow`/`seedSlaRiskSweepWorkflow` exist to import) — this task now only writes and commits `uninstall.ts`, which is self-contained and typechecks on its own. Task 9's post-install work depends on Phase 4 Task 10 regardless (see Task 9's header); folding the file write into that task does not add a new dependency, it only stops the plan from asking for a task-boundary commit that cannot typecheck.
 
 **Files:**
-- Create: `packages/twenty-apps/public/customer-support/src/logic-functions/uninstall.ts`
+- Create: `packages/searm-apps/public/customer-support/src/logic-functions/uninstall.ts`
 
 **Interfaces:**
-- Consumes: `defineUninstallLogicFunction`, `UninstallPayload` from `twenty-sdk/define`.
+- Consumes: `defineUninstallLogicFunction`, `UninstallPayload` from `searm-sdk/define`.
 - Produces: nothing consumed by a later task — uninstall logging is standalone. (`post-install.ts` is written in Task 9, Step 4.)
 
 - [ ] **Step 1: Uninstall**
 
 ```ts
 // customer-support/src/logic-functions/uninstall.ts
-import { defineUninstallLogicFunction } from 'twenty-sdk/define';
-import { type UninstallPayload } from 'twenty-sdk/logic-function';
+import { defineUninstallLogicFunction } from 'searm-sdk/define';
+import { type UninstallPayload } from 'searm-sdk/logic-function';
 
 import { UNINSTALL_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identifiers';
 
@@ -1412,9 +1412,9 @@ export default defineUninstallLogicFunction({
 - [ ] **Step 2: Validate and commit**
 
 ```bash
-cd packages/twenty-apps/public/customer-support
+cd packages/searm-apps/public/customer-support
 yarn typecheck
-git add packages/twenty-apps/public/customer-support/src/logic-functions/uninstall.ts
+git add packages/searm-apps/public/customer-support/src/logic-functions/uninstall.ts
 git commit -m "feat(customer-support): add uninstall hook"
 ```
 
@@ -1424,18 +1424,18 @@ Expected: no errors — `uninstall.ts` has no dependency on anything Task 9 writ
 
 ### Task 9: Close the workflow-template gap — the one place this plan writes real logic
 
-**This is the framework gap.** No app-manifest unit exists for a declarative workflow template — confirmed by an exhaustive listing of `packages/twenty-server/src/engine/core-modules/application/application-manifest/converters/`, where every other unit type in the anchors report (`object`, `field`, `index`, `view`, `view-field`, `role`, `agent` (via `role-target`), `skill`, `page-layout`, `page-layout-tab`, `page-layout-widget`, `navigation-menu-item`, `command-menu-item`, `connection-provider`, `application-variable`, `permission-flag`, `front-component`, row-level-permission-predicate(-group)) has a matching converter, and `workflow` does not.
+**This is the framework gap.** No app-manifest unit exists for a declarative workflow template — confirmed by an exhaustive listing of `packages/searm-server/src/engine/core-modules/application/application-manifest/converters/`, where every other unit type in the anchors report (`object`, `field`, `index`, `view`, `view-field`, `role`, `agent` (via `role-target`), `skill`, `page-layout`, `page-layout-tab`, `page-layout-widget`, `navigation-menu-item`, `command-menu-item`, `connection-provider`, `application-variable`, `permission-flag`, `front-component`, row-level-permission-predicate(-group)) has a matching converter, and `workflow` does not.
 
-Closing this with a new manifest unit type would mean a new `WorkflowManifest` type in `twenty-shared`, a new converter in `application-manifest/converters/`, a new builder step in the workspace migration runner, and a version bump across every package that imports `twenty-shared` — disproportionate to what one vertical needs. Instead: **an app declares its workflows as data and installs them with one call to `installWorkflowDefinition`**, the public mutation Phase 4 Task 10 exposes over `WorkflowTemplateService.installDefinition`. Zero core code changes *in this plan*, and zero hand-rolled workflow-builder calls. The cost is that this one piece is still TypeScript data plus one call, not a declarative manifest file — recorded honestly in "What was deliberately cut," not hidden.
+Closing this with a new manifest unit type would mean a new `WorkflowManifest` type in `searm-shared`, a new converter in `application-manifest/converters/`, a new builder step in the workspace migration runner, and a version bump across every package that imports `searm-shared` — disproportionate to what one vertical needs. Instead: **an app declares its workflows as data and installs them with one call to `installWorkflowDefinition`**, the public mutation Phase 4 Task 10 exposes over `WorkflowTemplateService.installDefinition`. Zero core code changes *in this plan*, and zero hand-rolled workflow-builder calls. The cost is that this one piece is still TypeScript data plus one call, not a declarative manifest file — recorded honestly in "What was deliberately cut," not hidden.
 
 **Files:**
-- Create: `packages/twenty-apps/public/customer-support/src/utils/seed-workflow.util.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/workflow-templates/new-ticket-triage.workflow-template.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/workflow-templates/sla-risk-sweep.workflow-template.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/logic-functions/post-install.ts` (repair pass, I23: moved here from Task 8 so no task-boundary commit is red — see Step 4)
+- Create: `packages/searm-apps/public/customer-support/src/utils/seed-workflow.util.ts`
+- Create: `packages/searm-apps/public/customer-support/src/workflow-templates/new-ticket-triage.workflow-template.ts`
+- Create: `packages/searm-apps/public/customer-support/src/workflow-templates/sla-risk-sweep.workflow-template.ts`
+- Create: `packages/searm-apps/public/customer-support/src/logic-functions/post-install.ts` (repair pass, I23: moved here from Task 8 so no task-boundary commit is red — see Step 4)
 
 **Interfaces:**
-- Consumes: `CoreApiClient` from `twenty-client-sdk/core` (program integration, second pass — `installWorkflowDefinition` lives on the **core** schema, `@CoreResolver()` on the standalone `WorkflowDefinitionInstallResolver` class; see Phase 4 Task 10's "Contract exposed to Phase 5" table); `MetadataApiClient` from `twenty-client-sdk/metadata` (unrelated to that mutation — used only for the `agents` lookup query in Steps 2–3, since `AgentResolver` is `@MetadataResolver()`-scoped, verified `packages/twenty-server/src/engine/metadata-modules/ai/ai-agent/agent.resolver.ts:29`); `WorkflowActionType` from `twenty-shared/workflow` (verified real export, `packages/twenty-shared/src/workflow/types/WorkflowActionType.ts`, importable the same way `twenty-shared/types` is imported in existing app code).
+- Consumes: `CoreApiClient` from `searm-client-sdk/core` (program integration, second pass — `installWorkflowDefinition` lives on the **core** schema, `@CoreResolver()` on the standalone `WorkflowDefinitionInstallResolver` class; see Phase 4 Task 10's "Contract exposed to Phase 5" table); `MetadataApiClient` from `searm-client-sdk/metadata` (unrelated to that mutation — used only for the `agents` lookup query in Steps 2–3, since `AgentResolver` is `@MetadataResolver()`-scoped, verified `packages/searm-server/src/engine/metadata-modules/ai/ai-agent/agent.resolver.ts:29`); `WorkflowActionType` from `searm-shared/workflow` (verified real export, `packages/searm-shared/src/workflow/types/WorkflowActionType.ts`, importable the same way `searm-shared/types` is imported in existing app code).
 - Produces: `seedWorkflow(client, template): Promise<{ workflowId: string; workflowVersionId: string }>` — the reusable helper. This exact function is what makes vertical #2's workflow templates configuration-shaped: copy `seed-workflow.util.ts` unmodified into the next app, then write only a new `WorkflowTemplate` data object.
 
 - [ ] **Step 1: Write the reusable seeding helper (thin wrapper over Phase 4's mutation)**
@@ -1446,15 +1446,15 @@ Closing this with a new manifest unit type would mean a new `WorkflowManifest` t
 >
 > **Phase 4 Task 10 already implements exactly that sequence server-side**, against verified services (`RecordPositionService`, `WorkflowVersionCoreSyncService`, `WorkflowTriggerWorkspaceService`) copied from the shipped `create_complete_workflow` tool. The program review added `WorkflowTemplateService.installDefinition(...)` and the public mutation `installWorkflowDefinition(input: InstallWorkflowDefinitionInput!): InstalledWorkflowTemplate!` specifically so an application can supply its own workflow definition and reuse that one implementation.
 >
-> So this helper is now **one mutation call**. The whole class of risk (wrong mutation name, wrong path to the draft version, wrong parent-step chaining, non-idempotent re-install) moves into `twenty-server`, where it is unit-tested. This adds a dependency: **Phase 4 Task 10 must ship before Phase 5 Task 9's post-install hook can run.** Every other Phase 5 task stays independent of Phase 4.
+> So this helper is now **one mutation call**. The whole class of risk (wrong mutation name, wrong path to the draft version, wrong parent-step chaining, non-idempotent re-install) moves into `searm-server`, where it is unit-tested. This adds a dependency: **Phase 4 Task 10 must ship before Phase 5 Task 9's post-install hook can run.** Every other Phase 5 task stays independent of Phase 4.
 
 ```ts
 // customer-support/src/utils/seed-workflow.util.ts
-import { type CoreApiClient } from 'twenty-client-sdk/core';
+import { type CoreApiClient } from 'searm-client-sdk/core';
 
 // Mirrors the server's WorkflowTrigger union
-// (packages/twenty-server/src/modules/workflow/workflow-trigger/types/workflow-trigger.type.ts),
-// which is not exported from twenty-shared. The GraphQL argument is typed as
+// (packages/searm-server/src/modules/workflow/workflow-trigger/types/workflow-trigger.type.ts),
+// which is not exported from searm-shared. The GraphQL argument is typed as
 // arbitrary JSON server-side, so a structurally correct plain object works
 // without importing that type.
 export type WorkflowTriggerTemplate =
@@ -1473,7 +1473,7 @@ export type WorkflowTriggerTemplate =
 
 export type WorkflowStepTemplate = {
   // Real WorkflowAction fields (verified:
-  // packages/twenty-shared/src/workflow/schemas/base-workflow-action-schema.ts).
+  // packages/searm-shared/src/workflow/schemas/base-workflow-action-schema.ts).
   // Only { type, name, settings } are required by
   // InstallWorkflowDefinitionInput — id, valid and nextStepIds are optional
   // and normalizeWorkflowTemplateSteps (Phase 4 Task 10, server-side)
@@ -1503,7 +1503,7 @@ export type WorkflowTemplate = {
   steps: WorkflowStepTemplate[];
 };
 
-// One call into twenty-server's WorkflowTemplateService.installDefinition,
+// One call into searm-server's WorkflowTemplateService.installDefinition,
 // which owns workflow creation, step chaining, activation, and
 // idempotency-by-name for both built-in templates and app-supplied ones.
 // Copy this file unmodified into the next vertical app; only the template
@@ -1572,13 +1572,13 @@ Note the step shape changed with the mutation: a step is the real `WorkflowActio
 
 - [ ] **Step 2: Write the "new ticket triage" template**
 
-`agentId` in a workflow step's `settings.input` is read as an agent's row **id** at execution time (`packages/twenty-server/src/modules/workflow/workflow-executor/workflow-actions/ai-agent/ai-agent.workflow-action.ts`: `agentRepository.findOne(workspaceId, { where: { id: agentId } })`) — not the manifest `universalIdentifier`. Rather than assume the two are equal, resolve the real row id unconditionally with a metadata query before building the template. Two clients are needed here, for two different reasons: `metadataClient` because `AgentResolver` is `@MetadataResolver()`-scoped (verified `packages/twenty-server/src/engine/metadata-modules/ai/ai-agent/agent.resolver.ts:29`), `coreClient` because `installWorkflowDefinition` (inside `seedWorkflow`) is `@CoreResolver()`-scoped:
+`agentId` in a workflow step's `settings.input` is read as an agent's row **id** at execution time (`packages/searm-server/src/modules/workflow/workflow-executor/workflow-actions/ai-agent/ai-agent.workflow-action.ts`: `agentRepository.findOne(workspaceId, { where: { id: agentId } })`) — not the manifest `universalIdentifier`. Rather than assume the two are equal, resolve the real row id unconditionally with a metadata query before building the template. Two clients are needed here, for two different reasons: `metadataClient` because `AgentResolver` is `@MetadataResolver()`-scoped (verified `packages/searm-server/src/engine/metadata-modules/ai/ai-agent/agent.resolver.ts:29`), `coreClient` because `installWorkflowDefinition` (inside `seedWorkflow`) is `@CoreResolver()`-scoped:
 
 ```ts
 // customer-support/src/workflow-templates/new-ticket-triage.workflow-template.ts
-import { type CoreApiClient } from 'twenty-client-sdk/core';
-import { type MetadataApiClient } from 'twenty-client-sdk/metadata';
-import { WorkflowActionType } from 'twenty-shared/workflow';
+import { type CoreApiClient } from 'searm-client-sdk/core';
+import { type MetadataApiClient } from 'searm-client-sdk/metadata';
+import { WorkflowActionType } from 'searm-shared/workflow';
 
 import {
   NEW_TICKET_TRIAGE_STEP_UNIVERSAL_IDENTIFIER,
@@ -1648,9 +1648,9 @@ Deliberately reuses the same `AI_AGENT` step shape as the first template rather 
 
 ```ts
 // customer-support/src/workflow-templates/sla-risk-sweep.workflow-template.ts
-import { type CoreApiClient } from 'twenty-client-sdk/core';
-import { type MetadataApiClient } from 'twenty-client-sdk/metadata';
-import { WorkflowActionType } from 'twenty-shared/workflow';
+import { type CoreApiClient } from 'searm-client-sdk/core';
+import { type MetadataApiClient } from 'searm-client-sdk/metadata';
+import { WorkflowActionType } from 'searm-shared/workflow';
 
 import {
   SLA_RISK_SWEEP_STEP_UNIVERSAL_IDENTIFIER,
@@ -1718,10 +1718,10 @@ export const seedSlaRiskSweepWorkflow = async (
 
 ```ts
 // customer-support/src/logic-functions/post-install.ts
-import { CoreApiClient } from 'twenty-client-sdk/core';
-import { MetadataApiClient } from 'twenty-client-sdk/metadata';
-import { definePostInstallLogicFunction } from 'twenty-sdk/define';
-import { type InstallPayload } from 'twenty-sdk/logic-function';
+import { CoreApiClient } from 'searm-client-sdk/core';
+import { MetadataApiClient } from 'searm-client-sdk/metadata';
+import { definePostInstallLogicFunction } from 'searm-sdk/define';
+import { type InstallPayload } from 'searm-sdk/logic-function';
 
 import { POST_INSTALL_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identifiers';
 import { seedNewTicketTriageWorkflow } from 'src/workflow-templates/new-ticket-triage.workflow-template';
@@ -1779,14 +1779,14 @@ export default definePostInstallLogicFunction({
 });
 ```
 
-`createSupportQueue` follows the exact confirmed pattern in `packages/twenty-apps/examples/hello-world/src/logic-functions/create-hello-world-company.ts` (`client.mutation({ createCompany: { __args: { data: {...} }, id: true, name: true } })`) — Twenty's `CoreApiClient` names its generic-object mutations `create<PascalCaseObjectName>`, not `createOne<PascalCaseObjectName>`.
+`createSupportQueue` follows the exact confirmed pattern in `packages/searm-apps/examples/hello-world/src/logic-functions/create-hello-world-company.ts` (`client.mutation({ createCompany: { __args: { data: {...} }, id: true, name: true } })`) — SeaRM's `CoreApiClient` names its generic-object mutations `create<PascalCaseObjectName>`, not `createOne<PascalCaseObjectName>`.
 
 - [ ] **Step 5: Typecheck the whole package now that all imports resolve**
 
 ```bash
-cd packages/twenty-apps/public/customer-support
+cd packages/searm-apps/public/customer-support
 yarn typecheck
-npx twenty app build
+npx searm app build
 ```
 
 Expected: no errors — every file this task and Task 8 wrote is present, so this is the first point at which the full package typechecks.
@@ -1794,7 +1794,7 @@ Expected: no errors — every file this task and Task 8 wrote is present, so thi
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/twenty-apps/public/customer-support/src/utils packages/twenty-apps/public/customer-support/src/workflow-templates packages/twenty-apps/public/customer-support/src/logic-functions/post-install.ts
+git add packages/searm-apps/public/customer-support/src/utils packages/searm-apps/public/customer-support/src/workflow-templates packages/searm-apps/public/customer-support/src/logic-functions/post-install.ts
 git commit -m "feat(customer-support): seed workflow templates via existing workflow-builder API"
 ```
 
@@ -1803,19 +1803,19 @@ git commit -m "feat(customer-support): seed workflow templates via existing work
 ### Task 10: Support overview dashboard
 
 **Files:**
-- Create: `packages/twenty-apps/public/customer-support/src/page-layouts/support-overview.page-layout.ts`
+- Create: `packages/searm-apps/public/customer-support/src/page-layouts/support-overview.page-layout.ts`
 
 **Interfaces:**
-- Consumes: `definePageLayout`, `PageLayoutType` from `twenty-sdk/define`; `WidgetType` — imported from `twenty-shared/types` the same way `NavigationMenuItemType` is (the `WidgetType` enum lives server-side at `packages/twenty-server/src/engine/metadata-modules/page-layout-widget/enums/widget-type.enum.ts`; if it is not re-exported from `twenty-shared/types`, use the string literal `'VIEW'` directly — the manifest type accepts `type: string`, verified in `packages/twenty-shared/src/application/pageLayoutManifestType.ts`).
+- Consumes: `definePageLayout`, `PageLayoutType` from `searm-sdk/define`; `WidgetType` — imported from `searm-shared/types` the same way `NavigationMenuItemType` is (the `WidgetType` enum lives server-side at `packages/searm-server/src/engine/metadata-modules/page-layout-widget/enums/widget-type.enum.ts`; if it is not re-exported from `searm-shared/types`, use the string literal `'VIEW'` directly — the manifest type accepts `type: string`, verified in `packages/searm-shared/src/application/pageLayoutManifestType.ts`).
 - Produces: one `DASHBOARD`-type page layout with two `VIEW`-configuration widgets.
 
 - [ ] **Step 1: Write the dashboard**
 
-`ViewConfiguration = { configurationType: 'VIEW' }` verified in full — `packages/twenty-shared/src/types/page-layout/page-layout-widget-configuration.type.ts`, lines 89–91. A `VIEW` widget's `objectUniversalIdentifier` (top-level, sibling of `configuration`) selects which object's default view renders:
+`ViewConfiguration = { configurationType: 'VIEW' }` verified in full — `packages/searm-shared/src/types/page-layout/page-layout-widget-configuration.type.ts`, lines 89–91. A `VIEW` widget's `objectUniversalIdentifier` (top-level, sibling of `configuration`) selects which object's default view renders:
 
 ```ts
 // customer-support/src/page-layouts/support-overview.page-layout.ts
-import { definePageLayout, PageLayoutTabLayoutMode } from 'twenty-sdk/define';
+import { definePageLayout, PageLayoutTabLayoutMode } from 'searm-sdk/define';
 
 import {
   SUPPORT_OVERVIEW_KANBAN_WIDGET_UNIVERSAL_IDENTIFIER,
@@ -1863,10 +1863,10 @@ export default definePageLayout({
 - [ ] **Step 2: Validate and commit**
 
 ```bash
-cd packages/twenty-apps/public/customer-support
+cd packages/searm-apps/public/customer-support
 yarn typecheck
-npx twenty app build
-git add packages/twenty-apps/public/customer-support/src/page-layouts
+npx searm app build
+git add packages/searm-apps/public/customer-support/src/page-layouts
 git commit -m "feat(customer-support): add support overview dashboard"
 ```
 
@@ -1877,21 +1877,21 @@ git commit -m "feat(customer-support): add support overview dashboard"
 This task is the actual deliverable of the phase: it proves the vertical installs cleanly, is usable, survives an upgrade, and uninstalls without leaving CRM core data damaged.
 
 **Files:**
-- Create: `packages/twenty-apps/public/customer-support/src/__tests__/app-install.integration-test.ts`
-- Create: `packages/twenty-apps/public/customer-support/src/__tests__/app-upgrade.integration-test.ts`
+- Create: `packages/searm-apps/public/customer-support/src/__tests__/app-install.integration-test.ts`
+- Create: `packages/searm-apps/public/customer-support/src/__tests__/app-upgrade.integration-test.ts`
 
 **Interfaces:**
-- Consumes: `appBuild`, `appDeploy`, `appInstall`, `appUninstall` from `twenty-sdk/cli`; `MetadataApiClient` from `twenty-client-sdk/metadata`; `CoreApiClient` from `twenty-client-sdk/core` (all verified real exports/usage, `packages/twenty-apps/examples/hello-world/src/__tests__/app-install.integration-test.ts`, read in full).
+- Consumes: `appBuild`, `appDeploy`, `appInstall`, `appUninstall` from `searm-sdk/cli`; `MetadataApiClient` from `searm-client-sdk/metadata`; `CoreApiClient` from `searm-client-sdk/core` (all verified real exports/usage, `packages/searm-apps/examples/hello-world/src/__tests__/app-install.integration-test.ts`, read in full).
 
 - [ ] **Step 1: Write the install/uninstall test**
 
-Pattern copied from `packages/twenty-apps/examples/hello-world/src/__tests__/app-install.integration-test.ts`, extended with the assertions this plan's success criteria require:
+Pattern copied from `packages/searm-apps/examples/hello-world/src/__tests__/app-install.integration-test.ts`, extended with the assertions this plan's success criteria require:
 
 ```ts
 // customer-support/src/__tests__/app-install.integration-test.ts
-import { CoreApiClient } from 'twenty-client-sdk/core';
-import { MetadataApiClient } from 'twenty-client-sdk/metadata';
-import { appBuild, appDeploy, appInstall, appUninstall } from 'twenty-sdk/cli';
+import { CoreApiClient } from 'searm-client-sdk/core';
+import { MetadataApiClient } from 'searm-client-sdk/metadata';
+import { appBuild, appDeploy, appInstall, appUninstall } from 'searm-sdk/cli';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
@@ -2068,17 +2068,17 @@ describe('Customer Support app installation', () => {
 });
 ```
 
-The exact GraphQL field names used here (`findManyObjectMetadataItems`, `companies`, `supportQueues`, `supportTicket`) are Twenty's standard generic-object CRUD naming convention (plural query, `create<PascalCase>` mutation) inferred from `create-hello-world-company.ts`'s confirmed `createCompany` and this repo's broader convention — run this test against a real dev instance first and correct any field name that doesn't match before treating it as passing. The `workflows { statuses }` and `agents { roleId }` field names in the two repair-pass tests above have the same status: `AgentEntity`/its GraphQL DTO does not exist on disk yet (Phase 4/agent-manifest install code is unbuilt as of this repair pass — verified by its absence under `packages/twenty-server/src/engine/metadata-modules/`), so the exact field name for "this agent's assigned role" could not be confirmed against a resolver. Confirm both field names against Phase 4's shipped `AgentDTO`/`WorkflowDTO` before this test is treated as passing.
+The exact GraphQL field names used here (`findManyObjectMetadataItems`, `companies`, `supportQueues`, `supportTicket`) are SeaRM's standard generic-object CRUD naming convention (plural query, `create<PascalCase>` mutation) inferred from `create-hello-world-company.ts`'s confirmed `createCompany` and this repo's broader convention — run this test against a real dev instance first and correct any field name that doesn't match before treating it as passing. The `workflows { statuses }` and `agents { roleId }` field names in the two repair-pass tests above have the same status: `AgentEntity`/its GraphQL DTO does not exist on disk yet (Phase 4/agent-manifest install code is unbuilt as of this repair pass — verified by its absence under `packages/searm-server/src/engine/metadata-modules/`), so the exact field name for "this agent's assigned role" could not be confirmed against a resolver. Confirm both field names against Phase 4's shipped `AgentDTO`/`WorkflowDTO` before this test is treated as passing.
 
 - [ ] **Step 2: Run it**
 
 ```bash
-cd packages/twenty-apps/public/customer-support
-npx twenty login   # or the equivalent auth step your dev instance requires
+cd packages/searm-apps/public/customer-support
+npx searm login   # or the equivalent auth step your dev instance requires
 yarn test src/__tests__/app-install.integration-test.ts
 ```
 
-Expected: 6 passing tests against a running local Twenty instance (the original 4 plus the two added by the repair pass: workflows installed and ACTIVE (C12), agent has a usable role (I24)). This requires a live server — it is not a unit test and does not run in a sandboxed CI step without one.
+Expected: 6 passing tests against a running local SeaRM instance (the original 4 plus the two added by the repair pass: workflows installed and ACTIVE (C12), agent has a usable role (I24)). This requires a live server — it is not a unit test and does not run in a sandboxed CI step without one.
 
 - [ ] **Step 3: Write the upgrade test**
 
@@ -2086,8 +2086,8 @@ Proves the "upgrade migration" bullet of the Phase 5 exit gate: bump the app ver
 
 ```ts
 // customer-support/src/__tests__/app-upgrade.integration-test.ts
-import { MetadataApiClient } from 'twenty-client-sdk/metadata';
-import { appBuild, appDeploy, appInstall, appUninstall } from 'twenty-sdk/cli';
+import { MetadataApiClient } from 'searm-client-sdk/metadata';
+import { appBuild, appDeploy, appInstall, appUninstall } from 'searm-sdk/cli';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const APP_PATH = process.cwd();
@@ -2143,7 +2143,7 @@ This is intentionally thin: it proves the version-reporting half of upgrade beha
 - [ ] **Step 4: Commit**
 
 ```bash
-git add packages/twenty-apps/public/customer-support/src/__tests__
+git add packages/searm-apps/public/customer-support/src/__tests__
 git commit -m "test(customer-support): install, use, and uninstall the app end to end"
 ```
 
@@ -2154,7 +2154,7 @@ git commit -m "test(customer-support): install, use, and uninstall the app end t
 | Charter requirement (Phase 5 exit gate + five contracts) | Proven by |
 | --- | --- |
 | "A new industry composes standard objects, relations, views, workflow templates, and agent policies" | Tasks 2–10 build exactly that list for customer support |
-| "...without changing the CRM core" | No file under `packages/twenty-server/`, `packages/twenty-front/`, or `packages/twenty-shared/` is touched anywhere in this plan — Task 4's Global Constraints callout and Task 11's uninstall assertion both verify it |
+| "...without changing the CRM core" | No file under `packages/searm-server/`, `packages/searm-front/`, or `packages/searm-shared/` is touched anywhere in this plan — Task 4's Global Constraints callout and Task 11's uninstall assertion both verify it |
 | Objects | Tasks 2–3 (`supportQueue`, `supportTicket`) |
 | Views | Task 5 (table, Kanban, queue overview) |
 | Dashboards | Task 10 |
@@ -2164,7 +2164,7 @@ git commit -m "test(customer-support): install, use, and uninstall the app end t
 | Seed data | Task 8 Step 3 (default queue) |
 | Upgrade migration | Task 11 Step 3, plus the manual rehearsal it documents |
 | Uninstall | Task 11 Step 1, fourth test |
-| Record contract — every action uses Twenty objects/fields/relations/permissions | All fields in Tasks 2–4 are ordinary metadata fields; the agent's role in Task 6 is an ordinary permission role |
+| Record contract — every action uses SeaRM objects/fields/relations/permissions | All fields in Tasks 2–4 are ordinary metadata fields; the agent's role in Task 6 is an ordinary permission role |
 | Proposal contract — AI changes are visible diffs requiring approval | Every write the triage agent makes (Task 7, Task 9) executes through `AgentAsyncExecutorService.executeAgent` → `ToolExecutorService.dispatch()` → Launch 1's `ProposalGateService`, unmodified by this plan |
 | Principal contract — audit distinguishes agent from user/workflow | The agent's `AgentEntity` row and its bound role (Task 6, Task 7) are what Launch 1's `createdByActor: ActorMetadata` capture already carries through to the proposal — this plan supplies the agent identity, not a new audit mechanism |
 | Custom objects are the only extension mechanism for business-specific records | Tasks 2–3; Task 4's relation fields are pointers only, never business-data fields, on standard objects |
@@ -2180,9 +2180,9 @@ git commit -m "test(customer-support): install, use, and uninstall the app end t
 
 | Cut | Why | Trigger to build it |
 | --- | --- | --- |
-| A declarative `*.workflow.ts` manifest unit + `application-manifest` converter for workflows — the app instead installs workflows via Phase 4's `installWorkflowDefinition` mutation | Would require a `twenty-shared` type, a `twenty-server` converter, and a workspace-migration builder change — a core-code change this plan's constraints forbid, for a capability the existing public GraphQL API already provides. (Repair pass, N8: this row previously appeared twice, once marked "(restated)" — collapsed into one.) | A third vertical needs workflow templates and the one-call `seed-workflow.util.ts` pattern has caused an install-time bug twice, or an app author outside this team asks for it |
-| The app's `pre-install` logic function (no-op validation hook) | Cut by the program review: it validated nothing, and an empty hook is a file, a UUID, and an install-time round trip bought on speculation | The app needs to refuse installation on a real precondition — a conflicting object name, an incompatible Twenty version, a missing connected account |
-| A dedicated `supportTicketComment` object | Twenty's built-in Notes/Tasks already attach to any record via polymorphic `NoteTarget`/`TaskTarget` relations — a second, ticket-specific comment object would duplicate that for no new capability | Support reps need comment-specific fields (internal-vs-customer-visible flag, macro/canned-response linkage) that generic Notes cannot express |
+| A declarative `*.workflow.ts` manifest unit + `application-manifest` converter for workflows — the app instead installs workflows via Phase 4's `installWorkflowDefinition` mutation | Would require a `searm-shared` type, a `searm-server` converter, and a workspace-migration builder change — a core-code change this plan's constraints forbid, for a capability the existing public GraphQL API already provides. (Repair pass, N8: this row previously appeared twice, once marked "(restated)" — collapsed into one.) | A third vertical needs workflow templates and the one-call `seed-workflow.util.ts` pattern has caused an install-time bug twice, or an app author outside this team asks for it |
+| The app's `pre-install` logic function (no-op validation hook) | Cut by the program review: it validated nothing, and an empty hook is a file, a UUID, and an install-time round trip bought on speculation | The app needs to refuse installation on a real precondition — a conflicting object name, an incompatible SeaRM version, a missing connected account |
+| A dedicated `supportTicketComment` object | SeaRM's built-in Notes/Tasks already attach to any record via polymorphic `NoteTarget`/`TaskTarget` relations — a second, ticket-specific comment object would duplicate that for no new capability | Support reps need comment-specific fields (internal-vs-customer-visible flag, macro/canned-response linkage) that generic Notes cannot express |
 | `FIND_RECORDS` + `ITERATOR` bulk SLA-breach workflow (deterministic, non-AI escalation for every breaching ticket in one cron tick) | The exact `ITERATOR`/`FIND_RECORDS` step settings shape was not independently verified against a resolver or converter file in this research pass, unlike every other step type this plan uses; shipping an unverified shape in a plan meant for literal transcription is worse than shipping a verified, slightly less powerful alternative | SLA escalation needs to run even when AI credits are exhausted or the triage agent is disabled — deterministic bulk escalation becomes a hard requirement, not a nice-to-have |
 | Row-level permission predicates (e.g., "a rep only sees tickets in their own queue") | `support-agent.role.ts` ships with object/field-level permissions only; row-level predicates are a real, already-supported manifest capability (`row-level-permission-predicate(-group)` converters exist) this plan simply doesn't need for a first vertical | A customer asks for queue-scoped visibility between reps |
 | A purpose-built ticket console front component (SLA countdown timers, macro buttons, etc.) | Task 10's dashboard and Task 5's views use only the framework's stock `VIEW`/table/Kanban widgets — a custom `*.front-component.tsx` is real, supported (see `hello-world`'s `front-components/hello-world.tsx`), and unnecessary for proving the framework | Reps ask for a purpose-built console beyond what generic record views and a Kanban board provide |
@@ -2195,7 +2195,7 @@ git commit -m "test(customer-support): install, use, and uninstall the app end t
 ## Risks — not resolved by reading code
 
 - ~~**The exact mutation/query names for creating a `Workflow` record and reaching its first draft `WorkflowVersion` id**~~ — **closed by the program review.** Task 9 no longer creates workflows itself; it calls Phase 4 Task 10's `installWorkflowDefinition` mutation, backed by `WorkflowTemplateService`, which uses the verified `create_complete_workflow` service path (`RecordPositionService`, `WorkflowVersionCoreSyncService`, `WorkflowTriggerWorkspaceService`) and targets the workspace-object `WorkflowWorkspaceEntity` path explicitly. The core-vs-workspace-entity ambiguity is resolved there, once, with unit tests — not in an app package. **New dependency introduced by this resolution: Phase 4 Task 10 must ship before Phase 5's post-install hook runs.**
-- ~~**Whether `STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS` exports a `workspaceMember` key**~~ — **closed (repair pass, N7).** Confirmed present: `packages/twenty-shared/src/metadata/constants/standard-object-universal-identifiers.constant.ts:26`, re-exported unchanged through `packages/twenty-sdk/src/sdk/define/objects/standard-object-ids.ts`. Task 4 no longer carries a fallback note.
-- **Whether `WidgetType` is re-exported from `twenty-shared/types`** (it is defined server-side at `packages/twenty-server/src/engine/metadata-modules/page-layout-widget/enums/widget-type.enum.ts`) was not confirmed; Task 10 falls back to the string literal `'VIEW'`, which the manifest type accepts either way (`type: string` on `PageLayoutWidgetManifest`), so this risk has no blocking effect on the task, only a minor loss of type-checking.
+- ~~**Whether `STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS` exports a `workspaceMember` key**~~ — **closed (repair pass, N7).** Confirmed present: `packages/searm-shared/src/metadata/constants/standard-object-universal-identifiers.constant.ts:26`, re-exported unchanged through `packages/searm-sdk/src/sdk/define/objects/standard-object-ids.ts`. Task 4 no longer carries a fallback note.
+- **Whether `WidgetType` is re-exported from `searm-shared/types`** (it is defined server-side at `packages/searm-server/src/engine/metadata-modules/page-layout-widget/enums/widget-type.enum.ts`) was not confirmed; Task 10 falls back to the string literal `'VIEW'`, which the manifest type accepts either way (`type: string` on `PageLayoutWidgetManifest`), so this risk has no blocking effect on the task, only a minor loss of type-checking.
 - **Whether `canBeAssignedToAgents: true` on a role is sufficient, on its own, for the install-time server-side validator to accept that role as an agent's `roleUniversalIdentifier`.** **Repair pass (I24):** re-checked against `application-manifest/services/compute-application-manifest-all-universal-flat-entity-maps.service.ts` and `application-manifest/converters/from-agent-manifest-to-universal-flat-role-target.util.ts` (the converter that turns a `defineAgent`'s `roleUniversalIdentifier` into a `UniversalFlatRoleTarget` row) — neither file reads or checks `canBeAssignedToAgents`; the converter builds the role-target row unconditionally from whatever `roleUniversalIdentifier` the agent manifest supplies. This is consistent with, but does not prove, "any role works regardless of the flag" — the flag could still be enforced by a manifest-sync validation pass not reached by this search, and Phase 4 (which owns agent-manifest install code) has not shipped yet to test against directly. **Still unresolved. Fallback applied per the review's suggested fix:** Task 11 gains an install-time assertion (see Task 11 Step 1) that the agent's role-target row exists after install, so a silent "agent installed with no usable role" failure is caught by the exit-gate test even if the underlying question stays open.
-- **Whether an app-owned custom object's records survive or are hard-deleted on uninstall**, and whether records in Twenty's built-in Notes/Tasks that were attached to a since-deleted `supportTicket` record become orphaned `NoteTarget`/`TaskTarget` rows or are cleaned up automatically, was inferred from `ApplicationSyncService.uninstallApplication`'s behavior (tears down all app-owned metadata via `getApplicationSubAllFlatEntityMaps`) rather than traced through to the workspace-schema table-drop and its cascade behavior. Task 11's uninstall test checks that the object itself disappears and that unrelated `Company` data survives, but does not check for orphaned Note/Task rows — worth adding an explicit assertion for once a real instance is available to observe the actual behavior.
+- **Whether an app-owned custom object's records survive or are hard-deleted on uninstall**, and whether records in SeaRM's built-in Notes/Tasks that were attached to a since-deleted `supportTicket` record become orphaned `NoteTarget`/`TaskTarget` rows or are cleaned up automatically, was inferred from `ApplicationSyncService.uninstallApplication`'s behavior (tears down all app-owned metadata via `getApplicationSubAllFlatEntityMaps`) rather than traced through to the workspace-schema table-drop and its cascade behavior. Task 11's uninstall test checks that the object itself disappears and that unrelated `Company` data survives, but does not check for orphaned Note/Task rows — worth adding an explicit assertion for once a real instance is available to observe the actual behavior.

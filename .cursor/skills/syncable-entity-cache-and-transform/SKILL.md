@@ -1,6 +1,6 @@
 ---
 name: syncable-entity-cache-and-transform
-description: Create cache services and transformation utilities for syncable entities in Twenty. Use when implementing entity-to-flat conversions, input DTO transpilation to universal flat entities, or cache recomputation for syncable entities.
+description: Create cache services and transformation utilities for syncable entities in SeaRM. Use when implementing entity-to-flat conversions, input DTO transpilation to universal flat entities, or cache recomputation for syncable entities.
 ---
 
 # Syncable Entity: Cache & Transform (Step 2/6)
@@ -32,7 +32,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 } from 'uuid';
 
-import { WorkspaceCache } from 'src/engine/twenty-orm/decorators/workspace-cache.decorator';
+import { WorkspaceCache } from 'src/engine/searm-orm/decorators/workspace-cache.decorator';
 import { MyEntityEntity } from 'src/engine/metadata-modules/my-entity/entities/my-entity.entity';
 import { type FlatMyEntityMaps } from 'src/engine/metadata-modules/flat-my-entity/types/flat-my-entity-maps.type';
 import { fromMyEntityEntityToFlatMyEntity } from 'src/engine/metadata-modules/flat-my-entity/utils/from-my-entity-entity-to-flat-my-entity.util';
@@ -110,7 +110,7 @@ export const fromMyEntityEntityToFlatMyEntity = (
 
 ```typescript
 import { v4 } from 'uuid';
-import { sanitizeString } from 'twenty-shared/string';
+import { sanitizeString } from 'searm-shared/string';
 import { type CreateMyEntityInput } from 'src/engine/metadata-modules/my-entity/dtos/create-my-entity.input';
 import { type UniversalFlatMyEntity } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-my-entity.type';
 import { resolveEntityRelationUniversalIdentifiers } from 'src/engine/metadata-modules/flat-entity/utils/resolve-entity-relation-universal-identifiers.util';

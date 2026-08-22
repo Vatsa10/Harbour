@@ -1,0 +1,187 @@
+import { Module } from '@nestjs/common';
+import { APP_FILTER, HttpAdapterHost } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+
+import { WorkspaceQueryRunnerModule } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-runner.module';
+import { ActorModule } from 'src/engine/core-modules/actor/actor.module';
+import { AdminPanelModule } from 'src/engine/core-modules/admin-panel/admin-panel.module';
+import { ApiKeyModule } from 'src/engine/core-modules/api-key/api-key.module';
+import { ApplicationAuthorizationModule } from 'src/engine/core-modules/application/application-authorization/application-authorization.module';
+import { ApplicationDevelopmentModule } from 'src/engine/core-modules/application/application-development/application-development.module';
+import { ApplicationInstallModule } from 'src/engine/core-modules/application/application-install/application-install.module';
+import { MarketplaceModule } from 'src/engine/core-modules/application/application-marketplace/marketplace.module';
+import { ApplicationOAuthModule } from 'src/engine/core-modules/application/application-oauth/application-oauth.module';
+import { ApplicationRegistrationModule } from 'src/engine/core-modules/application/application-registration/application-registration.module';
+import { ApplicationUpgradeModule } from 'src/engine/core-modules/application/application-upgrade/application-upgrade.module';
+import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
+import { PreInstalledAppsModule } from 'src/engine/core-modules/application/pre-installed-apps/pre-installed-apps.module';
+import { ApprovedAccessDomainModule } from 'src/engine/core-modules/approved-access-domain/approved-access-domain.module';
+import { AuthModule } from 'src/engine/core-modules/auth/auth.module';
+import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-graphql-api-exception.filter';
+import { CacheStorageModule } from 'src/engine/core-modules/cache-storage/cache-storage.module';
+import { TimelineCalendarEventModule } from 'src/engine/core-modules/calendar/timeline-calendar-event.module';
+import { CaptchaModule } from 'src/engine/core-modules/captcha/captcha.module';
+import { CodeInterpreterModule } from 'src/engine/core-modules/code-interpreter/code-interpreter.module';
+import { DpaModule } from 'src/engine/core-modules/dpa/dpa.module';
+import { EmailModule } from 'src/engine/core-modules/email/email.module';
+import { EmailingDomainModule } from 'src/engine/core-modules/emailing-domain/emailing-domain.module';
+import { EmailingModule } from 'src/modules/emailing/emailing.module';
+import { EnvironmentModule } from 'src/engine/core-modules/environment/environment.module';
+import { ExceptionHandlerModule } from 'src/engine/core-modules/exception-handler/exception-handler.module';
+import { exceptionHandlerModuleFactory } from 'src/engine/core-modules/exception-handler/exception-handler.module-factory';
+import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
+import { FileStorageModule } from 'src/engine/core-modules/file-storage/file-storage.module';
+import { GeoMapModule } from 'src/engine/core-modules/geo-map/geo-map-module';
+import { HealthModule } from 'src/engine/core-modules/health/health.module';
+import { ImapSmtpCaldavModule } from 'src/engine/core-modules/imap-smtp-caldav-connection/imap-smtp-caldav-connection.module';
+import { ImpersonationModule } from 'src/engine/core-modules/impersonation/impersonation.module';
+import { LabModule } from 'src/engine/core-modules/lab/lab.module';
+import { LoggerModule } from 'src/engine/core-modules/logger/logger.module';
+import { loggerModuleFactory } from 'src/engine/core-modules/logger/logger.module-factory';
+import { LogicFunctionModule } from 'src/engine/core-modules/logic-function/logic-function.module';
+import { MessageQueueModule } from 'src/engine/core-modules/message-queue/message-queue.module';
+import { messageQueueModuleFactory } from 'src/engine/core-modules/message-queue/message-queue.module-factory';
+import { TimelineMessagingModule } from 'src/engine/core-modules/messaging/timeline-messaging.module';
+import { MessagingWebhooksModule } from 'src/modules/messaging-webhooks/messaging-webhooks.module';
+import { ConnectedAccountSyncWebhooksModule } from 'src/modules/connected-account-sync-webhooks/connected-account-sync-webhooks.module';
+import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
+import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
+import { NotificationModule } from 'src/engine/core-modules/notification/notification.module';
+import { OpenApiModule } from 'src/engine/core-modules/open-api/open-api.module';
+import { PublicDomainModule } from 'src/engine/core-modules/public-domain/public-domain.module';
+import { RedisClientModule } from 'src/engine/core-modules/redis-client/redis-client.module';
+import { RedisClientService } from 'src/engine/core-modules/redis-client/redis-client.service';
+import { SearchModule } from 'src/engine/core-modules/search/search.module';
+import { WorkspaceSSOModule } from 'src/engine/core-modules/sso/sso.module';
+import { WellKnownModule } from 'src/engine/core-modules/well-known/well-known.module';
+import { TelemetryModule } from 'src/engine/core-modules/telemetry/telemetry.module';
+import { SearmConfigModule } from 'src/engine/core-modules/searm-config/searm-config.module';
+import { SearmConfigService } from 'src/engine/core-modules/searm-config/searm-config.service';
+import { UsageModule } from 'src/engine/core-modules/usage/usage.module';
+import { UserModule } from 'src/engine/core-modules/user/user.module';
+import { WorkflowApiModule } from 'src/engine/core-modules/workflow/workflow-api.module';
+import { WorkspaceInvitationModule } from 'src/engine/core-modules/workspace-invitation/workspace-invitation.module';
+import { WorkspaceModule } from 'src/engine/core-modules/workspace/workspace.module';
+import { AiModelsModule } from 'src/engine/metadata-modules/ai/ai-models/ai-models.module';
+import { PageLayoutModule } from 'src/engine/metadata-modules/page-layout/page-layout.module';
+import { RoleModule } from 'src/engine/metadata-modules/role/role.module';
+import { RowLevelPermissionModule } from 'src/engine/metadata-modules/row-level-permission-predicate/row-level-permission.module';
+import { SubscriptionsModule } from 'src/engine/subscriptions/subscriptions.module';
+import { CodeInterpreterSessionCleanupModule } from 'src/engine/core-modules/code-interpreter/crons/code-interpreter-session-cleanup.module';
+import { TrashCleanupModule } from 'src/engine/trash-cleanup/trash-cleanup.module';
+import { WorkspaceEventEmitterModule } from 'src/engine/workspace-event-emitter/workspace-event-emitter.module';
+import { ChannelSyncModule } from 'src/modules/connected-account/channel-sync/channel-sync.module';
+import { CreateCalendarEventModule } from 'src/modules/calendar/calendar-event-creation-manager/create-calendar-event.module';
+import { DashboardModule } from 'src/modules/dashboard/dashboard.module';
+import { GuidedImportModule } from 'src/modules/guided-import/guided-import.module';
+import { SendEmailModule } from 'src/modules/messaging/message-outbound-manager/send-email.module';
+import { WorkflowTemplatesModule } from 'src/modules/workflow/workflow-templates/workflow-templates.module';
+import { ClientConfigModule } from './client-config/client-config.module';
+import { EventLogsViewerModule } from './event-logs/event-logs-viewer.module';
+import { FileModule } from './file/file.module';
+
+@Module({
+  imports: [
+    EnvironmentModule,
+    SearmConfigModule.forRoot(),
+    HealthModule,
+    AuthModule,
+    MessagingWebhooksModule,
+    ConnectedAccountSyncWebhooksModule,
+    UsageModule,
+    ClientConfigModule,
+    FeatureFlagModule,
+    FileModule,
+    RowLevelPermissionModule,
+    OpenApiModule,
+    WellKnownModule,
+    ApplicationRegistrationModule,
+    ApplicationOAuthModule,
+    ApplicationAuthorizationModule,
+    ApplicationModule,
+    ApplicationInstallModule,
+    ApplicationUpgradeModule,
+    ApplicationDevelopmentModule,
+    MarketplaceModule,
+    TimelineMessagingModule,
+    TimelineCalendarEventModule,
+    UserModule,
+    WorkspaceModule,
+    WorkspaceInvitationModule,
+    WorkspaceSSOModule,
+    ApprovedAccessDomainModule,
+    EmailingDomainModule,
+    EmailingModule,
+    PublicDomainModule,
+    WorkflowApiModule,
+    WorkspaceEventEmitterModule,
+    ActorModule,
+    TelemetryModule,
+    AdminPanelModule,
+    LabModule,
+    RoleModule,
+    RedisClientModule,
+    WorkspaceQueryRunnerModule,
+    GeoMapModule,
+    SubscriptionsModule,
+    ImapSmtpCaldavModule,
+    ChannelSyncModule,
+    SendEmailModule,
+    CreateCalendarEventModule,
+    FileStorageModule.forRoot(),
+    LoggerModule.forRootAsync({
+      useFactory: loggerModuleFactory,
+      inject: [SearmConfigService],
+    }),
+    MetricsModule,
+    NotificationModule,
+    MessageQueueModule.registerAsync({
+      useFactory: messageQueueModuleFactory,
+      inject: [SearmConfigService, RedisClientService, MetricsService],
+    }),
+    ExceptionHandlerModule.forRootAsync({
+      useFactory: exceptionHandlerModuleFactory,
+      inject: [SearmConfigService, HttpAdapterHost],
+    }),
+    EmailModule.forRoot(),
+    CaptchaModule.forRoot(),
+    EventEmitterModule.forRoot({
+      wildcard: true,
+    }),
+    CacheStorageModule,
+    AiModelsModule,
+    LogicFunctionModule.forRoot(),
+    CodeInterpreterModule.forRoot(),
+    SearchModule,
+    ApiKeyModule,
+    DpaModule,
+    PageLayoutModule,
+    ImpersonationModule,
+    TrashCleanupModule,
+    CodeInterpreterSessionCleanupModule,
+    DashboardModule,
+    EventLogsViewerModule,
+    PreInstalledAppsModule,
+    GuidedImportModule,
+    WorkflowTemplatesModule,
+  ],
+  providers: [
+    {
+      provide: APP_FILTER,
+      useClass: PermissionsGraphqlApiExceptionFilter,
+    },
+  ],
+  exports: [
+    EventLogsViewerModule,
+    AuthModule,
+    FeatureFlagModule,
+    TimelineMessagingModule,
+    TimelineCalendarEventModule,
+    UserModule,
+    WorkspaceModule,
+    WorkspaceInvitationModule,
+    WorkspaceSSOModule,
+    ImapSmtpCaldavModule,
+  ],
+})
+export class CoreEngineModule {}

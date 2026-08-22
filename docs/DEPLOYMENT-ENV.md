@@ -2,7 +2,7 @@
 
 Target stack: **Neon** (PostgreSQL) + **Upstash** (Redis) + your own compute.
 
-Everything here is verified against `packages/twenty-server/src/engine/core-modules/twenty-config/config-variables.ts` and `packages/twenty-server/src/database/scripts/setup-db.ts` in this fork. Where I flag a risk, it is a real one, not boilerplate caution.
+Everything here is verified against `packages/searm-server/src/engine/core-modules/searm-config/config-variables.ts` and `packages/searm-server/src/database/scripts/setup-db.ts` in this fork. Where I flag a risk, it is a real one, not boilerplate caution.
 
 ---
 
@@ -12,11 +12,11 @@ Two decisions in your chosen stack will bite, and both are cheap to get right up
 
 ### Upstash + BullMQ is the expensive one
 
-Twenty runs **BullMQ** for every background job: message sync, calendar sync, cron dispatch, and — in our Phase 2 work — the durable agent-task worker. BullMQ workers hold **blocking** connections (`BZPOPMIN`/`BRPOPLPUSH`) and poll continuously.
+SeaRM runs **BullMQ** for every background job: message sync, calendar sync, cron dispatch, and — in our Phase 2 work — the durable agent-task worker. BullMQ workers hold **blocking** connections (`BZPOPMIN`/`BRPOPLPUSH`) and poll continuously.
 
-Upstash bills **per command**. An idle BullMQ worker still issues a steady stream of commands, so a queue that processes nothing can still generate millions of requests a month. Upstash also caps concurrent connections per plan, and Twenty opens several (cache, each queue, each worker replica).
+Upstash bills **per command**. An idle BullMQ worker still issues a steady stream of commands, so a queue that processes nothing can still generate millions of requests a month. Upstash also caps concurrent connections per plan, and SeaRM opens several (cache, each queue, each worker replica).
 
-**Twenty already has the escape hatch — use it.** `REDIS_QUEUE_URL` exists precisely to split cache from queues:
+**SeaRM already has the escape hatch — use it.** `REDIS_QUEUE_URL` exists precisely to split cache from queues:
 
 | Variable | Point it at | Why |
 | --- | --- | --- |
@@ -29,14 +29,14 @@ If you want to start with Upstash for both, do it — but **watch the command co
 
 ### Neon: use the DIRECT endpoint, not the pooled one
 
-Neon gives you two connection strings. The pooled one runs PgBouncer in transaction mode, which breaks prepared statements and any session-scoped state. Twenty uses TypeORM with prepared statements and switches schemas per workspace — it is exactly the workload PgBouncer transaction mode does not support.
+Neon gives you two connection strings. The pooled one runs PgBouncer in transaction mode, which breaks prepared statements and any session-scoped state. SeaRM uses TypeORM with prepared statements and switches schemas per workspace — it is exactly the workload PgBouncer transaction mode does not support.
 
 - Use the **direct / unpooled** endpoint for `PG_DATABASE_URL`.
 - Control concurrency with `PG_POOL_MAX_CONNECTIONS` instead, sized under Neon's per-plan connection limit.
 - Turn **autosuspend off** (or set a long timeout). Scale-to-zero means a cold start on the first query after idle, and the background worker will wake it constantly anyway, so autosuspend buys you nothing here.
 - Neon presents a valid certificate, so keep `PG_SSL_ALLOW_SELF_SIGNED=false` and append `?sslmode=require`.
 
-**Extensions:** Twenty needs only `uuid-ossp` and `unaccent`. Both are available on Neon and are created automatically by `setup-db`. The `wrappers` / `mysql_fdw` / `postgres_fdw` extensions in that script are gated behind `IS_FDW_ENABLED` and skipped by default — leave that flag unset and Neon is fine.
+**Extensions:** SeaRM needs only `uuid-ossp` and `unaccent`. Both are available on Neon and are created automatically by `setup-db`. The `wrappers` / `mysql_fdw` / `postgres_fdw` extensions in that script are gated behind `IS_FDW_ENABLED` and skipped by default — leave that flag unset and Neon is fine.
 
 ---
 
@@ -111,7 +111,7 @@ GROQ_API_KEY=
 MISTRAL_API_KEY=
 ```
 
-Twenty splits models into a "fast" and a "smart" slot per workspace, with defaults in `AI_MODELS_DEFAULT_FAST` / `AI_MODELS_DEFAULT_SMART`. Set at least one provider whose models cover both. Anthropic alone is sufficient.
+SeaRM splits models into a "fast" and a "smart" slot per workspace, with defaults in `AI_MODELS_DEFAULT_FAST` / `AI_MODELS_DEFAULT_SMART`. Set at least one provider whose models cover both. Anthropic alone is sufficient.
 
 Cost control worth knowing: every agent run records token and cost usage on `AgentRun`, and `AgentTask` carries a per-task budget. That is our accounting, not the provider's — set budgets deliberately rather than discovering spend on the invoice.
 
@@ -152,7 +152,7 @@ The OAuth callback URLs must match what you register in Google Cloud Console / A
 
 ## 6. Email
 
-Needed for verification, invitations, password reset — and it is the **only** notification mechanism that exists. There is no in-app notification system in Twenty, so if you want to be told a proposal is waiting for review, it arrives by email or not at all.
+Needed for verification, invitations, password reset — and it is the **only** notification mechanism that exists. There is no in-app notification system in SeaRM, so if you want to be told a proposal is waiting for review, it arrives by email or not at all.
 
 ```bash
 EMAIL_DRIVER=smtp
@@ -202,7 +202,7 @@ SENTRY_ENVIRONMENT=production
 ## 9. Leave these OFF
 
 ```bash
-IS_BILLING_ENABLED=false     # Twenty Cloud's Stripe billing; irrelevant self-hosted
+IS_BILLING_ENABLED=false     # SeaRM Cloud's Stripe billing; irrelevant self-hosted
 IS_FDW_ENABLED=              # unset — the extensions it needs do not exist on Neon
 SIGN_IN_PREFILLED=false      # dev convenience; a security hole in production
 ```
@@ -230,15 +230,15 @@ SIGN_IN_PREFILLED=false      # dev convenience; a security hole in production
 
 ```bash
 # 1. Create schemas and extensions (uuid-ossp, unaccent)
-npx nx run twenty-server:database:init:prod
+npx nx run searm-server:database:init:prod
 
 # 2. Apply instance commands — including this fork's proposal, evidence,
 #    fact, agentTask and agentRun tables
-npx nx run twenty-server:database:migrate:prod
+npx nx run searm-server:database:migrate:prod
 
 # 3. Start server and worker as separate processes
-npx nx start twenty-server
-npx nx run twenty-server:worker
+npx nx start searm-server
+npx nx run searm-server:worker
 ```
 
 The worker is **not optional**. Without it, message sync, cron dispatch, and the agent-task queue never run — the CRM appears to work while the entire AI layer sits idle. Run it as its own always-on process.
@@ -291,7 +291,7 @@ Generate `APP_SECRET` once (`openssl rand -base64 32`) and put it in a secret ma
 
 ```bash
 yarn install
-cd packages/twenty-server && rm -rf dist && npx nest build
+cd packages/searm-server && rm -rf dist && npx nest build
 ```
 
 - **Verify:** `ls node_modules/.bin | wc -l` returns several hundred (368 on a known-good install here). Then `npx tsgo -p tsconfig.json --noEmit`.
@@ -303,7 +303,7 @@ cd packages/twenty-server && rm -rf dist && npx nest build
 ### Step 5 — Create schemas and extensions
 
 ```bash
-npx nx run twenty-server:database:init:prod
+npx nx run searm-server:database:init:prod
 ```
 
 - **Verify:** `select extname from pg_extension` includes `uuid-ossp` and `unaccent`; the `core` schema exists.
@@ -312,7 +312,7 @@ npx nx run twenty-server:database:init:prod
 ### Step 6 — Apply instance commands (this fork's tables)
 
 ```bash
-npx nx run twenty-server:database:migrate:prod
+npx nx run searm-server:database:migrate:prod
 ```
 
 - **Verify** — this fork registers seven instance commands creating eight tables:
@@ -325,7 +325,7 @@ WHERE schemaname = 'core'
 -- expect 8 rows
 ```
 
-- **Failure:** fewer than 8 rows means a migration file exists but was never added to `INSTANCE_COMMANDS`. That exact bug shipped here once and was invisible to every test, because the tests mock the repository. The registration list is `packages/twenty-server/src/database/commands/upgrade-version-command/instance-commands.constant.ts`.
+- **Failure:** fewer than 8 rows means a migration file exists but was never added to `INSTANCE_COMMANDS`. That exact bug shipped here once and was invisible to every test, because the tests mock the repository. The registration list is `packages/searm-server/src/database/commands/upgrade-version-command/instance-commands.constant.ts`.
 
 ### Step 7 — Start the server
 
@@ -338,7 +338,7 @@ Run it, then check the log rather than the exit code.
 ### Step 8 — Start the worker as its own always-on process
 
 ```bash
-npx nx run twenty-server:worker
+npx nx run searm-server:worker
 ```
 
 - **Verify:** the worker log shows queues attached, including `cron-queue` and `workspace-queue`.

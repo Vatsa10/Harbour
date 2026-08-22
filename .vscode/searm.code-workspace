@@ -1,0 +1,150 @@
+{
+  "folders": [
+    {
+      "name": "ROOT",
+      "path": "../"
+    },
+    {
+      "name": "packages/searm-docker",
+      "path": "../packages/searm-docker"
+    },
+    {
+      "name": "packages/searm-front",
+      "path": "../packages/searm-front"
+    },
+    {
+      "name": "packages/searm-ui",
+      "path": "../packages/searm-ui"
+    },
+    {
+      "name": "packages/searm-emails",
+      "path": "../packages/searm-emails"
+    },
+    {
+      "name": "packages/searm-shared",
+      "path": "../packages/searm-shared"
+    },
+    {
+      "name": "packages/searm-server",
+      "path": "../packages/searm-server"
+    },
+    {
+      "name": "packages/searm-utils",
+      "path": "../packages/searm-utils"
+    },
+    {
+      "name": "packages/searm-zapier",
+      "path": "../packages/searm-zapier"
+    },
+    {
+      "name": "packages/searm-oxlint-rules",
+      "path": "../packages/searm-oxlint-rules"
+    },
+    {
+      "name": "packages/searm-e2e-testing",
+      "path": "../packages/searm-e2e-testing"
+    },
+    {
+      "name": "packages/searm-docs",
+      "path": "../packages/searm-docs"
+    },
+    {
+      "name": "packages/create-searm-app",
+      "path": "../packages/create-searm-app"
+    },
+    {
+      "name": "packages/searm-apps",
+      "path": "../packages/searm-apps"
+    },
+    {
+      "name": "packages/searm-claude-skills",
+      "path": "../packages/searm-claude-skills"
+    },
+    {
+      "name": "packages/searm-cli",
+      "path": "../packages/searm-cli"
+    },
+    {
+      "name": "packages/searm-client-sdk",
+      "path": "../packages/searm-client-sdk"
+    },
+    {
+      "name": "packages/searm-front-component-renderer",
+      "path": "../packages/searm-front-component-renderer"
+    },
+    {
+      "name": "packages/searm-sdk",
+      "path": "../packages/searm-sdk"
+    },
+    {
+      "name": "packages/searm-website",
+      "path": "../packages/searm-website"
+    }
+  ],
+  "settings": {
+    "editor.formatOnSave": false,
+    "files.eol": "auto",
+    "[typescript]": {
+      "editor.formatOnSave": true,
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+      "editor.codeActionsOnSave": {
+        "source.fixAll.oxc": "explicit",
+        "source.addMissingImports": "always"
+      }
+    },
+    "[javascript]": {
+      "editor.formatOnSave": true,
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+      "editor.codeActionsOnSave": {
+        "source.fixAll.oxc": "explicit",
+        "source.addMissingImports": "always"
+      }
+    },
+    "[typescriptreact]": {
+      "editor.formatOnSave": true,
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+      "editor.codeActionsOnSave": {
+        "source.fixAll.oxc": "explicit",
+        "source.addMissingImports": "always"
+      }
+    },
+    "[json]": {
+      "editor.formatOnSave": true
+    },
+    "javascript.format.enable": false,
+    "typescript.format.enable": false,
+    "cSpell.enableFiletypes": [
+      "!javascript",
+      "!json",
+      "!typescript",
+      "!typescriptreact",
+      "md",
+      "mdx"
+    ],
+    "cSpell.words": [
+      "Vatsa10"
+    ],
+    "typescript.preferences.importModuleSpecifier": "non-relative",
+    "[javascript][typescript][typescriptreact]": {
+      "editor.codeActionsOnSave": {
+        "source.fixAll.oxc": "explicit",
+        "source.addMissingImports": "always"
+      }
+    },
+    "search.exclude": {
+      "**/.yarn": true,
+    },
+    "files.exclude": {
+      "packages/": true
+    },
+    "oxc.lint.enable": true,
+    "jest.runMode": "on-demand",
+    "jest.disabledWorkspaceFolders": [
+      "ROOT",
+      "packages/searm-zapier",
+      "packages/searm-docker",
+      "packages/searm-utils",
+      "packages/searm-postgres"
+    ]
+  }
+}

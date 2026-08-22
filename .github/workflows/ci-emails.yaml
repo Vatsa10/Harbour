@@ -20,7 +20,7 @@ jobs:
     with:
       files: |
         package.json
-        packages/twenty-emails/**
+        packages/searm-emails/**
   emails-test:
     needs: changed-files-check
     if: needs.changed-files-check.outputs.any_changed == 'true'
@@ -33,16 +33,16 @@ jobs:
           fetch-depth: 10
       - name: Install dependencies
         uses: ./.github/actions/yarn-install
-      - name: Build twenty-emails
-        run: npx nx build twenty-emails
+      - name: Build searm-emails
+        run: npx nx build searm-emails
       - name: Extract translations (lingui)
-        run: npx nx run twenty-emails:lingui:extract
+        run: npx nx run searm-emails:lingui:extract
       - name: Compile translations (lingui)
-        run: npx nx run twenty-emails:lingui:compile
+        run: npx nx run searm-emails:lingui:compile
       - name: Run email tests
         run: |
           # Start the email server in the background
-          npx nx run twenty-emails:start &
+          npx nx run searm-emails:start &
           SERVER_PID=$!
 
           # Wait for server to start

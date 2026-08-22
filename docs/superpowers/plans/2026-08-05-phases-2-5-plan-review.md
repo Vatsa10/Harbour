@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-06
 **Reviewer brief:** prove these plans cannot be executed as written by a model that transcribes rather than designs.
-**Method:** every load-bearing file path, class, method, signature, and quoted find-and-replace block was checked against the real checkout at `d:\Files\Vatsa\Projects\AI-CRM\twenty` (HEAD `c6e057906b`, Launch 1 partially landed). Findings marked **[verified]** were confirmed by reading the source file named.
+**Method:** every load-bearing file path, class, method, signature, and quoted find-and-replace block was checked against the real checkout at `d:\Files\Vatsa\Projects\AI-CRM\searm` (HEAD `c6e057906b`, Launch 1 partially landed). Findings marked **[verified]** were confirmed by reading the source file named.
 
 **Verdicts**
 
@@ -36,7 +36,7 @@ Two defects dominate. **Phase 4 Task 5 Step 8 replaces `ProposalGateService.buil
 
 **Location:** Task 3 Steps 1–7 (create and register `record_evidence` in `ActionToolProvider`). The only mention of ungating is a parenthetical inside Task 3 **Step 8**: *"Add `'create_agent_task'` to `UNGATED_STATIC_TOOL_IDS` in `proposal-gate.service.ts` alongside `'record_evidence'`"* — which presupposes `record_evidence` is already there.
 
-**[verified]** `packages/twenty-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts` contains `UNGATED_STATIC_TOOL_IDS`, a 22-entry list, with the comment *"The inverse of the old allowlist. A static tool is gated unless it appears here."* `record_evidence` is not in it, and **no step in Phase 2 adds it.**
+**[verified]** `packages/searm-server/src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts` contains `UNGATED_STATIC_TOOL_IDS`, a 22-entry list, with the comment *"The inverse of the old allowlist. A static tool is gated unless it appears here."* `record_evidence` is not in it, and **no step in Phase 2 adds it.**
 
 **Failure:** the shipped default policy is `{ default: 'PROPOSE' }`. `isGatedStaticTool('record_evidence', …)` returns `true`. Every `record_evidence` call is diverted into a `ProposalItem` with `actionType: STATIC_TOOL`, and the tool returns *"Change proposed and awaiting human approval."* No `EvidenceEntity` row is ever written. `FactDerivationService.deriveFact` never runs. `FactLookupService.findCurrentFactIdsForFields` always returns `[]`. Task 12's citation row never renders. Task 13's exit-gate test cannot pass. Worse: on approval, `ProposalExecutionService.applyStaticTool` *replays* `record_evidence` through its provider, so a human is asked to approve the act of writing down an observation.
 
@@ -118,7 +118,7 @@ Task 1 defines seven source types: `CRM_RECORD | CRM_ACTIVITY | WEB_SEARCH | MAN
 
 **Location:** Task 12 Steps 1, 2, 3, 4, 5.
 
-**[verified]** against `packages/twenty-front/src/modules/settings/ai-approvals/components/ProposalDiffTable.tsx` and `graphql/queries/pendingProposals.ts`.
+**[verified]** against `packages/searm-front/src/modules/settings/ai-approvals/components/ProposalDiffTable.tsx` and `graphql/queries/pendingProposals.ts`.
 
 Five separate mismatches:
 
@@ -179,7 +179,7 @@ A transcriber reading the risks section will implement or at least document a pa
 
 **Location:** Task 9 Step 3, both the `CreateRecordService.execute` and `UpdateRecordService.execute` calls in `processRow`.
 
-**[verified]** `engine/twenty-orm/types/role-permission-config.ts`:
+**[verified]** `engine/searm-orm/types/role-permission-config.ts`:
 
 ```ts
 export type RolePermissionConfig =
@@ -190,7 +190,7 @@ export type RolePermissionConfig =
 
 `{ shouldBypassPermissionChecks: false }` is a type error, and there is no defined behaviour for it. The implementer's cheapest "fix" is to flip it to `true` — which turns the guided importer into an unrestricted writer.
 
-The deeper problem: the import executes under `buildSystemAuthContext(workspaceId)` with **no role and no `createdBy`/`updatedBy` actor**. Every imported record is attributed to SYSTEM rather than to the human who uploaded the file, and the uploader's object and field permissions are never applied — a user who cannot write `person.jobTitle` can import a column into it. That breaks the charter's **Record contract** ("every action uses Twenty objects, fields, relations, and permissions") and **Principal contract** ("audit entries distinguish authenticated user…"). The program document's §8 marks both "Satisfied".
+The deeper problem: the import executes under `buildSystemAuthContext(workspaceId)` with **no role and no `createdBy`/`updatedBy` actor**. Every imported record is attributed to SYSTEM rather than to the human who uploaded the file, and the uploader's object and field permissions are never applied — a user who cannot write `person.jobTitle` can import a column into it. That breaks the charter's **Record contract** ("every action uses SeaRM objects, fields, relations, and permissions") and **Principal contract** ("audit entries distinguish authenticated user…"). The program document's §8 marks both "Satisfied".
 
 **Fix:** carry `createdByUserWorkspaceId` on `ImportBatchEntity` (Task 6), resolve `roleId` with `UserRoleService.getRoleIdForUserWorkspace({userWorkspaceId, workspaceId})`, and pass `rolePermissionConfig: { unionOf: [roleId] }` plus `createdBy`/`updatedBy: actorMetadata` — the exact shape `ProposalExecutionService.buildApproverContext` already produces on disk. Add a test: *"should refuse a row whose target field the importing user cannot write"*.
 
@@ -273,7 +273,7 @@ Four consequences if transcribed literally:
 
 **Location:** Task 8 Step 2b vs Task 8 Step 3.
 
-**[verified]** the real signature in `engine/twenty-orm/utils/get-objects-permissions-from-role-permission-config.util.ts`:
+**[verified]** the real signature in `engine/searm-orm/utils/get-objects-permissions-from-role-permission-config.util.ts`:
 
 ```ts
 export const getObjectsPermissionsFromRolePermissionConfig = ({
@@ -293,7 +293,7 @@ There is a third, semantic bug: the real function returns `{}` for `{shouldBypas
 
 ### C11. `installWorkflowDefinition` lives on the **metadata** GraphQL schema; Phase 5 calls it through `CoreApiClient`
 
-**Location:** Phase 4 Task 10 Step 7 (`@MetadataResolver()` on `WorkflowTemplateResolver`) vs Phase 5 Task 9 Step 1 (`import { type CoreApiClient } from 'twenty-client-sdk/core'; … client.mutation({ installWorkflowDefinition: … })`).
+**Location:** Phase 4 Task 10 Step 7 (`@MetadataResolver()` on `WorkflowTemplateResolver`) vs Phase 5 Task 9 Step 1 (`import { type CoreApiClient } from 'searm-client-sdk/core'; … client.mutation({ installWorkflowDefinition: … })`).
 
 The mutation does not exist on the core endpoint. `seedWorkflow` will fail with an unknown-field error at install time.
 
@@ -348,7 +348,7 @@ Phase 5's app service role declares only `canReadAllObjectRecords`, `canUpdateAl
 
 **Verdict: NEEDS_REVISION.** 0 Critical of its own (C11, C12, C13 land here but originate on the P4↔P5 edge), 4 Important, 2 Nits.
 
-This is the strongest-written of the four plans. Its headline finding is correct and verified: `packages/twenty-apps/examples/hello-world`, `fixtures/rich-app`, and `public/last-contact` all exist; `twenty-sdk/src/sdk/define/index.ts` exports `defineApplication`, `defineRole`, `defineField`, `FieldType`, `RelationType`, `OnDeleteAction`, `STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS`, and the rest. Every path it cites resolves. It fails only where it depends on Phase 4.
+This is the strongest-written of the four plans. Its headline finding is correct and verified: `packages/searm-apps/examples/hello-world`, `fixtures/rich-app`, and `public/last-contact` all exist; `searm-sdk/src/sdk/define/index.ts` exports `defineApplication`, `defineRole`, `defineField`, `FieldType`, `RelationType`, `OnDeleteAction`, `STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS`, and the rest. Every path it cites resolves. It fails only where it depends on Phase 4.
 
 ## Important
 
@@ -362,7 +362,7 @@ This is the strongest-written of the four plans. Its headline finding is correct
 
 ## Nits
 
-**N7.** Risk 2 (`STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.workspaceMember`) is answerable in thirty seconds and is **[verified]** present: `'20202020-3319-4234-a34c-82d5c0e881a6'` in `twenty-shared/src/metadata/constants/standard-object-universal-identifiers.constant.ts`, re-exported by `twenty-sdk/src/sdk/define/objects/standard-object-ids.ts`. Write the value into Task 4 and delete the risk.
+**N7.** Risk 2 (`STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.workspaceMember`) is answerable in thirty seconds and is **[verified]** present: `'20202020-3319-4234-a34c-82d5c0e881a6'` in `searm-shared/src/metadata/constants/standard-object-universal-identifiers.constant.ts`, re-exported by `searm-sdk/src/sdk/define/objects/standard-object-ids.ts`. Write the value into Task 4 and delete the risk.
 **N8.** The cut table lists "A declarative `*.workflow.ts` manifest unit" twice (rows 1 and 3), the second marked "(restated)".
 
 ---
@@ -390,7 +390,7 @@ This is the strongest-written of the four plans. Its headline finding is correct
 
 **I27. §5's component ownership omits the projection where the cross-plan break actually is.** It names `EvidenceSourceType` as a P2 T1 interface consumed by P3 T4, which is correct, but not `EvidenceSourceTypeGraphQL` — the GraphQL mirror enum that silently drops three of the seven values and throws at query time (C4). Component ownership should cover the wire projection of any owned type that crosses phases.
 
-**I28. §4's parallelisation contradicts Phase 5's own file dependencies.** *"Phase 5 Tasks 1–8 and 10 touch no file under `twenty-server`, `twenty-front`, or `twenty-shared`. Zero merge risk against any other track."* True of merge risk; false of buildability. Task 8's `post-install.ts` imports Task 9's `seedNewTicketTriageWorkflow`/`seedSlaRiskSweepWorkflow`, and Task 9 depends on Phase 4 Task 10. Task 8 cannot complete in wave 2.
+**I28. §4's parallelisation contradicts Phase 5's own file dependencies.** *"Phase 5 Tasks 1–8 and 10 touch no file under `searm-server`, `searm-front`, or `searm-shared`. Zero merge risk against any other track."* True of merge risk; false of buildability. Task 8's `post-install.ts` imports Task 9's `seedNewTicketTriageWorkflow`/`seedSlaRiskSweepWorkflow`, and Task 9 depends on Phase 4 Task 10. Task 8 cannot complete in wave 2.
 
 ---
 
@@ -436,7 +436,7 @@ The program document's §7 self-reports five gaps (dashboards, proposal superses
 
 Little, and the plans are commendably disciplined about cuts. Two things nobody asked for:
 
-- **`AgentRunEntity.transcript` + `summarizeAgentSteps` + its spec** (P2 T7). Twenty already persists a transcript through `AgentMessageEntity`, and no task in Phases 2–5 reads `AgentRun.transcript`. **Replace with:** `resultSummary` alone, until a run-history UI is scoped. Saves a util, a spec, a jsonb column, and a coupling to the AI SDK's `StepResult` shape.
+- **`AgentRunEntity.transcript` + `summarizeAgentSteps` + its spec** (P2 T7). SeaRM already persists a transcript through `AgentMessageEntity`, and no task in Phases 2–5 reads `AgentRun.transcript`. **Replace with:** `resultSummary` alone, until a run-history UI is scoped. Saves a util, a spec, a jsonb column, and a coupling to the AI SDK's `StepResult` shape.
 - **`EvidenceLookupService` + `FactFieldsResolver` + `ProposalItemFieldsResolver` + two DTOs + two specs** (P2 T11), so the UI can render one citation line — and the component (T12) only reads `fact.evidence[0]`. **Replace with:** a single `ProposalItemDTO.facts` resolve field returning a flat projection `{fieldName, strength, hasConflict, sourceType, sourceLocator, observedAt}`. One class, one resolver, no N+1 pair, and the DataLoader cut row becomes unnecessary.
 
 ## Positioning

@@ -1,9 +1,9 @@
 ---
-description: TypeScript best practices and conventions for the Twenty codebase, including strict typing, naming conventions, and type safety guidelines.
+description: TypeScript best practices and conventions for the SeaRM codebase, including strict typing, naming conventions, and type safety guidelines.
 alwaysApply: false
 ---
 ---
-description: TypeScript best practices and conventions for the Twenty codebase, including strict typing, naming conventions, and type safety guidelines.
+description: TypeScript best practices and conventions for the SeaRM codebase, including strict typing, naming conventions, and type safety guidelines.
 globs: ["**/*.ts", "**/*.tsx"]
 alwaysApply: false
 ---
@@ -11,7 +11,7 @@ alwaysApply: false
 # TypeScript Guidelines
 
 ## Core TypeScript Principles
-Twenty enforces strict TypeScript usage to ensure type safety and maintainable code. This document outlines our TypeScript conventions and best practices.
+SeaRM enforces strict TypeScript usage to ensure type safety and maintainable code. This document outlines our TypeScript conventions and best practices.
 
 ## Type Safety
 

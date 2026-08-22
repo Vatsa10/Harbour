@@ -20,7 +20,7 @@ jobs:
     with:
       files: |
         package.json
-        packages/twenty-codex-plugin/**
+        packages/searm-codex-plugin/**
         .github/workflows/ci-codex-plugin.yaml
 
   codex-plugin-validate:
@@ -38,7 +38,7 @@ jobs:
         uses: ./.github/actions/yarn-install
 
       - name: Codex Plugin / Validate
-        run: npx nx run twenty-codex-plugin:validate
+        run: npx nx run searm-codex-plugin:validate
 
       - name: Codex Plugin / Test
-        run: npx nx run twenty-codex-plugin:test
+        run: npx nx run searm-codex-plugin:test

@@ -1,6 +1,6 @@
 ---
 name: syncable-entity-types-and-constants
-description: Define types, entities, and central constant registrations for syncable entities in Twenty's workspace migration system. Use when creating new syncable entities, defining TypeORM entities, flat entity types, or registering in central constants (ALL_ENTITY_PROPERTIES_CONFIGURATION_BY_METADATA_NAME, ALL_ONE_TO_MANY_METADATA_RELATIONS, ALL_MANY_TO_ONE_METADATA_FOREIGN_KEY, ALL_MANY_TO_ONE_METADATA_RELATIONS).
+description: Define types, entities, and central constant registrations for syncable entities in SeaRM's workspace migration system. Use when creating new syncable entities, defining TypeORM entities, flat entity types, or registering in central constants (ALL_ENTITY_PROPERTIES_CONFIGURATION_BY_METADATA_NAME, ALL_ONE_TO_MANY_METADATA_RELATIONS, ALL_MANY_TO_ONE_METADATA_FOREIGN_KEY, ALL_MANY_TO_ONE_METADATA_RELATIONS).
 ---
 
 # Syncable Entity: Types & Constants (Step 1/6)
@@ -14,7 +14,7 @@ description: Define types, entities, and central constant registrations for sync
 ## Quick Start
 
 This step creates:
-1. Metadata name constant (twenty-shared)
+1. Metadata name constant (searm-shared)
 2. TypeORM entity (extends `SyncableEntity`)
 3. Flat entity types
 4. Action types (universal + flat)
@@ -24,7 +24,7 @@ This step creates:
 
 ## Step 1: Add Metadata Name
 
-**File**: `packages/twenty-shared/src/metadata/all-metadata-name.constant.ts`
+**File**: `packages/searm-shared/src/metadata/all-metadata-name.constant.ts`
 
 ```typescript
 export const ALL_METADATA_NAME = {

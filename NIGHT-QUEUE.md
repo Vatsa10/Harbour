@@ -9,12 +9,12 @@ against commit messages. Commit incrementally with explicit paths.**
 ## RULES THAT DO NOT LAPSE
 - Never `git add -A` / `git add .` — a broad stage silently reverted a fix for 9h once.
 - Never bare `npx jest` — 23 workers on 24 cores, has OOM-killed this host 3x.
-  Use `cd packages/twenty-server && bash ../../scripts/lowmem.sh test|itest|types [pattern]`.
+  Use `cd packages/searm-server && bash ../../scripts/lowmem.sh test|itest|types [pattern]`.
 - Postgres **5433**, Redis **6380**. `:5432` is an unrelated native Windows PG.
 - Global `yarn` is BROKEN (`Cannot find module ...yarn.js`). Use
   `node .yarn/releases/yarn-4.13.0.cjs` or call node scripts directly.
 - Clean-room: `grep -l "@license Enterprise" <path>` before opening ANY file,
-  across packages including twenty-shared. Never head/cat/sed/Read unverified.
+  across packages including searm-shared. Never head/cat/sed/Read unverified.
   Read-then-DELETE is safe; read-then-REWRITE contaminates.
 - Never weaken a test to make it green. Mutation-prove every fix: break it,
   confirm RED, restore, confirm GREEN, paste both.
@@ -24,7 +24,7 @@ against commit messages. Commit incrementally with explicit paths.**
 1. Server boots: `NODE_ENV=development npx nest start` -> literal
    `Nest application successfully started`. Boot found a real bug typecheck
    and unit tests both missed (fa90b15b15). Boot after every wave.
-2. Frontend dev server: `npx nx start twenty-front`. Earlier failure blamed on
+2. Frontend dev server: `npx nx start searm-front`. Earlier failure blamed on
    rimraf quoting was MISDIAGNOSED — `npx rimraf dist` runs clean. Re-diagnose.
 3. Front typecheck: was 14 errors. Drive to 0.
 4. Browser round trip: "Continue with Email" + prefilled creds ->
@@ -34,7 +34,7 @@ against commit messages. Commit incrementally with explicit paths.**
    finally run. Report real counts.
 
 ## P1 — THE PRODUCT (8/27 narrative steps; this IS SeaRM)
-Charter: docs/superpowers/PRODUCT-CHARTER.md. Audit: twenty/.superpowers/sdd/final/contract-audit.md
+Charter: docs/superpowers/PRODUCT-CHARTER.md. Audit: searm/.superpowers/sdd/final/contract-audit.md
 6. No shipped workflow creates an AgentTask. `create_agent_task` exists as an
    action tool and `createAgentTask` is exposed, but no WORKFLOW_TEMPLATE uses
    it and there is no CREATE_AGENT_TASK step type. Ship one.

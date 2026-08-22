@@ -6,16 +6,16 @@ Scope: Phase 1 of the AI-Native CRM consolidation. One feature. Everything else 
 
 ## Context
 
-Four CRM codebases sit in `d:\Files\Vatsa\Projects\AI-CRM`. A prior audit ([CRM_CONSOLIDATION_PLAN.md](../../../CRM_CONSOLIDATION_PLAN.md), [CRM_FEATURE_REGISTRY.csv](../../../CRM_FEATURE_REGISTRY.csv)) scored `twenty` the winner at 96/100 and named the other three reference implementations to port from, not merge:
+Four CRM codebases sit in `d:\Files\Vatsa\Projects\AI-CRM`. A prior audit ([CRM_CONSOLIDATION_PLAN.md](../../../CRM_CONSOLIDATION_PLAN.md), [CRM_FEATURE_REGISTRY.csv](../../../CRM_FEATURE_REGISTRY.csv)) scored `searm` the winner at 96/100 and named the other three reference implementations to port from, not merge:
 
 | Repo | Stack | Contributes |
 | --- | --- | --- |
-| `twenty` | NestJS, React, PostgreSQL, Redis, Nx | Platform base — target repository |
+| `searm` | NestJS, React, PostgreSQL, Redis, Nx | Platform base — target repository |
 | `relaticle` | Laravel, Filament | Approval-gated AI writes, custom-field-aware AI tools, guided import review |
 | `crm` | NestJS, Next.js, Prisma | Durable autonomous research, evidence-backed facts, identity resolution |
 | `crmkit` | Go, SQLite/Postgres | Agent-safe error semantics, OAuth/MCP access, deterministic API behavior |
 
-Exploration of the current `twenty` HEAD showed it already ships far more AI machinery than that audit assumed: `ai-agent`, `ai-agent-execution` (runs, turns, messages), `ai-agent-monitor` (turn evaluation), `ai-agent-role`, `ai-billing` (cost accounting), a tool registry with MCP, and workflow actions `ai-agent`, `form`, `record-crud`.
+Exploration of the current `searm` HEAD showed it already ships far more AI machinery than that audit assumed: `ai-agent`, `ai-agent-execution` (runs, turns, messages), `ai-agent-monitor` (turn evaluation), `ai-agent-role`, `ai-billing` (cost accounting), a tool registry with MCP, and workflow actions `ai-agent`, `form`, `record-crud`.
 
 So the actual gap is narrow and specific: **AI writes go straight through to records. Nothing reviews them.** An agent can change six fields on a company and the first anyone knows is when the data is wrong.
 
@@ -30,7 +30,7 @@ Applying those principles cut this design roughly in half twice — once on firs
 
 ## Infrastructure and stack
 
-Self-hosted on our own infrastructure, no dependency on Twenty Cloud.
+Self-hosted on our own infrastructure, no dependency on SeaRM Cloud.
 
 - **Runtime**: NestJS 10 + TypeScript (server), React 18 + Recoil (front), Nx monorepo
 - **Data**: PostgreSQL 16 (`core` + `metadata` + per-workspace schemas), Redis (cache, queues, sessions)
@@ -38,13 +38,13 @@ Self-hosted on our own infrastructure, no dependency on Twenty Cloud.
 - **API**: GraphQL (core + metadata schemas), REST, MCP
 - **Deploy**: Docker Compose to start; container orchestration when load requires it
 
-The stack is Twenty's stack. A fork inherits its host's architecture — substituting a layer means fighting thousands of existing tests for no user-visible gain. License is AGPL-3.0; running it as a service is unencumbered, distributing modified source carries source-availability obligations.
+The stack is SeaRM's stack. A fork inherits its host's architecture — substituting a layer means fighting thousands of existing tests for no user-visible gain. License is AGPL-3.0; running it as a service is unencumbered, distributing modified source carries source-availability obligations.
 
 ## Design
 
 ### The gate
 
-**One chokepoint: `ToolExecutorService.dispatch()`** — `packages/twenty-server/src/engine/core-modules/tool-provider/services/tool-executor.service.ts`.
+**One chokepoint: `ToolExecutorService.dispatch()`** — `packages/searm-server/src/engine/core-modules/tool-provider/services/tool-executor.service.ts`.
 
 Everything an AI writes passes through this one method: AI chat, agent runs, MCP `tools/call`, the `execute_tool` meta-tool, and AI-agent nodes inside workflows. It also covers side-effecting tools that never touch the record layer at all — `send_email`, `create_calendar_event`.
 
@@ -84,7 +84,7 @@ Core-schema TypeORM entities, following the pattern of the AI agent-run entities
 
 Batching: one proposal per originating agent run. The gate lazily opens a `PENDING` proposal keyed on the run identifier and appends items to it, so six tool calls in one turn become one reviewable change set rather than six.
 
-**Why core entities and not standard objects.** The first design put these on the workspace metadata layer to inherit views, filters, search, and notifications for free. Exploration proved that wrong on this codebase version: the decorator-based standard-object system was replaced by a declarative flat-metadata registry, so two new standard objects cost roughly 22 files across `twenty-shared/src/metadata/*` and `twenty-standard-application/*`, plus snapshot updates and a versioned workspace upgrade command for existing workspaces. Meanwhile the diff UI needs a custom component either way (server `WidgetType` enum + front `WidgetContentRenderer` case), and **there is no in-app notification system in this codebase at all** — only queued email. Core entities are roughly a third the surface area for the same v1 capability. Cost accepted: no saved views, no search, no workflow triggers on proposals. None are needed for the wedge.
+**Why core entities and not standard objects.** The first design put these on the workspace metadata layer to inherit views, filters, search, and notifications for free. Exploration proved that wrong on this codebase version: the decorator-based standard-object system was replaced by a declarative flat-metadata registry, so two new standard objects cost roughly 22 files across `searm-shared/src/metadata/*` and `searm-standard-application/*`, plus snapshot updates and a versioned workspace upgrade command for existing workspaces. Meanwhile the diff UI needs a custom component either way (server `WidgetType` enum + front `WidgetContentRenderer` case), and **there is no in-app notification system in this codebase at all** — only queued email. Core entities are roughly a third the surface area for the same v1 capability. Cost accepted: no saved views, no search, no workflow triggers on proposals. None are needed for the wedge.
 
 ### Approval
 
@@ -159,8 +159,8 @@ Recorded so the cuts are decisions, not oversights, and so the upgrade path is k
 ## Verification
 
 - **Unit**: policy resolution (specificity, default fallback, all three modes), conflict detection against baseline.
-- **Integration**: agent write diverted rather than applied; approval applies as approver with permissions enforced; validation abort leaves zero writes; unselected items rejected; reads ungated. Existing suites: `npx nx run twenty-server:test:integration:with-db-reset`.
-- **Manual end-to-end**: `npx nx database:reset twenty-server`, start the stack, run an agent from AI chat instructed to update a company, confirm the proposal appears in the inbox, approve a subset, confirm the record.
+- **Integration**: agent write diverted rather than applied; approval applies as approver with permissions enforced; validation abort leaves zero writes; unselected items rejected; reads ungated. Existing suites: `npx nx run searm-server:test:integration:with-db-reset`.
+- **Manual end-to-end**: `npx nx database:reset searm-server`, start the stack, run an agent from AI chat instructed to update a company, confirm the proposal appears in the inbox, approve a subset, confirm the record.
 - **Regression**: full server suite must stay green — the gate sits on a hot path used by every AI feature.
 
 ## Open items for the implementation plan

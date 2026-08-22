@@ -1,6 +1,6 @@
 ---
 name: syncable-entity-runner-and-actions
-description: Implement action handlers for executing workspace migrations in Twenty. Use when creating database operations for syncable entities, implementing universal-to-flat entity transpilation, or handling create/update/delete actions in the runner layer.
+description: Implement action handlers for executing workspace migrations in SeaRM. Use when creating database operations for syncable entities, implementing universal-to-flat entity transpilation, or handling create/update/delete actions in the runner layer.
 ---
 
 # Syncable Entity: Runner & Actions (Step 4/6)

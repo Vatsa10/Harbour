@@ -1,11 +1,11 @@
 # CRM Handoff — findings from the Ever Gauzy scout
 
-**For:** the session consolidating four CRM forks into `twenty` (branch `ai-native-crm`), plan at `CRM_CONSOLIDATION_PLAN.md`.
+**For:** the session consolidating four CRM forks into `searm` (branch `ai-native-crm`), plan at `CRM_CONSOLIDATION_PLAN.md`.
 **From:** an ERP-scout pass over `d:/Files/Vatsa/Projects/AI-CRM/ever-gauzy` — a fifth repo that is **not** in your plan. I was scouting it for ERP capability, but a lot of what's in it is plainly CRM, so here it is.
 
 ## Licensing — read this first
 
-**Ever Gauzy is AGPL-3.0 across the board** (Nx/yarn monorepo, `packages/core`, `packages/contracts`, `packages/plugins/*`). Same class of obligation as Relaticle and Twenty core, so *design*-level borrowing is fine and code-level porting is fine only if the distribution decision in Phase 0 already accepts AGPL. Nothing below is MIT. Recommendation for everything marked "port": **reimplement from the described design against Twenty's contracts, do not copy files** — that is also what your plan already mandates ("capability port, not a Git merge"), and it sidesteps the license question entirely.
+**Ever Gauzy is AGPL-3.0 across the board** (Nx/yarn monorepo, `packages/core`, `packages/contracts`, `packages/plugins/*`). Same class of obligation as Relaticle and SeaRM core, so *design*-level borrowing is fine and code-level porting is fine only if the distribution decision in Phase 0 already accepts AGPL. Nothing below is MIT. Recommendation for everything marked "port": **reimplement from the described design against SeaRM's contracts, do not copy files** — that is also what your plan already mandates ("capability port, not a Git merge"), and it sidesteps the license question entirely.
 
 ---
 
@@ -14,12 +14,12 @@
 - **Is:** `packages/core/src/lib/deal`, `.../pipeline`, `.../pipeline-stage` — deal entity with stage FK, ordered stages per pipeline, all registered in `app.module.ts`.
 - **CRM value:** core sales pipeline.
 - **Port cost:** n/a.
-- **Verdict:** **DUPLICATE.** Plan §Sales, "Multiple pipelines and customizable stages / Twenty / Keep — P0". Twenty's is better. Ignore Gauzy's entirely.
+- **Verdict:** **DUPLICATE.** Plan §Sales, "Multiple pipelines and customizable stages / SeaRM / Keep — P0". SeaRM's is better. Ignore Gauzy's entirely.
 
 ## 2. Contact + OrganizationContact (account/contact master) — DUPLICATE
 
 - **Is:** `packages/core/src/lib/contact` (address/phone primitive) and `.../organization-contact` (the client/account record). Referenced as invoice recipient, income `client`, `TimeLog.organizationContactId`, `Payment.organizationContact`, `Employee.organizationContacts` (m2m = account ownership).
-- **Verdict:** **DUPLICATE** of Twenty's Person/Company. Only note worth keeping: Gauzy demonstrates the *split* between a reusable `Contact` value-object (address/phones) and the account record that references it — Twenty already models this via metadata.
+- **Verdict:** **DUPLICATE** of SeaRM's Person/Company. Only note worth keeping: Gauzy demonstrates the *split* between a reusable `Contact` value-object (address/phones) and the account record that references it — SeaRM already models this via metadata.
 
 ## 3. Lead / Client models — mostly absent, nothing to take
 
@@ -31,8 +31,8 @@
 ## 4. Entity subscription engine (watchers) — **PORT, high value, not in your plan**
 
 - **Is:** `packages/core/src/lib/entity-subscription/*`. One polymorphic table: `(entity: BaseEntityEnum, entityId, employeeId, type)` where `type ∈ {CREATED_ENTITY, ASSIGNMENT, MENTION, COMMENT, MANUAL}`. Producers publish a CQRS `CreateEntitySubscriptionEvent`; the service dedupes on (employee, entity, entityId, org, tenant). Unsubscribe on unassignment removes only the ASSIGNMENT-reason row, leaving a manual watch intact.
-- **CRM value:** "who gets notified about this record" is a primitive every CRM needs and Twenty currently handles ad hoc. The **reason-typed subscription** is the detail most implementations miss — it makes unsubscribe-on-unassign correct without clobbering deliberate follows.
-- **Port cost:** Low. ~1 table + 1 service + event wiring. Maps cleanly onto Twenty's metadata (`objectMetadataId` + `recordId` instead of an enum).
+- **CRM value:** "who gets notified about this record" is a primitive every CRM needs and SeaRM currently handles ad hoc. The **reason-typed subscription** is the detail most implementations miss — it makes unsubscribe-on-unassign correct without clobbering deliberate follows.
+- **Port cost:** Low. ~1 table + 1 service + event wiring. Maps cleanly onto SeaRM's metadata (`objectMetadataId` + `recordId` instead of an enum).
 - **Plan status:** **Not covered.** Closest is §Team "Observability" and the notification-adjacent rows; no subscription/watcher primitive is specified.
 
 ## 5. Notification engine with per-type preference gating — **PORT, partly new**
@@ -56,8 +56,8 @@
 - **Is:** `packages/core/src/lib/comment/*`. Extends `BasePerEntityType` so it attaches to any record: `comment` text, `actorType`, `resolved/resolvedAt/resolvedByEmployeeId`, `editedAt`, self parent/replies threading, m2m assignment to employees (`comment_employee`) and teams (`comment_team`). Update restricted to the authoring employee.
 - **CRM value:** one table serves deal discussion, note threads, proposal review comments. **Resolve** + **assign a comment to a person** are exactly what an approval-inbox needs (your Phase 1 proposal review).
 - **Gap:** no COMMENT-type notification is emitted on create despite the template existing — same fan-out hole as #5.
-- **Port cost:** Low. Twenty likely wants this as a metadata-defined object rather than a hardcoded table.
-- **Plan status:** **Not covered** as a primitive (plan has "notes" under Twenty Keep, but no threading/resolve/assign semantics).
+- **Port cost:** Low. SeaRM likely wants this as a metadata-defined object rather than a hardcoded table.
+- **Plan status:** **Not covered** as a primitive (plan has "notes" under SeaRM Keep, but no threading/resolve/assign semantics).
 
 ## 8. Reactions + generic entity attachments (favorites, resource links) — take the idea, skip the code
 
@@ -76,7 +76,7 @@
   - Any approvable document auto-spawns a companion approval object (see `time-off-request.service.ts:44-68` creating a `RequestApproval` with `min_count: 1`, and `time-off.status.handler.ts` mirroring status back).
 - **CRM value:** your plan's §Workflow "Human approval/rejection step — Relaticle — Port as a native workflow action and inbox — P1" and §AI "Batch AI proposals and all-or-nothing approval". Gauzy gives you the **multi-approver M-of-N quorum + team-as-approver** shape that Relaticle's single-approver model probably doesn't, plus the "every approvable document gets a companion approval object" pattern which generalizes directly to your `Proposal` entity.
 - **Do NOT copy the implementation:**
-  - Polymorphic untyped `requestId` forces hand-written per-dialect SQL casts (Postgres `::varchar`, MySQL `CAST/COLLATE`) — see `request-approval.service.ts:56-180`. Use Twenty's metadata `(objectMetadataId, recordId)` instead.
+  - Polymorphic untyped `requestId` forces hand-written per-dialect SQL casts (Postgres `::varchar`, MySQL `CAST/COLLATE`) — see `request-approval.service.ts:56-180`. Use SeaRM's metadata `(objectMetadataId, recordId)` instead.
   - No sequential stages, no escalation, no delegation/out-of-office, no ordering, no decision audit trail.
   - `updateRequestApproval` **deletes and recreates all approver rows**, silently discarding prior votes.
   - `updateStatusRequestApprovalByAdmin`'s conflict guard is **commented out** (`:416-424`) — an admin can flip a settled request freely.
@@ -112,7 +112,7 @@
 
 ## 14. Tags / TagType — DUPLICATE-ish, skip
 
-- `packages/core/src/lib/tag-type` is a trivial lookup (`type` string + OneToMany Tag) with `DEFAULT_TAG_TYPES`. Tagging is cross-cutting and Twenty's metadata handles it. Skip.
+- `packages/core/src/lib/tag-type` is a trivial lookup (`type` string + OneToMany Tag) with `DEFAULT_TAG_TYPES`. Tagging is cross-cutting and SeaRM's metadata handles it. Skip.
 
 ## 15. ActivityLog — field-level audit trail — **PORT, complements your Principal contract**
 
@@ -129,11 +129,11 @@
 | Pattern | Where | Why you care | Plan status |
 |---|---|---|---|
 | **Scope-cascade metadata with system-default fallback** — `TaskMetadataService.fetchAll` filters on exact `(tenant, org, project, team)` with IS NULL for unspecified levels and falls back to `isSystem=true` rows with all scope columns NULL | `packages/core/src/lib/tasks/task-metadata.service.ts` | The single most reusable idea in the repo. Generalizes to any configurable enum: pipeline stages, deal statuses, proposal states, per-workspace task priorities. Avoids per-tenant seeding hell. Caveat: it's exact-match-then-default, **not** a true cascade up the levels | Not covered |
-| **Request-scoped context via AsyncLocalStorage (nestjs-cls)** with static accessors `currentTenantId/currentUserId/currentEmployeeId` | `core/context/request-context.ts` | Twenty already has workspace context, but the **CLS-stored bypass flag** (`withoutEmployeeFilter(cb)` saving/restoring in a `finally`, explicitly to avoid races between concurrent requests on a singleton service — `tenant-aware-crud.service.ts:33-51, 93-105`) is the right way to model "this agent run legitimately reads outside the caller's scope" | Adjacent to Principal contract |
+| **Request-scoped context via AsyncLocalStorage (nestjs-cls)** with static accessors `currentTenantId/currentUserId/currentEmployeeId` | `core/context/request-context.ts` | SeaRM already has workspace context, but the **CLS-stored bypass flag** (`withoutEmployeeFilter(cb)` saving/restoring in a `finally`, explicitly to avoid races between concurrent requests on a singleton service — `tenant-aware-crud.service.ts:33-51, 93-105`) is the right way to model "this agent run legitimately reads outside the caller's scope" | Adjacent to Principal contract |
 | **Sprint-move audit row** `(fromSprintId, toSprintId, movedById, reason)` written on every change | `organization-sprint-task-history.entity.ts` | Exact shape for **deal stage-change history** — carry-over/velocity reporting comes free, and `reason` is where an agent's justification goes | Not covered |
 | **Permission → manager → self authorization ladder** | `organization-team-employee.service.ts` | Right shape for row-level access on agent-initiated writes. **Bug to not copy:** the manager check queries by whereClause *without* `employeeId`, so it proves *some* manager exists on the team, not that the caller is one — a real privilege bug | §Team, Keep |
 | **Feature flags: env default → global Feature row → per-org FeatureOrganization override**, guard 404s (not 403s) on disabled so endpoint existence isn't disclosed | `feature/*`, `shared/guards/feature-flag.guard.ts` | Per-workspace module licensing. The 404 detail is correct and cheap. **Broken as shipped:** `FeatureFlagGuard` caches on `featureFlag_${flag}` with **no tenantId** and reads the global row, never the per-org override — the whole override table is ignored | Not covered |
-| **Instructive polymorphic-FK warning** | `request-approval.service.ts:56-180` | Concrete evidence for why your Proposal/Evidence entities should use Twenty's `(objectMetadataId, recordId)` rather than an untyped string FK: Gauzy pays for it with per-dialect SQL casts and zero referential integrity | Reinforces target architecture |
+| **Instructive polymorphic-FK warning** | `request-approval.service.ts:56-180` | Concrete evidence for why your Proposal/Evidence entities should use SeaRM's `(objectMetadataId, recordId)` rather than an untyped string FK: Gauzy pays for it with per-dialect SQL casts and zero referential integrity | Reinforces target architecture |
 
 ---
 
@@ -145,7 +145,7 @@ Three rows I'd add, all sourced from ever-gauzy (AGPL — reimplement, don't cop
 2. **§Team/security** — *Notification store with per-type/per-channel user preferences, snooze, and template-resolved titles* | ever-gauzy | Port | **P1**.
 3. **§Workflow** — extend the existing "Human approval/rejection step (Relaticle, P1)" row to *"…with M-of-N quorum, team-as-approver, and a companion approval object per approvable record (ever-gauzy reference design); add sequential stages, escalation, delegation, and a decision audit trail — none of which either source has."*
 
-And one to **not** add: Gauzy's deal/pipeline/pipeline-stage, contact/organization-contact, and tagging are all inferior to what Twenty already ships. Don't spend time there.
+And one to **not** add: Gauzy's deal/pipeline/pipeline-stage, contact/organization-contact, and tagging are all inferior to what SeaRM already ships. Don't spend time there.
 
 ## What I'd skip outright from ever-gauzy
 
@@ -159,7 +159,7 @@ Candidate/ATS (14 modules — recruiting, not CRM), time-tracking + desktop acti
 
 ## Licensing — read this first
 
-**ERPNext is GPL-3.0** (`# License: GNU General Public License v3` header on every file). Different licence family from Twenty's AGPL-3.0: AGPLv3 §13 permits combining with GPLv3 works, but the combined result carries AGPLv3 obligations on the whole. **Do not copy ERPNext files.** Everything below is a *design* to reimplement against Twenty's metadata contracts — same rule as the Gauzy section, for a different reason.
+**ERPNext is GPL-3.0** (`# License: GNU General Public License v3` header on every file). Different licence family from SeaRM's AGPL-3.0: AGPLv3 §13 permits combining with GPLv3 works, but the combined result carries AGPLv3 obligations on the whole. **Do not copy ERPNext files.** Everything below is a *design* to reimplement against SeaRM's metadata contracts — same rule as the Gauzy section, for a different reason.
 
 Also relevant: ERPNext is actively **removing** its CRM module in favour of the standalone **Frappe CRM** app (`erpnext/patches/v16_0/remove_frappe_crm_custom_fields`, `crm_settings_handle_allowed_users_for_frappe_crm`, `CRM Settings.enable_frappe_crm_data_synchronization`, `erpnext/crm/frappe_crm_api.py`). Treat `erpnext/crm/*` as a mature-but-frozen reference design; `frappe-crm` is a separate repo already in this workspace and is the better scout target for CRM depth.
 
@@ -168,8 +168,8 @@ Also relevant: ERPNext is actively **removing** its CRM module in favour of the 
 ### 1. Lead → Prospect → Opportunity → Quotation → Customer funnel — mostly DUPLICATE, one idea new
 
 - **Is:** `crm/doctype/lead/lead.py`, `prospect/prospect.py`, `opportunity/opportunity.py`, `crm/doctype/prospect_lead|prospect_opportunity`. Lead is a *person-or-org* record (`lead_name` from first/middle/last, falling back to `company_name`, then to the email localpart). Prospect is the **account roll-up**: it owns child tables of Leads and Opportunities and mirrors denormalised fields (`amount, stage, deal_owner, probability, expected_closing, contact_person`) onto itself via `Opportunity.update_prospect` / `Lead.update_prospect`. Opportunity is polymorphic on `opportunity_from ∈ {Lead, Prospect, Customer}` + `party_name`.
-- **DUPLICATE:** the funnel is Plan §Sales P0 and §CRM foundation P0. Twenty's metadata model beats a DynamicLink.
-- **New, worth taking:** **Prospect as an explicit "several leads + several opportunities under one account" aggregation, created lazily from a Lead** (`Lead.create_prospect`, `add_lead_to_prospect`). This is the missing middle between Twenty's Person and Company for inbound B2B — multiple unqualified contacts arrive from one company long before anyone is a Customer. Port difficulty: **Low** (a relation/view on Twenty Company, not a new object).
+- **DUPLICATE:** the funnel is Plan §Sales P0 and §CRM foundation P0. SeaRM's metadata model beats a DynamicLink.
+- **New, worth taking:** **Prospect as an explicit "several leads + several opportunities under one account" aggregation, created lazily from a Lead** (`Lead.create_prospect`, `add_lead_to_prospect`). This is the missing middle between SeaRM's Person and Company for inbound B2B — multiple unqualified contacts arrive from one company long before anyone is a Customer. Port difficulty: **Low** (a relation/view on SeaRM Company, not a new object).
 - **Do not copy:** `Opportunity.map_fields` blind-copies every column name that happens to exist on both the party and the opportunity inside a bare `try/except: continue`.
 
 ### 2. Derived funnel status via `has_*` predicates — PORT the pattern, new
@@ -217,21 +217,21 @@ Also relevant: ERPNext is actively **removing** its CRM module in favour of the 
   - **Pause/resume state machine:** each SLA names its own hold statuses and fulfilled statuses; `handle_status_change` enumerates all six Open↔Hold↔Closed transitions, accumulates `total_hold_time`, resets `resolution_by` on hold, recomputes on reopen, records `first_responded_on`, and calls `record_assigned_users_on_failure` when first response missed `response_by`.
 - **Why:** the plan's §Installable solutions row *"Customer support tickets, requester, assignee, conversation, SLA — crmkit — App — P2"* is one line; this is the specification behind it. Business-hours arithmetic + pause-while-waiting-on-customer + first-response and resolution as separate clocks is what separates a real SLA from a `due_date`. It also generalises past support: the same engine gives **lead-response SLAs** ("first touch within 2 business hours") — an AI-native use case, since the agent is then measured on the same clock as the human.
 - **Port difficulty:** **Medium–High.** The business-hours/holiday clock and the hold-time accumulator are the real work (~a week done properly); the rest is config.
-- **Do not copy:** applying an SLA **mutates the target doctype's schema** (creates custom fields) — model SLA state as a related record in Twenty. Also `safe_eval`'d conditions, N+1 lookups per hold/fulfilled status, and `apply()` as a wildcard `validate` hook on every doctype guarded only by a cache lookup.
+- **Do not copy:** applying an SLA **mutates the target doctype's schema** (creates custom fields) — model SLA state as a related record in SeaRM. Also `safe_eval`'d conditions, N+1 lookups per hold/fulfilled status, and `apply()` as a wildcard `validate` hook on every doctype guarded only by a cache lookup.
 - **Plan status:** **DUPLICATE in intent** (§Installable solutions, P2) — attach as the reference design, and consider promoting the lead-response-SLA half to P1.
 
 ### 8. Communication / comment / event carry-forward on conversion — PORT, new, small and important
 
 - **Is:** `crm/utils.py` — `copy_comments`, `link_communications`, `link_open_tasks`, `link_open_events`, `link_communications_with_prospect`, `link_events_with_prospect`, gated by `CRM Settings.carry_forward_communication_and_comments`. When a Lead becomes an Opportunity (or joins a Prospect), comments are cloned and Communications/Events/ToDos are **re-linked** (via `Communication Link` timeline rows) to the new record, so conversation history follows the funnel. `update_modified_timestamp` bumps `modified` on an inbound Communication so "stale record" views stay honest.
 - **Why:** every CRM that models Lead and Opportunity as separate objects has this problem and most solve it badly (history stranded on the dead Lead). The **many-to-many timeline link** — one Communication visible on the Lead *and* the Prospect *and* the Opportunity — is the right answer, not a copy and not a move.
-- **Port difficulty:** **Low.** Twenty already has timeline activities; this is a link-fanout rule on conversion plus a settings toggle.
+- **Port difficulty:** **Low.** SeaRM already has timeline activities; this is a link-fanout rule on conversion plus a settings toggle.
 - **Plan status:** **New.** §Sales has "Activity timeline — Keep" but is silent on what happens to it on conversion/merge — and §CRM foundation "Dedupe and identity resolution / merge review — P1" needs exactly this rule.
 - **Also:** `CRMNote` mixin (`crm/doctype/crm_note`) — an `(note, added_by, added_on)` child table with `notify_mentions` wired in, shared by Lead/Opportunity/Prospect. Cheaper than Gauzy's polymorphic Comment (§7) but strictly less capable; prefer Gauzy's shape, take ERPNext's mention hook.
 
 ### 9. Contact/Address linking via Dynamic Link — DUPLICATE, one cautionary note
 
 - **Is:** Frappe's `Contact`/`Address` with a `Dynamic Link` child table (`link_doctype`, `link_name`), so one Contact attaches to Lead + Customer + Prospect at once. `Lead.before_insert` auto-creates a Contact (`CRM Settings.auto_creation_of_contact`); `crm/utils.py:update_lead_phone_numbers` syncs the Contact's primary phone/mobile **back down** onto the Lead.
-- **DUPLICATE:** Twenty's metadata relations cover this properly. The value here is the demonstrated **cost** of denormalising: a hand-written back-sync hook per field, plus `Opportunity.onload` manually merging two contact/address lists. Reinforces "use real relations, never copy contact fields onto the deal".
+- **DUPLICATE:** SeaRM's metadata relations cover this properly. The value here is the demonstrated **cost** of denormalising: a hand-written back-sync hook per field, plus `Opportunity.onload` manually merging two contact/address lists. Reinforces "use real relations, never copy contact fields onto the deal".
 
 ### 10. Quotation flow (quoting a Lead, not just a Customer) — partly new
 
@@ -253,7 +253,7 @@ From ERPNext (**GPLv3 — reimplement, do not copy**):
 
 ## What I'd skip outright from ERPNext
 
-Everything outside `crm/` and `support/`: accounting core, stock/valuation, taxes, POS, subscriptions, dunning, bank reconciliation, payroll — all ERP, none of it CRM, all GPLv3. Also skip `Warranty Claim` (thin Issue variant keyed to serial numbers), `Sales Team`/commission (hits payroll and GL), the lookup tables (`Market Segment`, `Industry Type`, `Sales Stage`, `Opportunity Type` — Twenty select fields), and the Frappe-CRM sync bridge (`crm/frappe_crm_api.py`, `CRM Settings.enable_frappe_crm_data_synchronization`), which exists solely to hand this module off to another app.
+Everything outside `crm/` and `support/`: accounting core, stock/valuation, taxes, POS, subscriptions, dunning, bank reconciliation, payroll — all ERP, none of it CRM, all GPLv3. Also skip `Warranty Claim` (thin Issue variant keyed to serial numbers), `Sales Team`/commission (hits payroll and GL), the lookup tables (`Market Segment`, `Industry Type`, `Sales Stage`, `Opportunity Type` — SeaRM select fields), and the Frappe-CRM sync bridge (`crm/frappe_crm_api.py`, `CRM Settings.enable_frappe_crm_data_synchronization`), which exists solely to hand this module off to another app.
 
 **Scout note:** since ERPNext is actively deprecating this module, `frappe-crm` and `frappe-helpdesk` (both already cloned in this workspace) are the higher-yield next targets — helpdesk in particular is where the SLA engine above has been rebuilt properly.
 
@@ -269,13 +269,13 @@ Everything outside `crm/` and `support/`: accounting core, stock/valuation, taxe
 
 - LGPL permits **linking from a larger work under any licence**, including closed/commercial. AGPL/GPL do not.
 - So Odoo is the **only** scouted source where you could legally *copy* algorithm-level code, if it stays in an LGPL-licensed module boundary and you honour §4 (relinking/modification rights, notice, source of the LGPL part).
-- Practically: **still reimplement.** Python/ORM-coupled code doesn't survive a port to Twenty's NestJS/metadata stack, and keeping an LGPL boundary inside a TS monorepo is more compliance overhead than the code is worth. But when a specific algorithm (Naive-Bayes lead scoring, the weighted-random assignment loop, the RFC-5322 routing rules) is worth lifting near-verbatim, **Odoo is the one repo where you may.** Flag that to whoever owns the Phase-0 licence review.
+- Practically: **still reimplement.** Python/ORM-coupled code doesn't survive a port to SeaRM's NestJS/metadata stack, and keeping an LGPL boundary inside a TS monorepo is more compliance overhead than the code is worth. But when a specific algorithm (Naive-Bayes lead scoring, the weighted-random assignment loop, the RFC-5322 routing rules) is worth lifting near-verbatim, **Odoo is the one repo where you may.** Flag that to whoever owns the Phase-0 licence review.
 
 ## A — `crm/` (the CRM addon itself)
 
 | # | Capability | What it is / source | Why worth having | Port | Status |
 |---|---|---|---|---|---|
-| A1 | **One model for Lead + Opportunity** (`type in {lead, opportunity}`) | `crm/models/crm_lead.py:123`, 2890 lines, one table | No conversion-loses-history problem at all — conversion is a field write (`convert_opportunity`, `:1850`). Sidesteps the ERPNext §8 carry-forward problem entirely. Contrast with ERPNext's separate Lead/Prospect/Opportunity before deciding Twenty's shape. | n/a — architectural choice | **Decide, not port.** Relevant to plan §Sales P0 |
+| A1 | **One model for Lead + Opportunity** (`type in {lead, opportunity}`) | `crm/models/crm_lead.py:123`, 2890 lines, one table | No conversion-loses-history problem at all — conversion is a field write (`convert_opportunity`, `:1850`). Sidesteps the ERPNext §8 carry-forward problem entirely. Contrast with ERPNext's separate Lead/Prospect/Opportunity before deciding SeaRM's shape. | n/a — architectural choice | **Decide, not port.** Relevant to plan §Sales P0 |
 | A2 | **Duplicate detection: 3 exact-match criteria** — same email *domain* (`email_domain_criterion`, free-provider domains excluded), same `phone_sanitized`, same `commercial_partner_id` ancestor | `crm_lead.py:508` (`_compute_email_domain_criterion`), `:624` `_compute_potential_lead_duplicates` | Cheap, deterministic, no fuzzy matching, and **caps out at 21 results and returns empty above the cap** — "too many matches means the criterion is meaningless" is the right failure mode. Runs sudo + `active_test=False` deliberately so managers see cross-company/archived dupes. | **Low** | Serves §CRM foundation "Dedupe and identity resolution — P1". **New detail**, complements crmkit/crm |
 | A3 | **Merge with confidence-ranked winner + non-destructive history move** | `_sort_by_confidence_level` (`:1943`), `_merge_data` (`:1479`), `_merge_dependences_*` (`:1627-1706`), `_merge_followers` (`:1707`) | Best merge implementation in the whole scout. Winner picked by `(not lost, is opportunity, stage.sequence, probability, -id)`. Field merge rule per type: text concatenated, m2o = first-not-null in winner order, x2m skipped, address fields taken **as a coherent block from one record** not field-by-field. Messages/activities/attachments/calendar events are **re-parented** (`res_id` rewrite) with the source name prefixed into the subject, not copied. Followers move only if that partner **posted in the last 30 days** — one SQL, dedup against existing followers. Merge posts a summary message. Hard cap of 5 records unless superuser. | **Medium** | §CRM foundation "merge review — P1". **New**, and strictly better than anything else scouted |
 | A4 | **Naive-Bayes predictive lead scoring (PLS)** | `_pls_get_naive_bayes_probabilities` (`:2194`), frequency table `crm.lead.scoring.frequency`, nightly `_cron_update_automated_probabilities` (`:2397`) | A real, explainable, no-LLM scoring model: per-team frequency counts of (field, value) to won/lost, Laplace-smoothed with +0.1 to dodge zero-frequency, probability = S(won)/(S(won)+S(lost)). Fields are admin-configurable (`crm.pls_fields`), start date bounded (`crm.pls_start_date`), and it exposes a **per-(field,value) score breakdown tooltip** (`prepare_pls_tooltip_data`, `:2813`). `probability` is user-overridable; `automated_probability` and `is_automated_probability` track whether a human has taken over. | **Medium** | **New.** Directly relevant to the plan's "an LLM confidence score is not evidence" principle — this *is* evidence-shaped scoring, per-feature attributable, and cheap. Suggest §AI-native, **P1** |
@@ -283,7 +283,7 @@ Everything outside `crm/` and `support/`: accounting core, stock/valuation, taxe
 | A6 | **Rotting / staleness as a first-class stage property** | `mail_tracking_duration_mixin.py` (`rotting_days`, `is_rotting`, searchable), `crm_stage.rotting_threshold_days`, `crm_lead._get_rotting_domain` (`:396`) | Per-stage "days before this goes stale" beats a global staleness rule; and `is_rotting` has a `search=` so it works in list filters and workflow triggers. | **Low** | §Sales "Outreach count and last-outreach signals — crmkit — P1" — **add this as the better model** |
 | A7 | **`duration_tracking`: time-in-each-stage, derived from the tracking log** | `mail_tracking_duration_mixin.py:_compute_duration_tracking` | Json `{stage_id: seconds}` computed from `mail.tracking.value` history — no separate stage-history table. Cycle-time/velocity analytics for free once you have field tracking. Requires the m2o be `tracking=True`. | **Low** (given B4) | **New.** Supersedes handoff "Sprint-move audit row" (ever-gauzy) as the deal-stage-history mechanism |
 | A8 | Lost reasons | `crm_lost_reason.py` (35 lines), `crm_lead.action_set_lost` | Trivially thin — a named lookup plus `lost_reason_id`. | n/a | **DUPLICATE** of ERPNext §3, which is better (competitors, detailed reason, live-quote guard). Take ERPNext's. |
-| A9 | Stages, `is_won`, `fold`, per-team stages, `requirements` tooltip | `crm_stage.py` | — | n/a | **DUPLICATE** — Twenty §Sales P0 |
+| A9 | Stages, `is_won`, `fold`, per-team stages, `requirements` tooltip | `crm_stage.py` | — | n/a | **DUPLICATE** — SeaRM §Sales P0 |
 | A10 | Recurring revenue on the opportunity (`recurring_plan`, MRR, prorated revenue) | `crm_lead.py:143-151`, `crm_recurring_plan.py` | Prorated + MRR + one-off on the same record; small but the correct shape for SaaS pipelines. | **Low** | **New**, optional. §Sales P3 |
 
 ## B — `mail/` (the chatter) — the highest-value subsystem in Odoo
@@ -292,11 +292,11 @@ Everything outside `crm/` and `support/`: accounting core, stock/valuation, taxe
 
 | # | Capability | Source | Why worth having | Port | Status |
 |---|---|---|---|---|---|
-| B1 | **`mail.thread` as a mixin, not a feature** | `mail/models/mail_thread.py` (5137 lines) | Every business object gets chatter by declaring one inherit. In Twenty terms: chatter is a **capability applied to an object metadata definition**, not a hardcoded table per record type. Get this shape right before building anything on top. | architectural | **New framing.** Plan has "Activity timeline — Twenty — Keep" with no mixin concept |
+| B1 | **`mail.thread` as a mixin, not a feature** | `mail/models/mail_thread.py` (5137 lines) | Every business object gets chatter by declaring one inherit. In SeaRM terms: chatter is a **capability applied to an object metadata definition**, not a hardcoded table per record type. Get this shape right before building anything on top. | architectural | **New framing.** Plan has "Activity timeline — SeaRM — Keep" with no mixin concept |
 | B2 | **Follower + subtype subscription model** | `mail_followers.py` (557), `mail_message_subtype.py` | `mail.followers = (res_model, res_id, partner_id, subtype_ids)` with a unique constraint on (model, res_id, partner). **Subtypes are the per-topic granularity** ("stage changed", "new note", "assigned") — a follower subscribes to a *subset*. `internal` subtypes are employee-only; `parent_id` + `relation_field` enable **cascading auto-subscription** (follow a project, get task-level subtypes). This is a strictly more capable version of handoff §4 (ever-gauzy entity-subscription): reason-typing there vs topic-typing here — you want **both axes**. | **Medium** | **Supersedes/extends handoff §4.** §CRM foundation, **P1** |
 | B3 | **Auto-subscribe on assignment, with notification** | `_message_auto_subscribe` (`:4776`), `_message_auto_subscribe_followers` (`:4706`) | Any tracked m2o to `res.users` named `user_id` auto-subscribes the assignee and sends a rendered "You have been assigned to X" notify — **unless the assigner is the assignee**. `followers_existing_policy` lets a caller choose skip/replace on re-subscribe. Exactly the fix for the ever-gauzy §5 fan-out hole. | **Low** | **New.** Wire with B2 |
 | B4 | **Field-level tracking to message + typed diff rows** | `_message_track` (`:644`), `mail_tracking_value.py` | `tracking=<int>` on a field; on write, changed fields produce `mail.tracking.value` rows (typed columns per datatype plus a `field_info` Json fallback for **fields later deleted from the schema**), attached to a `mail.message`. `_track_subtype(initial_values)` lets a model pick which subtype a given change posts under (crm posts a different subtype for won vs lost — `crm_lead.py:2088`). Crucially `_filter_has_field_access` **re-checks field ACLs when rendering the diff**, so tracking is not a permission leak. | **Medium** | §CRM foundation "Audit trail and field diffs — P1" — **this is the reference schema**, better than ever-gauzy §15 (typed columns + ACL recheck + deleted-field survival) |
-| B5 | **Inbound email gateway / routing** | `message_route` (`:1121`), `_routing_check_route` (`:846`), `message_new`/`message_update` (`:1514`/`:1547`), `mail_alias.py` | Route order: (1) reply-detection by `References`/`In-Reply-To` against stored `message_id` — **truncated to the last 32 refs, with a comment that 100+ refs degrades perf**; (2) `mail.alias` local-part match against To/Cc/Delivered-To, filtered by allowed catchall domains; (3) declared fallback model; else raise. An alias defines its own model, defaults and owner. `crm.lead.message_new` (`:2125`) turns an inbound mail into a lead with `email_from` to partner matching. | **Medium–High** | **New.** Plan has "IMAP/SMTP/CalDAV — Twenty — Keep" but nothing on **record-creating aliases** (`sales@` creates a lead). Suggest §Sales, **P1** |
+| B5 | **Inbound email gateway / routing** | `message_route` (`:1121`), `_routing_check_route` (`:846`), `message_new`/`message_update` (`:1514`/`:1547`), `mail_alias.py` | Route order: (1) reply-detection by `References`/`In-Reply-To` against stored `message_id` — **truncated to the last 32 refs, with a comment that 100+ refs degrades perf**; (2) `mail.alias` local-part match against To/Cc/Delivered-To, filtered by allowed catchall domains; (3) declared fallback model; else raise. An alias defines its own model, defaults and owner. `crm.lead.message_new` (`:2125`) turns an inbound mail into a lead with `email_from` to partner matching. | **Medium–High** | **New.** Plan has "IMAP/SMTP/CalDAV — SeaRM — Keep" but nothing on **record-creating aliases** (`sales@` creates a lead). Suggest §Sales, **P1** |
 | B6 | **Bounce + loop protection** | `_routing_handle_bounce` (`:785`), `_detect_loop_sender` (`:1003`), `_detect_loop_headers` (`:1091`), `_detect_write_to_catchall` | Bounces are parsed, mapped back to the originating `mail.notification` (status `bounce`, `failure_type='mail_bounce'`), and propagated to **every blacklist-enabled record sharing that normalized email**, incrementing `message_bounce`. Loop protection is three-layer: a marker in the bounce Message-Id (`-loop-detection-bounce-email@`), a per-sender rate check on records created by the same alias, and "all recipients are catchall, drop". | **Medium** | **New and non-obvious.** Any CRM with an inbound alias will get auto-replier loops in week one. **P1** if you take B5 |
 | B7 | **Blacklist / opt-out as a mixin** | `mail_blacklist.py`, `mail_thread_blacklist.py` | One global `mail.blacklist` table keyed on normalized email; `mail.thread.blacklist` gives any model `email_normalized` (trigram index), computed `is_blacklisted` with a working `_search_is_blacklisted`, and `message_bounce`. Blacklist is `active`-toggled, not deleted, and every add/remove posts a tracked message — the audit trail is the point. | **Low** | **New.** Legally required (CAN-SPAM/GDPR) the moment you send outbound. §CRM foundation, **P1** |
 | B8 | **Activities: scheduled next-actions with chaining** | `mail_activity.py` (878), `mail_activity_type.py`, `mail_activity_mixin.py` (487) | `mail.activity = (res_model, res_id, activity_type_id, summary, note, date_deadline, user_id, state)`; `state` is **computed from the deadline** (`overdue/today/planned`), never stored-and-drifting. Types carry a delay (`delay_count`/`delay_unit`/`delay_from in {current_date, previous_activity_deadline}`), an icon/decoration, mail templates, and **`chaining_type` = suggest-next vs trigger-next** — completing a "Call" auto-schedules "Send quote". `mail_activity_mixin` gives any model `activity_ids`, `activity_state`, `activity_summary` **as searchable fields**, so "my overdue accounts" is a plain filter. | **Medium** | §Sales "Tasks, reminders, assignment — P1" is **partly DUPLICATE**, but chaining, deadline-derived state, and mixin-searchability are **new**. The distinction *activity (future intent) vs message (past record)* is the design insight |
@@ -330,9 +330,9 @@ Everything outside `crm/` and `support/`: accounting core, stock/valuation, taxe
 
 | # | Capability | Source | Why | Port | Status |
 |---|---|---|---|---|---|
-| E1 | **One table for company, contact and address** — `is_company` + `parent_id` + `type in {contact, invoice, delivery, other, private}` | `odoo/addons/base/models/res_partner.py:254-302` | Everything addressable is a partner. Debatable, and Twenty's Person/Company split is probably better for a CRM — but note what it buys: any relation pointing at "a party" needs exactly one FK. | n/a | **DUPLICATE / decided.** Twenty wins here |
-| E2 | **`commercial_partner_id` — the billing/legal entity of any contact** | `:302`, `:514` — computed as `self if is_company or no parent else parent.commercial_partner_id` | The **single most reusable idea in `res.partner`**. It resolves any contact, at any depth, to its root commercial entity in one stored, indexable field. Powers portal visibility rules (`child_of commercial_partner_id`), "all leads for this account", duplicate detection (A2), and credit limits. Twenty needs the equivalent computed rollup even with a Person/Company split — especially for multi-subsidiary accounts. | **Low** | **New.** §CRM foundation, **P1** |
-| E3 | **Commercial-field sync down the hierarchy** | `_commercial_fields`/`_synced_commercial_fields` (`:686`), `_commercial_sync_from_company`, `_commercial_sync_to_descendants`, `_fields_sync` (`:769`) | An explicit, declared list of fields (`vat`, `company_registry`, `industry_id`) that **belong to the commercial entity and are pushed to all descendants**, plus address fields that sync parent/child by `type`. It only writes children whose value actually differs. | **Low–Medium** | **New**, but caution: this is denormalisation-with-a-sync-hook, the exact pattern ERPNext §9 warns about. **Prefer a computed/inherited read** in Twenty; take the *concept of a declared "owned by the account" field set*, not the write-propagation |
+| E1 | **One table for company, contact and address** — `is_company` + `parent_id` + `type in {contact, invoice, delivery, other, private}` | `odoo/addons/base/models/res_partner.py:254-302` | Everything addressable is a partner. Debatable, and SeaRM's Person/Company split is probably better for a CRM — but note what it buys: any relation pointing at "a party" needs exactly one FK. | n/a | **DUPLICATE / decided.** SeaRM wins here |
+| E2 | **`commercial_partner_id` — the billing/legal entity of any contact** | `:302`, `:514` — computed as `self if is_company or no parent else parent.commercial_partner_id` | The **single most reusable idea in `res.partner`**. It resolves any contact, at any depth, to its root commercial entity in one stored, indexable field. Powers portal visibility rules (`child_of commercial_partner_id`), "all leads for this account", duplicate detection (A2), and credit limits. SeaRM needs the equivalent computed rollup even with a Person/Company split — especially for multi-subsidiary accounts. | **Low** | **New.** §CRM foundation, **P1** |
+| E3 | **Commercial-field sync down the hierarchy** | `_commercial_fields`/`_synced_commercial_fields` (`:686`), `_commercial_sync_from_company`, `_commercial_sync_to_descendants`, `_fields_sync` (`:769`) | An explicit, declared list of fields (`vat`, `company_registry`, `industry_id`) that **belong to the commercial entity and are pushed to all descendants**, plus address fields that sync parent/child by `type`. It only writes children whose value actually differs. | **Low–Medium** | **New**, but caution: this is denormalisation-with-a-sync-hook, the exact pattern ERPNext §9 warns about. **Prefer a computed/inherited read** in SeaRM; take the *concept of a declared "owned by the account" field set*, not the write-propagation |
 
 ## Recommended additions to `CRM_CONSOLIDATION_PLAN.md`
 
@@ -352,7 +352,7 @@ From Odoo (**LGPL-3 — the one source where copying is legally viable; still re
 
 ## What I'd skip outright from Odoo
 
-`crm`'s QWeb-bound views and kanban rainbowman/gamification (`_get_rainbowman_message`, `crm_lead.py:1181`); `digest` (its own reporting stack); `discuss` (a whole realtime chat product with WebRTC ICE servers, presence and push — `mail/models/discuss/`, `mail_ice_server.py`, `mail_push*.py` — out of scope unless you want in-app chat); `link_tracker` unless you take D2; `fetchmail` (IMAP polling — Twenty already has connected accounts); and the entire `mail` client-side JS framework. Also skip `crm_lead`'s 2890-line single-class shape as a *structure* — the capabilities are excellent, the file is not a model to imitate.
+`crm`'s QWeb-bound views and kanban rainbowman/gamification (`_get_rainbowman_message`, `crm_lead.py:1181`); `digest` (its own reporting stack); `discuss` (a whole realtime chat product with WebRTC ICE servers, presence and push — `mail/models/discuss/`, `mail_ice_server.py`, `mail_push*.py` — out of scope unless you want in-app chat); `link_tracker` unless you take D2; `fetchmail` (IMAP polling — SeaRM already has connected accounts); and the entire `mail` client-side JS framework. Also skip `crm_lead`'s 2890-line single-class shape as a *structure* — the capabilities are excellent, the file is not a model to imitate.
 
 **Scout note:** `mail/` is the strongest single subsystem encountered across all five scouted repos. If only one thing gets ported from Odoo, port the chatter — followers/subtypes, tracking values, activities, and the auto-subscribe rule — because handoff §4, §5, §6, §7 and §15 (ever-gauzy) and ERPNext §8 are all partial reinventions of it.
 
@@ -364,9 +364,9 @@ From Odoo (**LGPL-3 — the one source where copying is legally viable; still re
 
 ## Licensing — read this first
 
-- **Frappe CRM: AGPL-3.0** (`frappe-crm/LICENSE`). Same obligation class as ever-gauzy, Relaticle and Twenty core.
+- **Frappe CRM: AGPL-3.0** (`frappe-crm/LICENSE`). Same obligation class as ever-gauzy, Relaticle and SeaRM core.
 - **Frappe Helpdesk: AGPL-3.0** (`frappe-helpdesk/`). Same.
-- Neither is MIT. Everything marked "port" below means **reimplement from the described design against Twenty's contracts** — do not copy files. Consistent with the plan's "capability port, not a Git merge".
+- Neither is MIT. Everything marked "port" below means **reimplement from the described design against SeaRM's contracts** — do not copy files. Consistent with the plan's "capability port, not a Git merge".
 
 ---
 
@@ -375,7 +375,7 @@ From Odoo (**LGPL-3 — the one source where copying is legally viable; still re
 ### F1. Lean lead/deal/organization split — DUPLICATE
 
 - **Is:** `crm/fcrm/doctype/crm_lead|crm_deal|crm_organization|crm_task/*.json`. Lead = prospect; Deal = opportunity linking one org + many contacts; Organization carries website/employees/revenue/territory/industry.
-- **Verdict:** **DUPLICATE.** Plan §CRM foundation ("People, companies, opportunities… / Twenty / Keep / P0") and §Sales ("Multiple pipelines"). One design note worth keeping: they deliberately kept Lead and Organization as *independent* records rather than forcing a customer master — that is precisely why Frappe left ERPNext's CRM model behind. Twenty's metadata already permits this.
+- **Verdict:** **DUPLICATE.** Plan §CRM foundation ("People, companies, opportunities… / SeaRM / Keep / P0") and §Sales ("Multiple pipelines"). One design note worth keeping: they deliberately kept Lead and Organization as *independent* records rather than forcing a customer master — that is precisely why Frappe left ERPNext's CRM model behind. SeaRM's metadata already permits this.
 
 ### F2. Polymorphic activity timeline with dynamic reference — DUPLICATE (superseded by Odoo)
 
@@ -385,26 +385,26 @@ From Odoo (**LGPL-3 — the one source where copying is legally viable; still re
 ### F3. Call Log as a first-class record, provider-agnostic — **PORT, new**
 
 - **Is:** `crm/fcrm/doctype/crm_call_log/crm_call_log.json`, `crm/integrations/twilio`, `crm/integrations/exotel`. One `CRM Call Log` doctype: from/to, direction, full status enum (Initiated / Ringing / In Progress / Completed / Failed / Busy / No Answer / Queued / Canceled), start/end, duration, `recording_url`, caller + receiver user links, dynamic reference to lead/deal/anything. Two providers behind it; webhooks drive status transitions.
-- **Why worth having:** the plan has "Call recording and meeting intelligence | Twenty apps | Keep and expand" with no data contract. This supplies one: a provider-neutral call record with a *lifecycle enum*, which is what makes call analytics (connect rate, talk time, no-answer follow-up) possible at all. Recording URLs stay on the provider CDN — do the same, or storage cost scales with call volume.
+- **Why worth having:** the plan has "Call recording and meeting intelligence | SeaRM apps | Keep and expand" with no data contract. This supplies one: a provider-neutral call record with a *lifecycle enum*, which is what makes call analytics (connect rate, talk time, no-answer follow-up) possible at all. Recording URLs stay on the provider CDN — do the same, or storage cost scales with call volume.
 - **Port cost:** Low for the record + webhook state machine; medium per provider adapter.
 - **Verdict:** **new** — sharpen the existing plan row into a defined `CallLog` object plus a provider interface.
 
 ### F4. Metadata-driven filter/sort/group discovery API — **PORT the API shape, new**
 
 - **Is:** `crm/api/doc.py` — `get_filterable_fields(doctype)`, `sort_options`, `get_group_by_fields` return field metadata so the UI builds filter/sort/kanban controls with zero per-object code. New fields become filterable automatically.
-- **Why worth having:** Twenty has the metadata; what the plan lacks is the *published discovery endpoint* over it. This is the same contract an MCP tool needs (Phase 4, "metadata discovery, scoped tools") — build it once, serve both the UI and the agent.
+- **Why worth having:** SeaRM has the metadata; what the plan lacks is the *published discovery endpoint* over it. This is the same contract an MCP tool needs (Phase 4, "metadata discovery, scoped tools") — build it once, serve both the UI and the agent.
 - **Port cost:** Low. Mostly exposure of what already exists.
 - **Verdict:** **new as a plan row**; folds into §AI-native "MCP/OAuth connector" and Phase 4.
 
 ### F5. Per-user view settings as a record — DUPLICATE
 
 - **Is:** `CRM View Settings` doctype; kanban column choice, filters, sorts and visible columns persisted per user via `updateKanbanSettings`.
-- **Verdict:** **DUPLICATE.** Plan §CRM foundation "Table, board, calendar, dashboard, and record views / Twenty / Keep / P0".
+- **Verdict:** **DUPLICATE.** Plan §CRM foundation "Table, board, calendar, dashboard, and record views / SeaRM / Keep / P0".
 
 ### F6. Runtime form scripts (low-code customisation without deploy) — **PORT the idea, P2**
 
 - **Is:** `crm/fcrm/doctype/crm_form_script/`, `crm/api/form.py`, consumed in `frontend/src/pages/Lead.vue`. Per-object JS with `on_load` / `before_save` / `on_save` hooks that can hide fields, set values and inject custom action buttons — executed in the browser, not on the server.
-- **Why worth having:** it is the escape hatch that keeps a vertical customer (an Indian manufacturing SME) off a fork. Twenty's answer is apps + workflow code functions, which is heavy for "hide this field when stage = X".
+- **Why worth having:** it is the escape hatch that keeps a vertical customer (an Indian manufacturing SME) off a fork. SeaRM's answer is apps + workflow code functions, which is heavy for "hide this field when stage = X".
 - **Port cost:** Medium-high, and it is mostly a *security* cost: tenant-authored JS needs a sandbox and a permission gate. Client-side-only execution (as Frappe does here) is the cheap safe version — it can never bypass server permissions.
 - **Verdict:** **new**, but P2 and explicitly scoped to client-side presentation logic only.
 
@@ -474,7 +474,7 @@ From Odoo (**LGPL-3 — the one source where copying is legally viable; still re
 ### H8. Bidirectional Customer sync with ERPNext — take the hook checklist only
 
 - **Is:** `helpdesk/integrations/erpnext/customer.py` + `hooks.py` — `after_insert`, `on_update`, `before_rename`, `after_rename`, `on_trash`, plus User Permission and DocShare sync.
-- **Why worth having:** the *rename* and *permission-share* hooks are the two everyone forgets when building a sync. Keep as a checklist for any Twenty↔external-system sync.
+- **Why worth having:** the *rename* and *permission-share* hooks are the two everyone forgets when building a sync. Keep as a checklist for any SeaRM↔external-system sync.
 - **Verdict:** **DUPLICATE-adjacent** — a note, not a port.
 
 ### H9. ERP GAP — Helpdesk is **not** a complaint / warranty / quality system
@@ -487,11 +487,11 @@ From Odoo (**LGPL-3 — the one source where copying is legally viable; still re
 
 ## Cross-cutting: the frontend architecture observation
 
-Both apps are **Vue 3 SPAs served beside** the Frappe backend rather than inside it — separate Vite build (`frontend/`, `desk/`), own router base (`/crm`), own component library (`frappe-ui`), Pinia stores, socket.io for push, mobile/desktop layout swap at a 640px breakpoint. Twenty's stack is React / NestJS / GraphQL, so none of this ports directly. The transferable lesson is about **API shape, not framework**:
+Both apps are **Vue 3 SPAs served beside** the Frappe backend rather than inside it — separate Vite build (`frontend/`, `desk/`), own router base (`/crm`), own component library (`frappe-ui`), Pinia stores, socket.io for push, mobile/desktop layout swap at a 640px breakpoint. SeaRM's stack is React / NestJS / GraphQL, so none of this ports directly. The transferable lesson is about **API shape, not framework**:
 
-1. **The SPA only ever talks to the backend through the same public, whitelisted API a third party would use** — `@frappe.whitelist()` → `/api/method/crm.api.*`, type-annotated and enforced by `require_type_annotated_api_methods` in `hooks.py`. There is no privileged internal channel. That constraint is *why* the metadata discovery endpoints in F4 exist at all: the UI needed them, so agents get them free. **Recommendation for the Twenty port: hold every AI/MCP tool path to the same API the UI uses.** If the UI needs a private endpoint, the agent will eventually need it too.
-2. **Client-side resource declarations (`createResource` + Pinia) keep `url`, `cache` key, `transform` and `onError` next to each other**, so a UI consumer and an agent consumer of the same endpoint cannot drift in how they normalise the response. Twenty has its own caching; the co-location is the part worth copying.
-3. **Push over poll.** socket.io authenticated by the ordinary session cookie, emitted server-side from doctype change hooks (`helpdesk:ticket-update`). Nothing new for Twenty, but it confirms record-change events should be emitted from the persistence layer, not from each feature.
+1. **The SPA only ever talks to the backend through the same public, whitelisted API a third party would use** — `@frappe.whitelist()` → `/api/method/crm.api.*`, type-annotated and enforced by `require_type_annotated_api_methods` in `hooks.py`. There is no privileged internal channel. That constraint is *why* the metadata discovery endpoints in F4 exist at all: the UI needed them, so agents get them free. **Recommendation for the SeaRM port: hold every AI/MCP tool path to the same API the UI uses.** If the UI needs a private endpoint, the agent will eventually need it too.
+2. **Client-side resource declarations (`createResource` + Pinia) keep `url`, `cache` key, `transform` and `onError` next to each other**, so a UI consumer and an agent consumer of the same endpoint cannot drift in how they normalise the response. SeaRM has its own caching; the co-location is the part worth copying.
+3. **Push over poll.** socket.io authenticated by the ordinary session cookie, emitted server-side from doctype change hooks (`helpdesk:ticket-update`). Nothing new for SeaRM, but it confirms record-change events should be emitted from the persistence layer, not from each feature.
 
 ## Recommended additions to `CRM_CONSOLIDATION_PLAN.md`
 
@@ -510,4 +510,4 @@ From Frappe CRM and Helpdesk (**both AGPL-3.0 — design-level port only; add to
 
 ## What I'd skip outright from Frappe CRM and Helpdesk
 
-The entire Vue / `frappe-ui` / Tiptap frontend (wrong stack, and Twenty's UI is stronger); the WhatsApp integration as built (a thin wrapper over Frappe's core WhatsApp app — treat WhatsApp as one more channel adapter, not a feature); the Docker/bench deployment layer; the doctype/child-table modelling idiom itself (Twenty's metadata layer is the equivalent and better); Frappe's Assignment Rule framework (Odoo §4's allocation model is the one to build); and `HD Article` unless the support app ships.
+The entire Vue / `frappe-ui` / Tiptap frontend (wrong stack, and SeaRM's UI is stronger); the WhatsApp integration as built (a thin wrapper over Frappe's core WhatsApp app — treat WhatsApp as one more channel adapter, not a feature); the Docker/bench deployment layer; the doctype/child-table modelling idiom itself (SeaRM's metadata layer is the equivalent and better); Frappe's Assignment Rule framework (Odoo §4's allocation model is the one to build); and `HD Article` unless the support app ships.

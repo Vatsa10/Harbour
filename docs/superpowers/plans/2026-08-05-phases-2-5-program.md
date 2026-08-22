@@ -40,7 +40,7 @@ These are not engineering calls. Each changes what the product *is*, trades off 
 
 **Options.**
 (a) **Core-schema TypeORM entities** — what all four plans assume today. `Evidence`, `Fact`, `AgentTask`, `AgentRun` live in the `core` schema alongside `Proposal`/`ProposalItem`. Cheap: one entity file plus one instance command each.
-(b) **Standard workspace objects** — the same four entities defined as Twenty standard objects.
+(b) **Standard workspace objects** — the same four entities defined as SeaRM standard objects.
 
 **Trade-off.** Option (b) buys, *for free and permanently*: saved views and filters over research activity, record pages, global search, dashboards and charts over facts and costs, and — the load-bearing one — **`DATABASE_EVENT` workflow triggers on `Evidence` and `Fact`**. The charter names all of these: Phase 2's row says evidence must be "surfaced on record pages, chat, workflows, dashboards, search", and "Trust layer meets workflows" names an "evidence/fact trigger". Option (a) delivers none of them without bespoke work per surface, and the evidence/fact trigger is currently **cut in Phase 2 with no cheap path to un-cut it** (see §7). The anchors report (§7) measured standard objects as materially more expensive: per-workspace metadata rows, migration surface on every workspace, and a heavier read path.
 
@@ -187,7 +187,7 @@ Phase 5 Tasks 1–8, 10  ⟂  everything  (pure app-manifest config, no core dep
 
 Genuinely independent, buildable simultaneously from day one by separate tracks:
 
-- **Phase 5 Tasks 1–8 and 10** touch no file under `twenty-server`, `twenty-front`, or `twenty-shared`. Zero merge risk against any other track. **Repair pass (I28): this is true of merge risk, not buildability.** Phase 5's Task 8 originally wrote `post-install.ts`, which imports Task 9's `seedNewTicketTriageWorkflow`/`seedSlaRiskSweepWorkflow` — and Task 9 depends on Phase 4 Task 10, which is Wave 3/4 work, not Wave 2. Task 8 could not complete (typecheck clean) in Wave 2 as originally scoped. **Fixed in the same repair pass that resolved I23 in Phase 5's plan file:** Task 8's `post-install.ts` write moved into Task 9, so Task 8 is now genuinely Wave-2-buildable (it only writes `uninstall.ts`, which has no cross-task dependency), and **Tasks 9 must be treated as Wave 4 work alongside Task 11**, not Wave 2 — Phase 5's own "Depends on" section already states this dependency; this row is corrected to match it rather than imply all of Tasks 1–10 are free of build-order dependency.
+- **Phase 5 Tasks 1–8 and 10** touch no file under `searm-server`, `searm-front`, or `searm-shared`. Zero merge risk against any other track. **Repair pass (I28): this is true of merge risk, not buildability.** Phase 5's Task 8 originally wrote `post-install.ts`, which imports Task 9's `seedNewTicketTriageWorkflow`/`seedSlaRiskSweepWorkflow` — and Task 9 depends on Phase 4 Task 10, which is Wave 3/4 work, not Wave 2. Task 8 could not complete (typecheck clean) in Wave 2 as originally scoped. **Fixed in the same repair pass that resolved I23 in Phase 5's plan file:** Task 8's `post-install.ts` write moved into Task 9, so Task 8 is now genuinely Wave-2-buildable (it only writes `uninstall.ts`, which has no cross-task dependency), and **Tasks 9 must be treated as Wave 4 work alongside Task 11**, not Wave 2 — Phase 5's own "Depends on" section already states this dependency; this row is corrected to match it rather than imply all of Tasks 1–10 are free of build-order dependency.
 - **Phase 3's import backend (Tasks 6–10)** touches only new files under `modules/guided-import/` plus one frontend hook. Zero overlap with Phase 2 or Phase 4.
 - **Phase 4 Tasks 1, 3, 4, 7** touch only `core-modules/tool/`, `tool-provider/`, `record-crud/`, and `api/mcp/` — no overlap with Phase 2's `ai-research/` or Phase 3's `guided-import/`.
 
@@ -210,7 +210,7 @@ One owner per component. A phase that needs a component consumes the owner's exa
 | `EvidenceRecordingService.recordEvidence()` | **Phase 2 T2** | P2 T3 tool, P3 T4 | `(params: RecordEvidenceParams) => Promise<EvidenceEntity>`, `RecordEvidenceParams = { workspaceId; runId: string \| null; objectNameSingular; recordId; sourceType; sourceLocator; extractor; observedAt?; payload: { fieldName; value; snippet? } }`. Calls `deriveFact` internally — nobody else calls `FactDerivationService`. |
 | `FactLookupService` | **Phase 2 T8** | P2 T9/T11, P3 T1, P4 T6 | `findCurrentFactIdsForFields({ workspaceId, objectNameSingular, recordId, fieldNames }) => Promise<string[]>`, `findByIds(ids) => Promise<FactEntity[]>`, `markDismissed(ids) => Promise<void>` |
 | `AgentTaskEntity`, `AgentRunEntity`, `AgentTaskService` | **Phase 2 T4/T5** | P2 T3 tool, P2 T7 worker, P2 T10 resolver | `createTask` is the only creation path. `budget` is a step cap, enforced by T7. |
-| `AgentAsyncExecutorService.executeAgent()` | Twenty (existing) | P2 T6/T7, P4 T10, P5 T9 | Exactly two optional parameters added by this program, both by Phase 2: `threadId?: string` (T6) and `maxSteps?: number` (T7). No other phase changes this signature. |
+| `AgentAsyncExecutorService.executeAgent()` | SeaRM (existing) | P2 T6/T7, P4 T10, P5 T9 | Exactly two optional parameters added by this program, both by Phase 2: `threadId?: string` (T6) and `maxSteps?: number` (T7). No other phase changes this signature. |
 | `ToolFailure`, `buildToolFailure` | **Phase 4 T1** | P4 T2–T4; new tools in P2/P3 should return it | `{ code: ToolFailureCode; message: string; hint?: string; retryable: boolean; allowedActions?: string[] }` |
 | Metadata discovery (`get_object_metadata`, `get_field_metadata`, `MetadataToolProvider.isAvailable`) | **Phase 4 T8** | agents; P3 T5 supplies the field descriptions it returns | `generateTools(context: ToolProviderContext)` on both factories; provider available on DATA_MODEL **or** any object read permission. |
 | Custom-field tool-schema descriptions | **Phase 3 T5** | P4 T8's output, all CRUD tool schemas | `describeCustomFieldForToolSchema(field: FlatFieldMetadata, relationTargetLabel?: string): string` |
@@ -241,7 +241,7 @@ The charter's triage rule: every capability from every scout report is either **
 | 9 | `Evidence` as a first-class entity separate from `Fact` | BUILT | P2 T1 |
 | 10 | Band-driven apply-vs-propose split | BUILT (as propose-always) | P2 T8. Auto-apply is **permanently cut** — the Proposal contract forbids it regardless of confidence |
 | 11 | Permanent dismissal memory | BUILT | P2 T2 dismissal check + T9 dismissal on reject |
-| 12 | Human-authorship supremacy (never overwrite a hand-typed field) | CUT **(program review)** | P2 cut — Twenty has no per-field authorship; baseline conflict + dismissal cover the dangerous cases. Build when reviewers report the agent proposing over hand-entered values |
+| 12 | Human-authorship supremacy (never overwrite a hand-typed field) | CUT **(program review)** | P2 cut — SeaRM has no per-field authorship; baseline conflict + dismissal cover the dangerous cases. Build when reviewers report the agent proposing over hand-entered values |
 | 13 | Supersession-not-deletion history | BUILT | P2 T2 |
 | 14 | Two-factor deterministic identity verdict | BUILT | P3 T2 |
 | 15 | Record briefs | CUT | P2 cut — when a record-page brief surface is scoped |
@@ -250,13 +250,13 @@ The charter's triage rule: every capability from every scout report is either **
 | 18 | Durable per-workspace/per-record cost ledger | BUILT | P2 T4 `AgentRun.creditsUsedMicro`/`inputTokens`/`outputTokens`, T7 |
 | 19 | `sensitiveWrite` — some actions agent-forbidden outright | BUILT | Launch 1 `AiWritePolicyService` `FORBID` mode |
 | 20 | Priority set at schedule time via a static per-kind table | PARTIAL / CUT **(program review)** | `AgentTaskEntity.priority` BUILT (P2 T4); the per-kind *table* cut — one kind exists, so it would have one row |
-| 21 | Relevance-scored CRM search | CUT | Twenty already has record search — not a differentiator. Trigger: agents report Twenty's search ranking is unusable for tool-driven lookup |
+| 21 | Relevance-scored CRM search | CUT | SeaRM already has record search — not a differentiator. Trigger: agents report SeaRM's search ranking is unusable for tool-driven lookup |
 | 22 | Per-record `EnrichmentStatus` enum | CUT | Derive from `AgentTask`/`AgentRun` joins instead. Trigger: that join proves awkward in the UI |
 | 23 | Vendor-specific enrichment pipelines (LinkedIn, Perplexity, logo/portrait) | CUT | More `research_*` tools behind the same pipeline, no new pattern. Trigger: a specific enrichment vendor is chosen |
-| 24 | `AgentConversation` session-continuation bookkeeping | CUT | Coupled to a third-party session runtime. Trigger: Twenty's agent framework proves to lack session continuation |
-| 25 | Email/calendar ingestion models | BUILT (on Twenty's existing entities) | P3 T3, T4 — Twenty already has messaging/calendar; nothing new modelled |
+| 24 | `AgentConversation` session-continuation bookkeeping | CUT | Coupled to a third-party session runtime. Trigger: SeaRM's agent framework proves to lack session continuation |
+| 25 | Email/calendar ingestion models | BUILT (on SeaRM's existing entities) | P3 T3, T4 — SeaRM already has messaging/calendar; nothing new modelled |
 | 26 | Suppression / do-not-contact lists | CUT | P3 cut — when outbound send workflows are built |
-| 27 | `AppSetting` singleton (model selection, vendor keys) | CUT | Twenty has workspace settings and connected-account credentials. Trigger: never — single-tenant demo plumbing |
+| 27 | `AppSetting` singleton (model selection, vendor keys) | CUT | SeaRM has workspace settings and connected-account credentials. Trigger: never — single-tenant demo plumbing |
 
 ### From `relaticle-scout.md` (custom-field-aware AI tools, guided import, proposal batches)
 
@@ -269,9 +269,9 @@ The charter's triage rule: every capability from every scout report is either **
 | Fully resolved relation-target labels in tool descriptions | CUT | P3 cut — when agents' relation-field guesses prove unreliable |
 | `kind`-bucketed diff-field descriptor for the approval UI | CUT | P3 cut — when reviewers report the raw-JSON diff is hard to read |
 | AI-proposable custom-field/schema CRUD | CUT | P3 cut — when `AiWritePolicyService` overrides are used in practice for record fields |
-| Full custom-field type taxonomy | N/A | Reference only — Twenty has its own field-type system |
+| Full custom-field type taxonomy | N/A | Reference only — SeaRM has its own field-type system |
 | Disposable per-import staging store | BUILT | P3 T6 (`ImportBatchEntity`/`ImportRowEntity`) |
-| Header-name mapping inference | BUILT (reused) | Existing `twenty-front` wizard, routed to the new backend in P3 T10 |
+| Header-name mapping inference | BUILT (reused) | Existing `searm-front` wizard, routed to the new backend in P3 T10 |
 | Sample-value type voting with a confidence floor | CUT | P3 cut — when header-only mapping leaves many columns unmapped |
 | Server-side mapping-inference service | CUT **(program review)** | Phantom deliverable in P3's File Structure, built by no task — removed (C10) |
 | Own-row identity matching (`MatchableField`) | BUILT | P3 T7 (`CREATE`/`UPDATE`/`PROPOSE`/`SKIP`) |
@@ -292,17 +292,17 @@ The charter's triage rule: every capability from every scout report is either **
 | Near-duplicate "heads up" warning on proposal cards | CUT | P3 cut — when duplicate-adjacent proposals are observed |
 | Pre-approval in-place proposal editing | CUT | Trigger: reviewers frequently reject-and-ask-again for a single wrong field instead of fixing one value |
 | Conversation-level supersession + resolution history in agent context | CUT | Trigger: multi-turn chat with persistent threads exists and users report the agent re-proposing resolved items |
-| Direct-write (ungated) MCP tool suite | N/A — anti-pattern | Explicitly rejected: Twenty's MCP routes through the same gate as chat |
-| `WhoAmI` / `ListTeamMembers` / `GuideToPage` tools | N/A | Twenty's agent context already covers these |
+| Direct-write (ungated) MCP tool suite | N/A — anti-pattern | Explicitly rejected: SeaRM's MCP routes through the same gate as chat |
+| `WhoAmI` / `ListTeamMembers` / `GuideToPage` tools | N/A | SeaRM's agent context already covers these |
 | `AggregateCrm` / `GetCrmSummary` / `SearchCrm` tools | N/A | `find_many`/`group_by` cover them generically |
-| AI credit/billing subsystem | N/A | Twenty's `AiBillingService` is the system of record |
-| Per-model `write_guard` (api vs. prompt) | N/A | Twenty gates every write server-side regardless of provider — strictly safer |
+| AI credit/billing subsystem | N/A | SeaRM's `AiBillingService` is the system of record |
+| Per-model `write_guard` (api vs. prompt) | N/A | SeaRM gates every write server-side regardless of provider — strictly safer |
 | Chat rate limiting / stream cancellation / retry events | N/A | Infra hygiene, not a differentiator |
 | Chat message feedback (thumbs up/down) | CUT | Trigger: chat is in production and product wants an AI-quality signal |
 | Per-provider prompt caching | N/A | Provider-level cost optimisation, orthogonal |
 | Onboarding seed fixtures | N/A | Fixture data shaped to another schema |
 | `EntityLinkValidator` | N/A | Folded into the import validation disposition |
-| Five hardcoded importer subclasses | N/A | Twenty's importer is metadata-driven |
+| Five hardcoded importer subclasses | N/A | SeaRM's importer is metadata-driven |
 
 ### From `crmkit-scout.md` (agent-safe API semantics, OAuth/MCP, ticket/campaign)
 
@@ -315,21 +315,21 @@ The charter's triage rule: every capability from every scout report is either **
 | 1.5 | Deterministic idempotent-create via upsert-on-natural-key | BUILT (three mechanisms) | P3 T2 (identity resolution prevents the duplicate), P3 T1 (`sourceKey` batch idempotency), P4 T6 (item-level retry dedupe) |
 | 1.6 | Short opaque handle/ref indirection for record ids | CUT | P4 cut — when token telemetry shows UUID verbosity is a material fraction of agent spend |
 | 1.7 | Plain-text-first content negotiation as a transport | CUT | P4 cut — `compactToolOutput`/`stripEmptyValues` already capture the saving at payload level |
-| 1.8 | Cursor keyset pagination + explicit total | BUILT | Twenty already has stable `id`-tiebreaker ordering + `count`; P4 T7 adds the missing `hasMore` |
+| 1.8 | Cursor keyset pagination + explicit total | BUILT | SeaRM already has stable `id`-tiebreaker ordering + `count`; P4 T7 adds the missing `hasMore` |
 | 1.9 | Whitelisted free-text filter DSL | CUT | P4 cut — GraphQL's typed filters parameterize by construction |
-| 1.10 | OAuth 2.1 AS for MCP clients (PKCE, dynamic registration) | ALREADY EXISTS + verified | Twenty ships RFC 9728/8414/7591/7009, workspace-pinned, role-scoped; P4 T9 proves it end to end |
-| 1.11 | Per-workspace/per-user plan quotas enforced pre-write | CUT | P4 cut — Twenty's billing/entitlement system owns this. Trigger: a load test shows uncapped MCP volume from one OAuth client |
+| 1.10 | OAuth 2.1 AS for MCP clients (PKCE, dynamic registration) | ALREADY EXISTS + verified | SeaRM ships RFC 9728/8414/7591/7009, workspace-pinned, role-scoped; P4 T9 proves it end to end |
+| 1.11 | Per-workspace/per-user plan quotas enforced pre-write | CUT | P4 cut — SeaRM's billing/entitlement system owns this. Trigger: a load test shows uncapped MCP volume from one OAuth client |
 | 1.12 | Ticket entity and lifecycle | BUILT | P5 T3 (`supportTicket`, as a custom object — never core schema) |
 | 1.13 | Campaign entity (brief + deduped membership + provenance) | CUT **(program review)** | P4 cut — it is objects + views + a workflow, i.e. vertical app #2. Trigger: Owner Decision 2, or immediately after Phase 5 proves the framework |
-| 1.14 | Generic single-tool MCP `request` surface | N/A (split) | Rejected as a tool shape — Twenty's per-tool MCP surface is strictly better for safety annotations. The allowlist-of-reachable-routes principle is already how the tool catalog works |
+| 1.14 | Generic single-tool MCP `request` surface | N/A (split) | Rejected as a tool shape — SeaRM's per-tool MCP surface is strictly better for safety annotations. The allowlist-of-reachable-routes principle is already how the tool catalog works |
 | 1.15 | MCP `initialize` server-declared `instructions` | CUT **(program review)** | P4 cut — `AGENT_API_CONTRACT.md` (P4 T12) is the equivalent. Trigger: a real external MCP client needs in-band guidance |
-| 1.16 | Audit log with structured computed diffs | CUT **(program review)** | P4 cut — `baseline` vs. `payload` *is* a structured diff for every AI change, and Twenty's timeline covers human changes. Trigger: a compliance requirement asks for field-level before/after on non-AI writes |
+| 1.16 | Audit log with structured computed diffs | CUT **(program review)** | P4 cut — `baseline` vs. `payload` *is* a structured diff for every AI change, and SeaRM's timeline covers human changes. Trigger: a compliance requirement asks for field-level before/after on non-AI writes |
 | 1.17 | `on_behalf_of` — delegated-principal axis | CUT **(program review)** | P4 cut — `ActorMetadata` already distinguishes agent/API/workflow/application/manual/system, which covers every principal this feature set produces. Trigger: a delegated-assistant mode where an agent acts *as* a named user |
-| 1.18 | Timezone-aware read-time localization | N/A | Standard hygiene, already Twenty's problem |
+| 1.18 | Timezone-aware read-time localization | N/A | Standard hygiene, already SeaRM's problem |
 | 1.19 | Dual SQLite/Postgres dialect abstraction | N/A | Architecture mismatch |
 | §3 | 12 explicitly-rejected items (OTP login, bearer-token-as-authority, quota subsystem, free-text assignee, internal-id/handle two-tier, etc.) | N/A | Each rejected in the scout with a reason; none re-opened here |
 
-### From `twenty-anchors.md` (charter trust-layer mapping and open items)
+### From `searm-anchors.md` (charter trust-layer mapping and open items)
 
 | Charter entity / item | Disposition | Owner |
 | --- | --- | --- |
@@ -344,7 +344,7 @@ The charter's triage rule: every capability from every scout report is either **
 | Open item: "approval executes atomically" | RESOLVED | Read from disk: per-item durable status with a `PENDING→APPLYING` claim. Not one transaction — a deliberate, documented Launch 1 trade-off (see the relaticle table above) |
 | Open item: do app manifests support workflow templates? | RESOLVED | No — confirmed by P5's exhaustive converter listing. Closed by P4 T10's `installWorkflowDefinition`, not by a new manifest unit |
 | Open item: server-side spreadsheet import | RESOLVED | None exists — P3 T6–T10 build it |
-| Open item: `twenty-cli` vs. `twenty-sdk` CLI | RESOLVED | P5 uses `twenty-sdk`'s bundled CLI |
+| Open item: `searm-cli` vs. `searm-sdk` CLI | RESOLVED | P5 uses `searm-sdk`'s bundled CLI |
 
 **Nothing in the four scout reports is now in neither column.** Twelve items were in neither before this review; each is marked **(program review)** above and has been written into the owning plan's cut table or task list.
 
@@ -365,7 +365,7 @@ Each numbered step from the charter's five end-to-end narratives, mapped to the 
 
 | Step | Delivered by |
 | --- | --- |
-| 1. Form/import/API/email/calendar/app creates or updates person and company | P3 T6–T10 (import), P3 T3 (email/calendar participants); form/API paths already exist in Twenty |
+| 1. Form/import/API/email/calendar/app creates or updates person and company | P3 T6–T10 (import), P3 T3 (email/calendar participants); form/API paths already exist in SeaRM |
 | 2. Deterministic email/domain/relationship matching prevents duplicates | P3 T2 `IdentityResolutionService`, consumed by T3, T4, T7, T9 |
 | 3. A workflow creates a budgeted research task | **Partial (repair pass, I26).** P2 T3 Step 8 builds the `create_agent_task` tool and P2 T7 enforces the budget as a step cap, but no Phase 4 Task 10 template prompt actually calls `create_agent_task` — the wiring is filed as a soft edge in §4 ("A one-line prompt edit, not a code change") and never written into any numbered task. The tool itself also does not compile as specified (C2 in the plan-file review) until Phase 2 Task 3 is repaired. Credited task-by-task, not end-to-end. |
 | 4. The agent collects internal history and enrichment as evidence | P2 T3 `record_evidence` + P2 T7 worker |
@@ -382,14 +382,14 @@ Each numbered step from the charter's five end-to-end narratives, mapped to the 
 | 2. The workflow evaluates related records and recent activity | P4 T10's `AI_AGENT` step using existing `find_many`/`group_by` tools |
 | 3. Creates tasks or an email/calendar proposal with evidence and a suggested next action | Launch 1's gate turns the agent's `send_email`/`create_calendar_event` calls into proposal items; P2 T8 attaches facts |
 | 4. The user approves outbound communication | Launch 1 |
-| 5. **Delays schedule follow-up; replies or stage changes supersede stale work** | **Partial.** `Fact` supersession is built (P2 T2) and proposals expire on TTL (Launch 1). But nothing supersedes a *pending proposal* when the underlying situation changes — that is relaticle's conversation-level supersession, cut with a trigger. A delay/wait workflow step exists in Twenty and is untouched |
-| 6. Audit history records user, workflow, agent, evidence, and approval | Launch 1 `createdByActor` + `reviewedByUserWorkspaceId`; P2 `factIds` → `Evidence`; Twenty's own record audit for the applied write |
+| 5. **Delays schedule follow-up; replies or stage changes supersede stale work** | **Partial.** `Fact` supersession is built (P2 T2) and proposals expire on TTL (Launch 1). But nothing supersedes a *pending proposal* when the underlying situation changes — that is relaticle's conversation-level supersession, cut with a trigger. A delay/wait workflow step exists in SeaRM and is untouched |
+| 6. Audit history records user, workflow, agent, evidence, and approval | Launch 1 `createdByActor` + `reviewedByUserWorkspaceId`; P2 `factIds` → `Evidence`; SeaRM's own record audit for the applied write |
 
 ### Inbox and meeting intelligence
 
 | Step | Delivered by |
 | --- | --- |
-| 1. Connected-account sync ingests mail, events, participants, recordings | Twenty (existing), extended not rebuilt — P3 T3, T4 |
+| 1. Connected-account sync ingests mail, events, participants, recordings | SeaRM (existing), extended not rebuilt — P3 T3, T4 |
 | 2. Identity matching attaches known participants; ambiguous matches become proposals | P3 T2 + T3 |
 | 3. The agent extracts commitments, risks, job changes, and next actions as sourced proposals | **Partial by design.** P3 T4 builds *job changes* end to end with real `Evidence`; commitments/risks/next-actions are cut with the trigger "job-title extraction is validated in production and reviewers approve most of it — extend the same pipeline with a second schema" |
 | 4. Approval updates records, tasks, opportunities, and record briefs | Launch 1 for records/tasks/opportunities. **Record briefs: no plan** — cut in P2 with a trigger |
@@ -410,7 +410,7 @@ Each numbered step from the charter's five end-to-end narratives, mapped to the 
 | --- | --- |
 | 1. Cron or event triggers create leased tasks for stale or high-value records | **Partial (repair pass, I26).** P4 T10 `ACCOUNT_MONITORING` (cron) is credited with its agent calling P2's `create_agent_task`, but — same gap as *Lead* step 3 — no template prompt actually names the tool, and the tool doesn't compile as specified until Phase 2 Task 3 is repaired (C2). P2 T7's dispatch cron leases and runs whatever tasks do get created. **The "for stale or high-value records" selection sweep is cut** in P2 — picking staleness thresholds is a product decision |
 | 2. Agents compare new observations against prior evidence under time, cost, and provider limits | P2 T2 (supersession *is* new-vs-prior comparison) + P2 T7 (`maxSteps: task.budget`). Per-task *dollar* limits cut; workspace credit ceiling applies |
-| 3. Material changes create proposals and notifications | Proposals: P2 T8. **Notifications: no plan** — cut in P2 (no notification primitive exists in Twenty; same gap Launch 1 flagged) |
+| 3. Material changes create proposals and notifications | Proposals: P2 T8. **Notifications: no plan** — cut in P2 (no notification primitive exists in SeaRM; same gap Launch 1 flagged) |
 | 4. Failures retry with backoff and stay observable in run history | P2 T5 `failTask` + T4 `AgentRun` + T13 integration test |
 
 ### Steps no plan delivers — summary
@@ -418,7 +418,7 @@ Each numbered step from the charter's five end-to-end narratives, mapped to the 
 1. **Dashboards over evidence/fact/cost** (*Lead* step 8) — data captured, surface not built. Materially cheaper under Owner Decision 1(b).
 2. **Proposal supersession on situation change** (*Pipeline* step 5, partial) — TTL expiry only today.
 3. **Record briefs** (*Inbox* step 4, partial) — the fact/evidence substrate is built; the narrative panel is not.
-4. **In-app notification on a new proposal** (*Monitoring* step 3, partial) — no notification primitive exists in Twenty.
+4. **In-app notification on a new proposal** (*Monitoring* step 3, partial) — no notification primitive exists in SeaRM.
 5. **Stale/high-value record selection sweep** (*Monitoring* step 1, partial) — the lease/retry machinery exists; nothing decides *which* records to sweep.
 
 All five are recorded in a cut table with a trigger. None is a silent drop. Items 1 and 4 are the two most likely to be asked for in a first customer demo.
@@ -429,8 +429,8 @@ All five are recorded in a cut table with a trigger. None is a silent drop. Item
 
 | Contract | Verdict | Evidence |
 | --- | --- | --- |
-| **Record** — every action uses Twenty objects, fields, relations, permissions | **Satisfied.** | Every write in every phase goes through `record-crud` services with the caller's `rolePermissionConfig`. `Evidence`/`Fact`/`AgentTask`/`AgentRun`/`ImportBatch`/`ImportRow` are platform tables, not business records. Phase 5 adds business records only as custom objects; its only touch on standard objects is relation pointers. |
-| **Execution** — versioned, idempotent, cancellable, leased, retryable, budgeted | **Satisfied for status; one field still missing (repair pass, C14).** | Leased/retried/cancellable/idempotent: P2 T5. Budgeted: was a **hole** — `budget` was stored and never read; closed by P2 T7's `maxSteps: task.budget` (C9). Versioned: workflow versions are Twenty's existing mechanism; `AgentTask` has no version concept and needs none — it carries its own immutable inputs. **`AgentRun`'s charter-named workflow link is not yet on the entity** — see §6 C14. Not a hole this review closes; recorded here so this row does not overstate the phase's current state. |
+| **Record** — every action uses SeaRM objects, fields, relations, permissions | **Satisfied.** | Every write in every phase goes through `record-crud` services with the caller's `rolePermissionConfig`. `Evidence`/`Fact`/`AgentTask`/`AgentRun`/`ImportBatch`/`ImportRow` are platform tables, not business records. Phase 5 adds business records only as custom objects; its only touch on standard objects is relation pointers. |
+| **Execution** — versioned, idempotent, cancellable, leased, retryable, budgeted | **Satisfied for status; one field still missing (repair pass, C14).** | Leased/retried/cancellable/idempotent: P2 T5. Budgeted: was a **hole** — `budget` was stored and never read; closed by P2 T7's `maxSteps: task.budget` (C9). Versioned: workflow versions are SeaRM's existing mechanism; `AgentTask` has no version concept and needs none — it carries its own immutable inputs. **`AgentRun`'s charter-named workflow link is not yet on the entity** — see §6 C14. Not a hole this review closes; recorded here so this row does not overstate the phase's current state. |
 | **Evidence** — facts are never written without traceable observations | **Satisfied for provenance; `Fact.freshness` overstated (repair pass, C14).** | Was a **hole**: Phase 3 extracted a job-title fact from message text with no `Evidence` row, and shipped it as an accepted "migrate later" debt. Closed by C4 — Phase 3 now records `Evidence` before proposing, and Phase 2 is a hard dependency. Every `Fact` in the product is now created by `FactDerivationService` from an `Evidence` row; there is no other creation path. **Phase 2's success-criteria table separately claims `Fact.freshness` is delivered — it is not; see §6 C14 for the corrected disposition (derive from `Evidence.observedAt`).** |
 | **Proposal** — visible diffs supporting approve, reject, expiry, supersession, atomic batch execution | **Satisfied, with one documented trade-off.** | Diffs/approve/reject/expiry: Launch 1 + P2 T12's citation row. Supersession: `Fact` supersession is built; *proposal* supersession is TTL-only (cut with a trigger — see narrative gap 2). "Atomic batch execution" is per-item-durable with a `PENDING→APPLYING` claim rather than one transaction — a deliberate Launch 1 trade-off (record-crud services accept no external transaction manager), documented, not accidental. |
 | **Principal** — audit distinguishes authenticated user, represented user/team, workflow, agent, integration | **Satisfied for every principal the product produces.** | `FieldActorSource` (read from disk) covers `MANUAL`, `AGENT`, `WORKFLOW`, `API`, `APPLICATION`, `SYSTEM`, `WEBHOOK`, `EMAIL`, `CALENDAR`, `IMPORT`. `ProposalEntity.createdByActor` captures it, `reviewedByUserWorkspaceId` captures the approver, and the applied write is attributed to the approver through the ordinary record path. **"Represented user/team" has no producer** — no feature in Phases 1–5 has an agent acting as a named user. Cut in P4 with a delegation trigger (crmkit §1.17). |
@@ -457,7 +457,7 @@ Everything this program deliberately does not build, with the trigger that would
 
 **Cut and recorded with triggers (grouped; see the owning plan for the full row):**
 
-- **Phase 2 (19 rows):** noisy-OR confidence bands; auto-applying a fact (permanent — contract-forbidden); AI-research workflow node; stale-record sweep; per-task dollar cap; two-lane dispatch; identity resolution (owned by P3); Evidence/Fact join table; DataLoader batching; chat-only evidence recording; proposal notifications; trust entities as standard objects (**Owner Decision 1**); workspace self-profile; record briefs; cost/quality dashboards; **evidence/fact workflow trigger** *(review)*; **evidence panel on the record page** *(review)*; **per-field human-authorship supremacy** *(review)*; **per-kind priority table** *(review)*; **`AgentRunEntity.transcript` + `summarizeAgentSteps` + its spec** *(over-engineering cut, this repair pass — Twenty already persists a transcript through `AgentMessageEntity`, and no task in Phases 2–5 reads `AgentRun.transcript`; replace with `resultSummary` alone until a run-history UI is scoped)*; **`EvidenceLookupService` + `FactFieldsResolver` + `ProposalItemFieldsResolver` + two DTOs + two specs** *(over-engineering cut, this repair pass — the UI (P2 T12) only ever reads `fact.evidence[0]`; replace with a single `ProposalItemDTO.facts` resolve field returning a flat projection, one class, one resolver, no N+1 pair)*.
+- **Phase 2 (19 rows):** noisy-OR confidence bands; auto-applying a fact (permanent — contract-forbidden); AI-research workflow node; stale-record sweep; per-task dollar cap; two-lane dispatch; identity resolution (owned by P3); Evidence/Fact join table; DataLoader batching; chat-only evidence recording; proposal notifications; trust entities as standard objects (**Owner Decision 1**); workspace self-profile; record briefs; cost/quality dashboards; **evidence/fact workflow trigger** *(review)*; **evidence panel on the record page** *(review)*; **per-field human-authorship supremacy** *(review)*; **per-kind priority table** *(review)*; **`AgentRunEntity.transcript` + `summarizeAgentSteps` + its spec** *(over-engineering cut, this repair pass — SeaRM already persists a transcript through `AgentMessageEntity`, and no task in Phases 2–5 reads `AgentRun.transcript`; replace with `resultSummary` alone until a run-history UI is scoped)*; **`EvidenceLookupService` + `FactFieldsResolver` + `ProposalItemFieldsResolver` + two DTOs + two specs** *(over-engineering cut, this repair pass — the UI (P2 T12) only ever reads `fact.evidence[0]`; replace with a single `ProposalItemDTO.facts` resolve field returning a flat projection, one class, one resolver, no N+1 pair)*.
 - **Phase 3 (19 rows):** sample-value voting; per-value correction UI; in-place row retry; cross-object entity links; extraction beyond job titles; AI-proposable schema CRUD; kind-bucketed diff descriptor; near-duplicate warning; content-equality proposal collapsing; resolved relation-target labels; calendar-description extraction; suppression lists; second BullMQ queue; **discovery tool** *(review)*; **storage-strategy abstraction** *(review)*; **intra-import dedup promotion** *(review)*; **format-aware date/number parsing** *(review)*; **staging-row retention job** *(review)*; and one row struck as **no longer cut** (Evidence/Fact provenance — now built).
 - **Phase 4 (18 rows):** per-tool inline failure migration; Evidence-backed templates (until Phase 2 lands); record-id aliases; plain-text transport; filter DSL; confirmation tokens on PROPOSE deletes; per-tool OAuth scopes; MCP quota subsystem; request-approval workflow action (**Owner Decision 6**); three cut templates *(review)*; **`on_behalf_of`** *(review)*; **email step-up escalation** *(review)*; **optimistic concurrency `version`** *(review)*; **MCP `initialize` instructions** *(review)*; **structured audit diffs** *(review)*; **Campaign entity / campaigns vertical** *(review)*; and one row struck as **no longer cut** (field-metadata permission scoping — now built).
 - **Phase 5 (11 rows):** declarative workflow manifest unit; `supportTicketComment`; `FIND_RECORDS`/`ITERATOR` bulk SLA sweep; row-level permission predicates; custom ticket console; multi-channel ticket ingestion; business-hours SLA calendars; CSAT; marketplace publishing; later vertical waves; **`pre-install` hook** *(review)*.

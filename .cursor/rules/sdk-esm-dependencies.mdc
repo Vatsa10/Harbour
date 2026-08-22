@@ -1,6 +1,6 @@
 ---
-description: ESM dependency guidelines for twenty-sdk and create-twenty-app packages
-globs: ["packages/twenty-sdk/**", "packages/create-twenty-app/**"]
+description: ESM dependency guidelines for searm-sdk and create-searm-app packages
+globs: ["packages/searm-sdk/**", "packages/create-searm-app/**"]
 alwaysApply: false
 ---
 
@@ -8,7 +8,7 @@ alwaysApply: false
 
 ## Context
 
-`twenty-sdk` and `create-twenty-app` are published as dual-format npm packages (ESM `.mjs` + CJS `.cjs`). Dependencies listed in `dependencies` are **externalized** by the Vite/Rollup build — they are not bundled, and consumers resolve them from `node_modules` at runtime.
+`searm-sdk` and `create-searm-app` are published as dual-format npm packages (ESM `.mjs` + CJS `.cjs`). Dependencies listed in `dependencies` are **externalized** by the Vite/Rollup build — they are not bundled, and consumers resolve them from `node_modules` at runtime.
 
 This means **CJS-only dependencies break the ESM output**. When Rollup emits `import { foo } from 'cjs-package'`, Node.js ESM cannot resolve named exports from CommonJS modules, causing `SyntaxError: Named export 'foo' not found`.
 

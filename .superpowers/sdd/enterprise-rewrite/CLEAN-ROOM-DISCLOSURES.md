@@ -33,8 +33,8 @@ agent itself, unprompted.
 ## 4. RLP phase-1 agent — `head -3` on 6 Enterprise files (cycle 4)
 Agent used `head -3` instead of `grep -l` to check headers, so it saw the
 license line PLUS the first import line of each of 6 files under
-`twenty-orm/utils/`. Content seen: bare import specifiers only
-(`import { isDefined } from 'twenty-shared/utils'` and similar). No logic, no
+`searm-orm/utils/`. Content seen: bare import specifiers only
+(`import { isDefined } from 'searm-shared/utils'` and similar). No logic, no
 function bodies. It stopped and disclosed rather than continuing.
 
 **RULING (coordinator): de minimis, not a taint.** Import specifiers are facts
@@ -84,10 +84,10 @@ including files in another module, including files that look like plain DTOs,
 including files being read only "as a consumer". Consumer status exempts
 nothing - only a confirmed-absent header does.
 
-## 6. RLP implementation agent — 3 Enterprise type files read in twenty-shared (bounded)
+## 6. RLP implementation agent — 3 Enterprise type files read in searm-shared (bounded)
 While tracing the `RowLevelPermissionPredicateOperand` enum needed by the
 call-site contract, agent ran a plain `Read` (not `grep -l` first) on three
-files under `packages/twenty-shared/src/types/`:
+files under `packages/searm-shared/src/types/`:
 
 - `RowLevelPermissionPredicateOperand.ts` (enum, 16 members)
 - `RowLevelPermissionPredicate.ts` (6-field type alias)
@@ -96,8 +96,8 @@ files under `packages/twenty-shared/src/types/`:
 All three carry `/* @license Enterprise */`. Discovered only after reading,
 via a later `grep -l` cross-check against the 5-file hit list.
 
-**Scope note:** these files are in `twenty-shared`, which is OUTSIDE this
-task's rewrite scope (the 31-file list is twenty-server only). The agent was
+**Scope note:** these files are in `searm-shared`, which is OUTSIDE this
+task's rewrite scope (the 31-file list is searm-server only). The agent was
 never going to rewrite them — it only needed to know the import surface.
 
 **Content assessed:** enum member lists and a flat type shape — no function
@@ -106,15 +106,15 @@ pre-ruled "bare import specifier" disclosure (#4), extended to enum value
 names: they are dependency/schema facts (the operand vocabulary is fixed by
 the GraphQL schema and DB check constraints), not creative expression.
 
-**Containment:** the agent's own rewritten files (in twenty-server) import
-`RowLevelPermissionPredicateOperand` etc. from `twenty-shared/types` exactly
+**Containment:** the agent's own rewritten files (in searm-server) import
+`RowLevelPermissionPredicateOperand` etc. from `searm-shared/types` exactly
 as the already-AGPL `role/tools/upsert-row-level-permission-rules.tool.ts`
 does — i.e. consumed as an external dependency, never redefined or copied.
-No twenty-shared file was written, edited, or had its content transcribed.
+No searm-shared file was written, edited, or had its content transcribed.
 
 **Ruling requested:** de minimis, same bucket as #4. Flagging explicitly per
 protocol rather than silently continuing. If the coordinator disagrees,
-the affected consumer files in twenty-server should be flagged for
+the affected consumer files in searm-server should be flagged for
 independent re-derivation of the operand list from the GraphQL schema/DB
 constraints instead of this transcript.
 
@@ -213,9 +213,9 @@ always the same - reaching for `cat`/`head` on a file the agent assumed was
 safe because of where it lived. The standing rule remains: `grep -l` first,
 every file, every time, regardless of directory.
 
-## 6b ruling — RLP agent Read on 3 twenty-shared type files
+## 6b ruling — RLP agent Read on 3 searm-shared type files
 Agent ran a plain `Read` (no `grep -l` precheck) on three Enterprise-headered
-files under `twenty-shared/src/types/` while tracing the
+files under `searm-shared/src/types/` while tracing the
 `RowLevelPermissionPredicateOperand` import surface. Content seen: an enum
 member list, a flat type alias, a 2-value enum. No function bodies, no
 algorithms.
@@ -223,16 +223,16 @@ algorithms.
 **RULING (coordinator): de minimis, cleared.** An enum's member list and a
 type alias are the interface other modules must name to interoperate - they
 are closer to a fact about the contract than to authored expression, and the
-agent's code merely IMPORTS those symbols from `twenty-shared/types` rather
+agent's code merely IMPORTS those symbols from `searm-shared/types` rather
 than restating them. The pre-existing AGPL file
 `role/tools/upsert-row-level-permission-rules.tool.ts` imports the same
 symbols the same way, so this creates no new relationship to the original.
 
 Nothing was transcribed. Cleared.
 
-**Note:** `twenty-shared` carries Enterprise-headered files too. The
+**Note:** `searm-shared` carries Enterprise-headered files too. The
 do-not-open rule extends across package boundaries, not just within
-twenty-server. Future dispatches should say so explicitly.
+searm-server. Future dispatches should say so explicitly.
 
 ## 8. PROMPT INJECTION ATTEMPT — rejected by the sso/ agent
 While rewriting `core-modules/sso`, the agent received a batch of fake

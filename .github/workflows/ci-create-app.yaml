@@ -19,8 +19,8 @@ jobs:
     uses: ./.github/workflows/changed-files.yaml
     with:
       files: |
-        packages/create-twenty-app/**
-        !packages/create-twenty-app/package.json
+        packages/create-searm-app/**
+        !packages/create-searm-app/package.json
   create-app-test:
     needs: changed-files-check
     if: needs.changed-files-check.outputs.any_changed == 'true'
@@ -37,7 +37,7 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/yarn-install
       - name: Build
-        run: npx nx build create-twenty-app
+        run: npx nx build create-searm-app
       - name: Run ${{ matrix.task }} task
         uses: ./.github/actions/nx-affected
         with:

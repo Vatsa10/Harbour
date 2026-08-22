@@ -8,7 +8,7 @@
 
 **Tech stack:** NestJS 10, TypeORM, PostgreSQL 16, GraphQL (code-first, metadata schema), React 18 + Jotai + Linaria, Jest.
 
-**Working directory for all paths below:** `d:\Files\Vatsa\Projects\AI-CRM\twenty`
+**Working directory for all paths below:** `d:\Files\Vatsa\Projects\AI-CRM\searm`
 
 **Depends on:** `.superpowers/sdd/enterprise-rewrite/enterprise-audit.md` Cluster 2, and on Cluster 1 having already removed the billing/entitlement imports from the row-level-permission module (the audit's sequencing step 3). This spec assumes no entitlement check exists and does not port one — record scoping is a security control, and on a self-hostable product a security control never sits behind a license key.
 
@@ -16,18 +16,18 @@
 
 ## 0. Provenance — read this before writing a line
 
-Twenty's row-level permission cluster (43 files) is `@license Enterprise`. **No file in this spec was derived from it.** The model below was designed from the textbook predicate/row-level-access-control pattern and from the AGPL half of Twenty's own permission system, all of which was read directly:
+SeaRM's row-level permission cluster (43 files) is `@license Enterprise`. **No file in this spec was derived from it.** The model below was designed from the textbook predicate/row-level-access-control pattern and from the AGPL half of SeaRM's own permission system, all of which was read directly:
 
 | Read (AGPL) | What it fixed in this design |
 | --- | --- |
-| `src/engine/twenty-orm/types/role-permission-config.ts` | The three-way `RolePermissionConfig` is the only authorization principal shape; scope composition must be defined for each arm of it |
-| `src/engine/twenty-orm/utils/get-objects-permissions-from-role-permission-config.util.ts` | Bypass returns `{}`; a missing role must deny, not widen |
-| `src/engine/twenty-orm/utils/resolve-role-permission-config.util.ts` | `{ shouldBypassPermissionChecks: true }` is emitted **only** for `authContext.type === 'system'` |
-| `src/engine/twenty-orm/utils/compute-permission-intersection.util.ts` | Existing intersection is unsound for row scope (§2.4); this spec replaces it |
+| `src/engine/searm-orm/types/role-permission-config.ts` | The three-way `RolePermissionConfig` is the only authorization principal shape; scope composition must be defined for each arm of it |
+| `src/engine/searm-orm/utils/get-objects-permissions-from-role-permission-config.util.ts` | Bypass returns `{}`; a missing role must deny, not widen |
+| `src/engine/searm-orm/utils/resolve-role-permission-config.util.ts` | `{ shouldBypassPermissionChecks: true }` is emitted **only** for `authContext.type === 'system'` |
+| `src/engine/searm-orm/utils/compute-permission-intersection.util.ts` | Existing intersection is unsound for row scope (§2.4); this spec replaces it |
 | `src/engine/metadata-modules/role/services/workspace-roles-permissions-cache.service.ts` | Rules load per workspace into `ObjectsPermissions`, alongside `restrictedFields` — same cache, same shape |
-| `src/engine/twenty-orm/repository/permissions.utils.ts` | Object/field checks throw `PermissionsException(PERMISSION_DENIED)`; scope denials must be indistinguishable from them at the API boundary |
-| `src/engine/twenty-orm/entity-manager/workspace-entity-manager.ts:139-195` | The single place a `RolePermissionConfig` becomes an `ObjectsPermissions` |
-| `src/engine/twenty-orm/utils/get-field-metadata-id-to-column-names-map.util.ts` | `Map<fieldMetadataId, string[]>` — a scope subject must resolve to **exactly one** column |
+| `src/engine/searm-orm/repository/permissions.utils.ts` | Object/field checks throw `PermissionsException(PERMISSION_DENIED)`; scope denials must be indistinguishable from them at the API boundary |
+| `src/engine/searm-orm/entity-manager/workspace-entity-manager.ts:139-195` | The single place a `RolePermissionConfig` becomes an `ObjectsPermissions` |
+| `src/engine/searm-orm/utils/get-field-metadata-id-to-column-names-map.util.ts` | `Map<fieldMetadataId, string[]>` — a scope subject must resolve to **exactly one** column |
 | `src/engine/metadata-modules/ai/ai-write-approval/services/proposal-gate.service.ts` and `proposal-execution.service.ts` | The whole of §5 |
 
 Naming, file layout, storage shape, composition algebra and the write-side guard are all different from the enterprise cluster by construction, and §1.6 records *why* each departure is the better fit for our product rather than merely a different one.
@@ -51,9 +51,9 @@ Three properties are non-negotiable and each has a test that pins it:
 2. **No free text reaches SQL.** Column names come from `getFieldMetadataIdToColumnNamesMap`; values are always bound parameters. A rule is data, never a fragment.
 3. **Unresolvable ⇒ the whole rule is false.** Not the node — the rule (§1.5). Node-level falsity would let a `not` invert a missing principal into a grant.
 
-### 1.2 Types (`twenty-shared`)
+### 1.2 Types (`searm-shared`)
 
-New files under `packages/twenty-shared/src/types/`, exported from the types barrel exactly as `ObjectPermissions.ts` is.
+New files under `packages/searm-shared/src/types/`, exported from the types barrel exactly as `ObjectPermissions.ts` is.
 
 `RecordScopePrincipalAttribute.ts`:
 
@@ -159,7 +159,7 @@ export type ObjectPermissions = {
 
 ### 1.3 Storage
 
-One table, one JSONB column. `packages/twenty-server/src/engine/metadata-modules/record-scope/entities/record-scope-rule.entity.ts`:
+One table, one JSONB column. `packages/searm-server/src/engine/metadata-modules/record-scope/entities/record-scope-rule.entity.ts`:
 
 ```ts
 import {
@@ -176,7 +176,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-import { type RecordScopeNode } from 'twenty-shared/types';
+import { type RecordScopeNode } from 'searm-shared/types';
 
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
@@ -237,10 +237,10 @@ Registration is automatic — `core.datasource.ts` globs `engine/metadata-module
 
 ### 1.4 Compiled form
 
-`packages/twenty-server/src/engine/twenty-orm/record-scope/types/compiled-record-scope.type.ts`:
+`packages/searm-server/src/engine/searm-orm/record-scope/types/compiled-record-scope.type.ts`:
 
 ```ts
-import { type RecordScopeNode } from 'twenty-shared/types';
+import { type RecordScopeNode } from 'searm-shared/types';
 
 // A tagged result rather than `RecordScopeNode | null`, because "no rules" and
 // "rules that can never match" are opposite answers and a nullable return
@@ -258,10 +258,10 @@ export const RECORD_SCOPE_DENY_ALL: CompiledRecordScope = { kind: 'denyAll' };
 
 ### 1.5 The principal
 
-`packages/twenty-server/src/engine/twenty-orm/record-scope/types/record-scope-principal.type.ts`:
+`packages/searm-server/src/engine/searm-orm/record-scope/types/record-scope-principal.type.ts`:
 
 ```ts
-import { type RecordScopePrincipalAttribute } from 'twenty-shared/types';
+import { type RecordScopePrincipalAttribute } from 'searm-shared/types';
 
 export type RecordScopePrincipal = Partial<
   Record<RecordScopePrincipalAttribute, string>
@@ -288,7 +288,7 @@ Under node-level falsity, an API key (no `workspaceMemberId`) gets `not(false) =
 
 Consequence, and it must be documented in the settings UI: **an API key or application principal sees no rows on any object whose role carries a principal-parameterised rule.** That is intentional. If a workspace wants an API key to have broad access, it gets a role with no scope rules.
 
-### 1.6 Departures from Twenty's enterprise design, and why
+### 1.6 Departures from SeaRM's enterprise design, and why
 
 | Their shape (from the audit, not from reading) | Ours | Why ours fits SeaRM |
 | --- | --- | --- |
@@ -357,40 +357,40 @@ Every hook point already exists in AGPL code and already calls an enterprise uti
 
 | # | AGPL file | Line (HEAD) | Today | Becomes |
 | --- | --- | --- | --- | --- |
-| 1 | `twenty-orm/repository/workspace-select-query-builder.ts` | 407 `applyRowLevelPermissionPredicates()` | `applyRowLevelPermissionPredicates({...})` | `applyRecordScopeToQueryBuilder({...})` |
+| 1 | `searm-orm/repository/workspace-select-query-builder.ts` | 407 `applyRowLevelPermissionPredicates()` | `applyRowLevelPermissionPredicates({...})` | `applyRecordScopeToQueryBuilder({...})` |
 | 2 | same | 434 `applyRowLevelPermissionPredicatesToJoinedRelations()` | resolve → render → `AND` into `joinAttribute.condition` | same flow, `compileRecordScope` → `renderRecordScopeToSql` |
 | 3 | same | 387 public `applyRowLevelPermissionPredicatesToMainAliasAndJoinedRelations()` | called by 3 outside files | renamed `applyRecordScopeToMainAliasAndJoins()` |
-| 4 | `twenty-orm/repository/workspace-update-query-builder.ts` | 634 | `applyRowLevelPermissionPredicates` | `applyRecordScopeToQueryBuilder` (narrows the `WHERE`) |
+| 4 | `searm-orm/repository/workspace-update-query-builder.ts` | 634 | `applyRowLevelPermissionPredicates` | `applyRecordScopeToQueryBuilder` (narrows the `WHERE`) |
 | 5 | same | 661 | `validateRLSPredicatesForRecords({ records: updatedRecordsFormatted, … })` | `assertRecordsWithinRecordScope({ records, … })` — post-image guard |
-| 6 | `twenty-orm/repository/workspace-insert-query-builder.ts` | 339 | `validateRLSPredicatesForRecords({ records: valuesToInsertFormatted, … })` | `assertRecordsWithinRecordScope` |
-| 7 | `twenty-orm/repository/workspace-delete-query-builder.ts` | 182 | `applyRowLevelPermissionPredicates({ queryBuilder: this as unknown as WorkspaceSelectQueryBuilder<T>, … })` | `applyRecordScopeToQueryBuilder` |
-| 8 | `twenty-orm/repository/workspace-soft-delete-query-builder.ts` | 211 | same | same |
+| 6 | `searm-orm/repository/workspace-insert-query-builder.ts` | 339 | `validateRLSPredicatesForRecords({ records: valuesToInsertFormatted, … })` | `assertRecordsWithinRecordScope` |
+| 7 | `searm-orm/repository/workspace-delete-query-builder.ts` | 182 | `applyRowLevelPermissionPredicates({ queryBuilder: this as unknown as WorkspaceSelectQueryBuilder<T>, … })` | `applyRecordScopeToQueryBuilder` |
+| 8 | `searm-orm/repository/workspace-soft-delete-query-builder.ts` | 211 | same | same |
 | 9 | `api/common/common-nested-relations-processor/process-nested-relations-v2.helper.ts` | 510 | calls #3 | call renamed method |
 | 10 | `api/common/common-query-runners/utils/build-mutation-query-builder.util.ts` | 46 | calls #3 | call renamed method |
 | 11 | `api/graphql/graphql-query-runner/group-by/services/group-by-with-records.service.ts` | 203 | calls #3 | call renamed method |
 | 12 | `subscriptions/object-record-event/object-record-event-publisher.ts` | 411-436 `buildSubscriberRLSFilter` | `buildRowLevelPermissionRecordFilter(...)` | `buildRecordScopeGqlFilter(...)` |
 | 13 | `metadata-modules/role/services/workspace-roles-permissions-cache.service.ts` | 53-56, 80-85, 104-113, 234-243 | two repositories, two arrays | one repository, one `recordScopeRules` array |
-| 14 | `twenty-orm/utils/compute-permission-intersection.util.ts` | 10-26, 117-120 | field-overlap predicate filter | `recordScopeRules: [...a, ...b]` is **wrong** — see Task 5 Step 4 |
-| 15 | `twenty-orm/interfaces/workspace-internal-context.interface.ts` | 18-19 | two flat map fields | both deleted; the cache-derived `ObjectsPermissions` already carries the rules |
+| 14 | `searm-orm/utils/compute-permission-intersection.util.ts` | 10-26, 117-120 | field-overlap predicate filter | `recordScopeRules: [...a, ...b]` is **wrong** — see Task 5 Step 4 |
+| 15 | `searm-orm/interfaces/workspace-internal-context.interface.ts` | 18-19 | two flat map fields | both deleted; the cache-derived `ObjectsPermissions` already carries the rules |
 
 Hook #15 is the structural win: the enterprise design threads two extra flat-map tables through `WorkspaceInternalContext` — i.e. through every repository, every query builder and every ORM manager — because predicates live in their own normalised store. Ours ride in `ObjectsPermissions`, which the query builders already hold as `this.objectRecordsPermissions`. Two fields leave the interface and nothing replaces them.
 
 ### 3.1 The single enforcement entry point
 
-`packages/twenty-server/src/engine/twenty-orm/record-scope/apply-record-scope-to-query-builder.util.ts`:
+`packages/searm-server/src/engine/searm-orm/record-scope/apply-record-scope-to-query-builder.util.ts`:
 
 ```ts
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'searm-shared/utils';
 import { Brackets, type SelectQueryBuilder } from 'typeorm';
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
-import { type ObjectsPermissions } from 'twenty-shared/types';
-import { compileRecordScope } from 'src/engine/twenty-orm/record-scope/compile-record-scope.util';
-import { renderRecordScopeToSql } from 'src/engine/twenty-orm/record-scope/render-record-scope-to-sql.util';
-import { resolveRecordScopePrincipal } from 'src/engine/twenty-orm/record-scope/resolve-record-scope-principal.util';
+import { type ObjectsPermissions } from 'searm-shared/types';
+import { compileRecordScope } from 'src/engine/searm-orm/record-scope/compile-record-scope.util';
+import { renderRecordScopeToSql } from 'src/engine/searm-orm/record-scope/render-record-scope-to-sql.util';
+import { resolveRecordScopePrincipal } from 'src/engine/searm-orm/record-scope/resolve-record-scope-principal.util';
 
 export const applyRecordScopeToQueryBuilder = ({
   queryBuilder,
@@ -685,7 +685,7 @@ A research agent typically runs under a broad read role so it can gather evidenc
 
 ## 6. File structure
 
-**New — `twenty-shared`** (`packages/twenty-shared/src/types/`):
+**New — `searm-shared`** (`packages/searm-shared/src/types/`):
 
 | File | Responsibility |
 | --- | --- |
@@ -694,7 +694,7 @@ A research agent typically runs under a broad read role so it can gather evidenc
 | `RecordScopeNode.ts` | Expression tree types |
 | `RecordScopeRule.ts` | Cache-facing rule projection |
 
-**New — server, model + enforcement** (`packages/twenty-server/src/engine/twenty-orm/record-scope/`):
+**New — server, model + enforcement** (`packages/searm-server/src/engine/searm-orm/record-scope/`):
 
 | File | Responsibility |
 | --- | --- |
@@ -709,7 +709,7 @@ A research agent typically runs under a broad read role so it can gather evidenc
 | `apply-record-scope-to-query-builder.util.ts` | the one enforcement entry point |
 | `assert-records-within-record-scope.util.ts` | post-image write guard |
 
-**New — server, metadata** (`packages/twenty-server/src/engine/metadata-modules/record-scope/`):
+**New — server, metadata** (`packages/searm-server/src/engine/metadata-modules/record-scope/`):
 
 | File | Responsibility |
 | --- | --- |
@@ -723,24 +723,24 @@ A research agent typically runs under a broad read role so it can gather evidenc
 
 **Modified — server:** the fifteen rows of §3, plus `metadata-modules/role/role.entity.ts` (`recordScopeRules` one-to-many replacing the two predicate relations), `role.dto.ts`, `role.resolver.ts`, the seven `flat-entity/constant/all-*.constant.ts` tables (`all-entity-properties-configuration-by-metadata-name`, `all-many-to-one-metadata-foreign-key`, `all-many-to-one-metadata-relations`, `all-metadata-entity-by-metadata-name`, `all-metadata-required-metadata-for-validation`, `all-metadata-serialized-relation`, `all-one-to-many-metadata-relations`) plus the two constant snapshots under `flat-entity/constant/__tests__/__snapshots__/` (one metadata name `recordScopeRule` replacing two), `workspace-cache-key.type.ts`, and the role manifest converters.
 
-**Deleted — server:** the 43-file enterprise cluster listed in the audit, plus its two `twenty-shared` predicate type files and the three remaining `RowLevelPermissionPredicate*` shared types.
+**Deleted — server:** the 43-file enterprise cluster listed in the audit, plus its two `searm-shared` predicate type files and the three remaining `RowLevelPermissionPredicate*` shared types.
 
 ---
 
 ## 7. Tasks
 
-Global constraints (from `CLAUDE.md`, identical to the AI-write-approval plan): named exports only; no `any`; types over interfaces; string-literal unions except GraphQL enums; kebab-case filenames with suffix; `//` comments explaining WHY; `isDefined()` from `twenty-shared/utils`; services under 500 lines; entities auto-registered by glob; schema changes ship as instance commands.
+Global constraints (from `CLAUDE.md`, identical to the AI-write-approval plan): named exports only; no `any`; types over interfaces; string-literal unions except GraphQL enums; kebab-case filenames with suffix; `//` comments explaining WHY; `isDefined()` from `searm-shared/utils`; services under 500 lines; entities auto-registered by glob; schema changes ship as instance commands.
 
-Memory constraint: **never bare `npx jest`.** Use `cd packages/twenty-server && bash ../../scripts/lowmem.sh test|itest|types|full [pattern]`.
+Memory constraint: **never bare `npx jest`.** Use `cd packages/searm-server && bash ../../scripts/lowmem.sh test|itest|types|full [pattern]`.
 
 ---
 
 ### Task 1: Shared types
 
-**Files:** the four `twenty-shared/src/types/Record Scope*.ts` files of §1.2, plus the barrel export, plus the `ObjectPermissions.ts` edit.
+**Files:** the four `searm-shared/src/types/Record Scope*.ts` files of §1.2, plus the barrel export, plus the `ObjectPermissions.ts` edit.
 
 - [ ] **Step 1:** Write the four type files exactly as §1.2.
-- [ ] **Step 2:** Add them to `packages/twenty-shared/src/types/index.ts` in alphabetical position.
+- [ ] **Step 2:** Add them to `packages/searm-shared/src/types/index.ts` in alphabetical position.
 - [ ] **Step 3:** Edit `ObjectPermissions.ts` to replace `rowLevelPermissionPredicates` / `rowLevelPermissionPredicateGroups` with `recordScopeRules: RecordScopeRule[]`.
 - [ ] **Step 4:** `bash ../../scripts/lowmem.sh types`. Expect failures — every producer and consumer of `ObjectPermissions`. Record the list; it is the work queue for Tasks 5, 7 and 13.
 
@@ -749,15 +749,15 @@ Memory constraint: **never bare `npx jest`.** Use `cd packages/twenty-server && 
 ### Task 2: Principal resolution
 
 **Files:**
-- Create: `twenty-orm/record-scope/types/record-scope-principal.type.ts`
-- Create: `twenty-orm/record-scope/resolve-record-scope-principal.util.ts`
-- Test: `twenty-orm/record-scope/__tests__/resolve-record-scope-principal.util.spec.ts`
+- Create: `searm-orm/record-scope/types/record-scope-principal.type.ts`
+- Create: `searm-orm/record-scope/resolve-record-scope-principal.util.ts`
+- Test: `searm-orm/record-scope/__tests__/resolve-record-scope-principal.util.spec.ts`
 
 - [ ] **Step 1: Failing test**
 
 ```ts
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
-import { resolveRecordScopePrincipal } from 'src/engine/twenty-orm/record-scope/resolve-record-scope-principal.util';
+import { resolveRecordScopePrincipal } from 'src/engine/searm-orm/record-scope/resolve-record-scope-principal.util';
 
 const workspace = { id: 'ws-1' } as WorkspaceAuthContext['workspace'];
 
@@ -855,7 +855,7 @@ recordScopeRules: Relation<RecordScopeRuleEntity[]>;
 - [ ] **Step 3:** Generate the schema change:
 
 ```bash
-npx nx run twenty-server:database:migrate:generate --name addRecordScopeRule --type fast
+npx nx run searm-server:database:migrate:generate --name addRecordScopeRule --type fast
 ```
 
 - [ ] **Step 4:** Verify the emitted SQL creates `core."recordScopeRule"` with a `jsonb` `expression` column, the `(workspaceId, roleId)` index and the `(workspaceId, universalIdentifier)` unique constraint, and drops the two predicate tables. Paste the SQL into the task record.
@@ -899,11 +899,11 @@ The depth and node-count limits exist because the expression is attacker-adjacen
 ### Task 5: Compilation and composition
 
 **Files:**
-- Create: `twenty-orm/record-scope/types/compiled-record-scope.type.ts`
-- Create: `twenty-orm/record-scope/compile-record-scope.util.ts`
-- Create: `twenty-orm/record-scope/compose-record-scopes.util.ts`
-- Test: `twenty-orm/record-scope/__tests__/compile-record-scope.util.spec.ts`
-- Test: `twenty-orm/record-scope/__tests__/compose-record-scopes.util.spec.ts`
+- Create: `searm-orm/record-scope/types/compiled-record-scope.type.ts`
+- Create: `searm-orm/record-scope/compile-record-scope.util.ts`
+- Create: `searm-orm/record-scope/compose-record-scopes.util.ts`
+- Test: `searm-orm/record-scope/__tests__/compile-record-scope.util.spec.ts`
+- Test: `searm-orm/record-scope/__tests__/compose-record-scopes.util.spec.ts`
 
 - [ ] **Step 1: Failing test for `compileRecordScope`** — §2.2 in full:
 
@@ -911,9 +911,9 @@ The depth and node-count limits exist because the expression is attacker-adjacen
 import {
   type RecordScopeNode,
   type RecordScopeRule,
-} from 'twenty-shared/types';
+} from 'searm-shared/types';
 
-import { compileRecordScope } from 'src/engine/twenty-orm/record-scope/compile-record-scope.util';
+import { compileRecordScope } from 'src/engine/searm-orm/record-scope/compile-record-scope.util';
 
 const ownedByMe: RecordScopeNode = {
   type: 'comparison',
@@ -1048,9 +1048,9 @@ it('should AND scopes from disjoint roles rather than dropping both', () => {
 ### Task 6: SQL rendering and in-memory evaluation, proven equivalent
 
 **Files:**
-- Create: `twenty-orm/record-scope/render-record-scope-to-sql.util.ts`
-- Create: `twenty-orm/record-scope/evaluate-record-scope.util.ts`
-- Test: `twenty-orm/record-scope/__tests__/render-record-scope-to-sql.util.spec.ts` (unit, string assertions)
+- Create: `searm-orm/record-scope/render-record-scope-to-sql.util.ts`
+- Create: `searm-orm/record-scope/evaluate-record-scope.util.ts`
+- Test: `searm-orm/record-scope/__tests__/render-record-scope-to-sql.util.spec.ts` (unit, string assertions)
 - Test: `test/integration/.../record-scope-evaluator-parity.integration-spec.ts` (real Postgres)
 
 - [ ] **Step 1: Unit test the rendered SQL**, asserting the exact string and the exact parameter map for each row of the §3.2 table. Example:
@@ -1147,7 +1147,7 @@ describe.each(CASES)('record scope parity: $name', ({ node, row, expected }) => 
 
 **Files:**
 - Modify: `metadata-modules/role/services/workspace-roles-permissions-cache.service.ts`
-- Modify: `twenty-orm/utils/compute-permission-intersection.util.ts`
+- Modify: `searm-orm/utils/compute-permission-intersection.util.ts`
 - Test: `metadata-modules/role/services/__tests__/workspace-roles-permissions-cache.service.spec.ts`
 
 - [ ] **Step 1:** In the cache service, replace the two injected predicate repositories (lines 53-56) with one `WorkspaceScopedRepository<RecordScopeRuleEntity>`, the two `find` calls (80-85) with one, the two `regroupEntitiesByRelatedEntityId` calls (104-113) with one keyed on `roleId`, and the two output arrays (234-243) with:
@@ -1174,11 +1174,11 @@ The projection is deliberate: entities carry timestamps and relations that would
 ### Task 8: Query-builder enforcement
 
 **Files:**
-- Create: `twenty-orm/record-scope/apply-record-scope-to-query-builder.util.ts` (§3.1)
-- Create: `twenty-orm/record-scope/assert-records-within-record-scope.util.ts` (§3.4)
+- Create: `searm-orm/record-scope/apply-record-scope-to-query-builder.util.ts` (§3.1)
+- Create: `searm-orm/record-scope/assert-records-within-record-scope.util.ts` (§3.4)
 - Modify: the five query builders and the three outside callers of §3 rows 1-11
-- Modify: `twenty-orm/interfaces/workspace-internal-context.interface.ts` (delete the two flat-map fields)
-- Test: `twenty-orm/record-scope/__tests__/apply-record-scope-to-query-builder.util.spec.ts`
+- Modify: `searm-orm/interfaces/workspace-internal-context.interface.ts` (delete the two flat-map fields)
+- Test: `searm-orm/record-scope/__tests__/apply-record-scope-to-query-builder.util.spec.ts`
 - Test: `test/integration/.../record-scope-orm.integration-spec.ts`
 
 - [ ] **Step 1: Unit assertions** on a stub query builder capturing `andWhere` calls:
@@ -1213,7 +1213,7 @@ The projection is deliberate: entities carry timestamps and relations that would
 ### Task 9: Bypass invariants
 
 **Files:**
-- Test: `twenty-orm/record-scope/__tests__/record-scope-bypass-invariants.spec.ts`
+- Test: `searm-orm/record-scope/__tests__/record-scope-bypass-invariants.spec.ts`
 
 This task adds no production code. It pins §4 so a later refactor cannot widen bypass without a red test.
 
@@ -1437,7 +1437,7 @@ The test is worth its two minutes because the automation-blocklist exemption and
 **Files:**
 - Create: the `metadata-modules/record-scope/` service, DTOs, resolver, module
 - Modify: the seven `flat-entity/constant/all-*.constant.ts` tables (`all-entity-properties-configuration-by-metadata-name`, `all-many-to-one-metadata-foreign-key`, `all-many-to-one-metadata-relations`, `all-metadata-entity-by-metadata-name`, `all-metadata-required-metadata-for-validation`, `all-metadata-serialized-relation`, `all-one-to-many-metadata-relations`) plus the two constant snapshots under `flat-entity/constant/__tests__/__snapshots__/`, `all-metadata-names-sorted-atomically.constant.ts`, `workspace-cache-key.type.ts`, `role.dto.ts`, `role.resolver.ts`, the role manifest converters
-- Modify: `packages/twenty-apps/public/customer-support/.twenty/output/manifest.json`
+- Modify: `packages/searm-apps/public/customer-support/.searm/output/manifest.json`
 
 - [ ] **Step 1:** Register one metadata name `recordScopeRule` where the two predicate names appear today, in all seven constant tables. `ALL_METADATA_NAMES_SORTED_ATOMICALLY` is *derived* — `sortMetadataNamesChildrenFirst()` — so ordering follows automatically from the relation tables, provided `all-many-to-one-metadata-relations.constant.ts` declares `recordScopeRule`'s parents as `role` and `objectMetadata`. Assert the derived order in the existing constant spec rather than hand-editing it, and regenerate the two `__snapshots__` files.
 - [ ] **Step 2:** Replace the two arrays in the role manifest converter with `recordScopeRules`, and update the app manifest's `"rowLevelPermissionPredicateGroups": []` / `"rowLevelPermissionPredicates": []` (lines 544-545, 575-576) with `"recordScopeRules": []`.
@@ -1450,7 +1450,7 @@ The test is worth its two minutes because the automation-blocklist exemption and
 ### Task 14: Subscriptions
 
 **Files:**
-- Create: `twenty-orm/record-scope/build-record-scope-gql-filter.util.ts`
+- Create: `searm-orm/record-scope/build-record-scope-gql-filter.util.ts`
 - Modify: `subscriptions/object-record-event/object-record-event-publisher.ts` (rows 12)
 - Test: `.../__tests__/object-record-event-publisher.spec.ts`
 
@@ -1463,7 +1463,7 @@ The test is worth its two minutes because the automation-blocklist exemption and
 
 ### Task 15: Settings UI
 
-**Files:** `packages/twenty-front/src/modules/settings/roles/record-scope/…`, `SettingsPath.ts`, `SettingsRoutes.tsx`.
+**Files:** `packages/searm-front/src/modules/settings/roles/record-scope/…`, `SettingsPath.ts`, `SettingsRoutes.tsx`.
 
 - [ ] Rule list per (role, object), each row showing `label` and a human rendering of the expression.
 - [ ] A builder restricted to what the model supports: pick a field, pick an operator, pick a literal or a principal attribute; group with AND/OR; negate.
@@ -1498,7 +1498,7 @@ The feature is done when all of the following have been run and their output rec
 3. `record-scope-evaluator-parity.integration-spec` — 22/22.
 4. `proposal-approval-record-scope.integration-spec` — an agent proposes a change to a record its approver cannot see; approval aborts with `OUT_OF_SCOPE`, the database row is byte-identical afterwards, and the correctly-scoped approver applies the same item successfully.
 5. `grep -rl "@license Enterprise" packages | grep -i "row-level\|RowLevelPermission"` returns nothing.
-6. `grep -rn "rowLevelPermissionPredicate" packages/twenty-server/src packages/twenty-front/src packages/twenty-shared/src packages/twenty-apps` returns nothing.
+6. `grep -rn "rowLevelPermissionPredicate" packages/searm-server/src packages/searm-front/src packages/searm-shared/src packages/searm-apps` returns nothing.
 7. Each mutation check named in Tasks 5, 6, 8, 10, 11, 12 and 14 was performed and the named test went red.
 
 Gate 4 is the one that matters. It is the only assertion in this document that proves the two halves of the product — the permission system and the approval layer — agree about who a write belongs to.

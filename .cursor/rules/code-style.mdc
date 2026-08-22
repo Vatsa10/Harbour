@@ -1,5 +1,5 @@
 ---
-description: Code style guidelines for Twenty CRM
+description: Code style guidelines for SeaRM CRM
 globs: []
 alwaysApply: true
 ---
@@ -161,7 +161,7 @@ const standardFields = standardFieldOrder.map(...)
 ## Utility Helpers
 ```typescript
 // ✅ Use existing utility helpers instead of manual checks
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'searm-shared/utils';
 import { isNonEmptyString, isNonEmptyArray } from '@sniptt/guards';
 
 // ❌ Manual type guards

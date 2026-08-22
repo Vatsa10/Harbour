@@ -42,7 +42,7 @@ jobs:
 
       - name: Ensure no .github folder inside app folders
         run: |
-          offenders=$(find packages/twenty-apps/internal packages/twenty-apps/public -mindepth 2 -maxdepth 2 -type d -name .github)
+          offenders=$(find packages/searm-apps/internal packages/searm-apps/public -mindepth 2 -maxdepth 2 -type d -name .github)
           if [ -n "$offenders" ]; then
             echo "::error::Apps must not define their own .github folder. Offenders:"
             echo "$offenders"
@@ -57,8 +57,8 @@ jobs:
           json: true
           escape_json: false
           files: |
-            packages/twenty-apps/internal/**
-            packages/twenty-apps/public/**
+            packages/searm-apps/internal/**
+            packages/searm-apps/public/**
 
       - name: Build matrix of apps
         id: set-matrix
@@ -74,13 +74,13 @@ jobs:
           const path = require('path');
           const changedOnly = process.env.CHANGED_ONLY === 'true';
           const roots = process.env.SCOPE === 'public'
-            ? ['packages/twenty-apps/public']
-            : ['packages/twenty-apps/internal', 'packages/twenty-apps/public'];
+            ? ['packages/searm-apps/public']
+            : ['packages/searm-apps/internal', 'packages/searm-apps/public'];
           const eventName = process.env.EVENT_NAME;
           const changedFiles = JSON.parse(process.env.CHANGED_FILES || '[]');
           const changedApps = new Set();
           for (const file of changedFiles) {
-            const match = file.match(/^packages\/twenty-apps\/(?:internal|public)\/([^/]+)\//);
+            const match = file.match(/^packages\/searm-apps\/(?:internal|public)\/([^/]+)\//);
             if (match) changedApps.add(match[1]);
           }
           const requestedApp = (process.env.APPLICATION_INPUT || '').trim();

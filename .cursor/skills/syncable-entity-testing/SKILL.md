@@ -1,6 +1,6 @@
 ---
 name: syncable-entity-testing
-description: Create comprehensive integration tests for syncable entities in Twenty. Use when writing integration tests for metadata entities, covering validator exceptions, input transpilation errors, and CRUD operations. Tests are MANDATORY for all syncable entities.
+description: Create comprehensive integration tests for syncable entities in SeaRM. Use when writing integration tests for metadata entities, covering validator exceptions, input transpilation errors, and CRUD operations. Tests are MANDATORY for all syncable entities.
 ---
 
 # Syncable Entity: Integration Testing (Step 6/6 - MANDATORY)
@@ -128,8 +128,8 @@ import { deleteMyEntity } from 'test/integration/metadata/suites/my-entity/utils
 import {
   eachTestingContextFilter,
   type EachTestingContext,
-} from 'twenty-shared/testing';
-import { isDefined } from 'twenty-shared/utils';
+} from 'searm-shared/testing';
+import { isDefined } from 'searm-shared/utils';
 import { type CreateMyEntityInput } from 'src/engine/metadata-modules/my-entity/dtos/create-my-entity.input';
 
 type TestContext = {
@@ -426,13 +426,13 @@ expectOneNotInternalServerErrorSnapshot({
 
 ```bash
 # Run all entity tests
-npx jest test/integration/metadata/suites/my-entity --config=packages/twenty-server/jest.config.mjs
+npx jest test/integration/metadata/suites/my-entity --config=packages/searm-server/jest.config.mjs
 
 # Run specific test file
-npx jest test/integration/metadata/suites/my-entity/failing-my-entity-creation.integration-spec.ts --config=packages/twenty-server/jest.config.mjs
+npx jest test/integration/metadata/suites/my-entity/failing-my-entity-creation.integration-spec.ts --config=packages/searm-server/jest.config.mjs
 
 # Update snapshots
-npx jest test/integration/metadata/suites/my-entity --updateSnapshot --config=packages/twenty-server/jest.config.mjs
+npx jest test/integration/metadata/suites/my-entity --updateSnapshot --config=packages/searm-server/jest.config.mjs
 ```
 
 ---
@@ -489,6 +489,6 @@ Your integration tests are complete when:
 
 ✅ **Step 6 Complete!** → Your syncable entity is fully tested and production-ready!
 
-**Congratulations!** You've successfully created a new syncable entity in Twenty's workspace migration system.
+**Congratulations!** You've successfully created a new syncable entity in SeaRM's workspace migration system.
 
 For complete workflow, see `@creating-syncable-entity` rule.

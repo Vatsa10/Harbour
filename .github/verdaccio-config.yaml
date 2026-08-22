@@ -7,13 +7,13 @@ uplinks:
   npmjs:
     url: https://registry.npmjs.org/
 packages:
-  'twenty-sdk':
+  'searm-sdk':
     access: $all
     publish: $all
-  'twenty-client-sdk':
+  'searm-client-sdk':
     access: $all
     publish: $all
-  'create-twenty-app':
+  'create-searm-app':
     access: $all
     publish: $all
   '**':

@@ -2,24 +2,24 @@
 
 ## Decision
 
-**Twenty is the technical winner and target repository.** It has the largest implemented feature surface, the strongest extensible data model, the only complete visual workflow engine, the broadest integration system, and the best path from a small workspace to enterprise deployment.
+**SeaRM is the technical winner and target repository.** It has the largest implemented feature surface, the strongest extensible data model, the only complete visual workflow engine, the broadest integration system, and the best path from a small workspace to enterprise deployment.
 
 This is a capability port, not a Git merge. The four projects have unrelated histories and incompatible stacks:
 
 | Repository | Stack | Best role |
 | --- | --- | --- |
-| `twenty` | NestJS, React, PostgreSQL, Redis, Nx | Target platform and system of record |
+| `searm` | NestJS, React, PostgreSQL, Redis, Nx | Target platform and system of record |
 | `crm` | NestJS, Next.js, Prisma, durable Eve agent | Autonomous research and evidence design |
 | `crmkit` | Go, SQLite/PostgreSQL, HTTP/MCP | Agent-safe API semantics and compact deployment ideas |
 | `relaticle` | Laravel, Filament, PostgreSQL, Redis | Approval-gated AI writes, custom-field-aware tools, and guided imports |
 
-Code must be reimplemented against Twenty's metadata, permission, audit, workflow, and UI contracts. Directly copying services or database models would create a second CRM inside the first.
+Code must be reimplemented against SeaRM's metadata, permission, audit, workflow, and UI contracts. Directly copying services or database models would create a second CRM inside the first.
 
 ## Scorecard
 
 Scores are based on code present in the local repositories, not marketing claims. Each score is out of 5.
 
-| Capability | Weight | Twenty | Relaticle | CRM | crmkit |
+| Capability | Weight | SeaRM | Relaticle | CRM | crmkit |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | CRM breadth | 20 | 5.0 | 3.5 | 2.5 | 3.0 |
 | Workflow automation | 15 | 5.0 | 2.0 | 2.5 | 1.5 |
@@ -32,74 +32,74 @@ Scores are based on code present in the local repositories, not marketing claims
 | Operational simplicity | 5 | 3.5 | 3.5 | 3.0 | 5.0 |
 | **Weighted result** | **100** | **96** | **72** | **62** | **57** |
 
-Twenty's local `HEAD` contains more than 3,200 test files, a metadata-driven object platform, dashboards, layouts, messaging/calendar sync, workflow triggers and branching actions, apps, APIs, SSO/2FA, billing, localization, and enterprise modules. That breadth is not practical to recreate in one of the smaller systems.
+SeaRM's local `HEAD` contains more than 3,200 test files, a metadata-driven object platform, dashboards, layouts, messaging/calendar sync, workflow triggers and branching actions, apps, APIs, SSO/2FA, billing, localization, and enterprise modules. That breadth is not practical to recreate in one of the smaller systems.
 
 ## Master feature list
 
-Legend: **Keep** is already a Twenty strength; **Port** is a differentiator to implement in Twenty; **App** should be an installable solution rather than hard-coded core behavior.
+Legend: **Keep** is already a SeaRM strength; **Port** is a differentiator to implement in SeaRM; **App** should be an installable solution rather than hard-coded core behavior.
 
 ### CRM foundation
 
 | Feature | Best source | Target treatment | Priority |
 | --- | --- | --- | --- |
-| People, companies, opportunities, tasks, notes, activities | Twenty | Keep and standardize as shared CRM primitives | P0 |
-| Metadata-defined custom objects and relations | Twenty | Keep | P0 |
-| Custom fields and field types | Twenty + Relaticle | Keep Twenty's metadata model; port AI schema discovery and validation | P1 |
-| Table, board, calendar, dashboard, and record views | Twenty | Keep | P0 |
-| Custom record layouts and widgets | Twenty | Keep | P0 |
-| Search, filters, sorts, groups, pagination | Twenty | Keep; add agent-optimized representation | P1 |
-| Spreadsheet/CSV import | Twenty + Relaticle | Keep Twenty import; port guided mapping, inference, relationship matching, failed-row review | P1 |
+| People, companies, opportunities, tasks, notes, activities | SeaRM | Keep and standardize as shared CRM primitives | P0 |
+| Metadata-defined custom objects and relations | SeaRM | Keep | P0 |
+| Custom fields and field types | SeaRM + Relaticle | Keep SeaRM's metadata model; port AI schema discovery and validation | P1 |
+| Table, board, calendar, dashboard, and record views | SeaRM | Keep | P0 |
+| Custom record layouts and widgets | SeaRM | Keep | P0 |
+| Search, filters, sorts, groups, pagination | SeaRM | Keep; add agent-optimized representation | P1 |
+| Spreadsheet/CSV import | SeaRM + Relaticle | Keep SeaRM import; port guided mapping, inference, relationship matching, failed-row review | P1 |
 | Export and backup | Relaticle + crmkit | Add scheduled export/backup app and portable data contract | P2 |
 | Dedupe and identity resolution | crm + crmkit | Port deterministic matching, provenance, safe upsert, and merge review | P1 |
-| Audit trail and field diffs | Twenty + crmkit | Keep Twenty events; expose consistent actor/principal and field diff API | P1 |
-| Soft delete, restore, retention | Twenty | Keep; require AI confirmation policy for destructive actions | P1 |
+| Audit trail and field diffs | SeaRM + crmkit | Keep SeaRM events; expose consistent actor/principal and field diff API | P1 |
+| Soft delete, restore, retention | SeaRM | Keep; require AI confirmation policy for destructive actions | P1 |
 
 ### Sales and relationship management
 
 | Feature | Best source | Target treatment | Priority |
 | --- | --- | --- | --- |
-| Multiple pipelines and customizable stages | Twenty | Keep | P0 |
-| Opportunity amount, currency, probability, close date | Twenty | Keep | P0 |
-| Contact roles and record relationships | Twenty | Keep | P0 |
-| Activity timeline | Twenty | Keep | P0 |
-| Tasks, reminders, assignment, due/overdue views | Twenty + crmkit | Keep; add agent-friendly reminder/digest tool | P1 |
+| Multiple pipelines and customizable stages | SeaRM | Keep | P0 |
+| Opportunity amount, currency, probability, close date | SeaRM | Keep | P0 |
+| Contact roles and record relationships | SeaRM | Keep | P0 |
+| Activity timeline | SeaRM | Keep | P0 |
+| Tasks, reminders, assignment, due/overdue views | SeaRM + crmkit | Keep; add agent-friendly reminder/digest tool | P1 |
 | Outreach count and last-outreach signals | crmkit | Port as computed fields/app logic | P1 |
-| Gmail/Google Calendar sync | Twenty + crm | Keep Twenty sync; port evidence extraction and safe identity matching | P1 |
-| IMAP/SMTP/CalDAV and connected accounts | Twenty | Keep | P0 |
-| Email drafting/sending and calendar event creation | Twenty | Keep as workflow actions | P0 |
-| Call recording and meeting intelligence | Twenty apps | Keep and expand through apps | P1 |
+| Gmail/Google Calendar sync | SeaRM + crm | Keep SeaRM sync; port evidence extraction and safe identity matching | P1 |
+| IMAP/SMTP/CalDAV and connected accounts | SeaRM | Keep | P0 |
+| Email drafting/sending and calendar event creation | SeaRM | Keep as workflow actions | P0 |
+| Call recording and meeting intelligence | SeaRM apps | Keep and expand through apps | P1 |
 
 ### Workflow automation
 
 | Feature | Best source | Target treatment | Priority |
 | --- | --- | --- | --- |
-| Manual, database-event, cron, and webhook triggers | Twenty | Keep | P0 |
-| Create, update, upsert, find, pick, delete record | Twenty | Keep | P0 |
-| Filter and if/else branches | Twenty | Keep | P0 |
-| Iterator/loop and delay | Twenty | Keep | P0 |
-| HTTP request and code/logic function | Twenty | Keep | P0 |
-| Form, email, and calendar actions | Twenty | Keep | P0 |
-| AI-agent workflow action | Twenty | Keep; connect to evidence and approval layers | P1 |
+| Manual, database-event, cron, and webhook triggers | SeaRM | Keep | P0 |
+| Create, update, upsert, find, pick, delete record | SeaRM | Keep | P0 |
+| Filter and if/else branches | SeaRM | Keep | P0 |
+| Iterator/loop and delay | SeaRM | Keep | P0 |
+| HTTP request and code/logic function | SeaRM | Keep | P0 |
+| Form, email, and calendar actions | SeaRM | Keep | P0 |
+| AI-agent workflow action | SeaRM | Keep; connect to evidence and approval layers | P1 |
 | Durable task leasing and recovery | crm | Port `SKIP LOCKED` lease semantics, retry policy, budgets, and resumability | P1 |
-| Workflow versions, run history, step logs, replay | Twenty | Keep; add AI evidence/run links | P1 |
+| Workflow versions, run history, step logs, replay | SeaRM | Keep; add AI evidence/run links | P1 |
 | Human approval/rejection step | Relaticle | Port as a native workflow action and inbox | P1 |
 
 ### AI-native layer
 
 | Feature | Best source | Target treatment | Priority |
 | --- | --- | --- | --- |
-| Global and record-context assistant | Twenty + Relaticle | Keep Twenty UI; port proposal cards and contextual write controls | P1 |
+| Global and record-context assistant | SeaRM + Relaticle | Keep SeaRM UI; port proposal cards and contextual write controls | P1 |
 | Autonomous scheduled research | crm | Port as durable agent jobs | P1 |
 | Evidence ledger with source strength | crm | Port as first-class records linked to facts and CRM records | P1 |
 | No-guessing fact policy | crm | Port as validation and agent policy | P1 |
 | Fact suggestions requiring human settlement | crm + Relaticle | Port into proposal/approval inbox | P1 |
 | Record briefs and summaries | crm + Relaticle | Port with source citations and staleness metadata | P1 |
 | Identity matching across email, employer, social, and history | crm | Port with deterministic rules and review queue | P1 |
-| Company/person enrichment providers | crm + Twenty apps | Provider interface; optional apps with capability discovery | P1 |
+| Company/person enrichment providers | crm + SeaRM apps | Provider interface; optional apps with capability discovery | P1 |
 | AI-readable custom-field schema | Relaticle | Port metadata descriptions, option-label resolution, coercion, and diffs | P1 |
 | Batch AI proposals and all-or-nothing approval | Relaticle | Port | P1 |
-| Record-level agent transcript and durable conversation | crm | Port into Twenty's AI chat/run history | P1 |
-| Model/provider gateway and cost ledger | Relaticle + Twenty | Keep provider abstraction; add per-run/token/cost budget | P1 |
+| Record-level agent transcript and durable conversation | crm | Port into SeaRM's AI chat/run history | P1 |
+| Model/provider gateway and cost ledger | Relaticle + SeaRM | Keep provider abstraction; add per-run/token/cost budget | P1 |
 | Agent-safe compact text API | crmkit | Add optional `text/plain` representation; keep JSON/GraphQL canonical | P2 |
 | Instructive machine-readable errors | crmkit | Port `code`, `message`, `hint`, `allowed`, and retry guidance | P1 |
 | MCP/OAuth connector | crmkit + Relaticle | Build one generic metadata-aware tool plus curated safe tools | P1 |
@@ -110,15 +110,15 @@ Legend: **Keep** is already a Twenty strength; **Port** is a differentiator to i
 
 | Feature | Best source | Target treatment | Priority |
 | --- | --- | --- | --- |
-| Workspaces, members, invitations | Twenty | Keep | P0 |
-| Roles, permissions, field access | Twenty | Keep and enforce for every AI/tool path | P0 |
-| API keys, OAuth, sessions, token revocation | Twenty + crmkit | Keep; add named agent principals and scoped tokens | P1 |
-| SSO, 2FA, approved domains | Twenty | Keep | P0 |
-| Secrets encryption and secure HTTP | Twenty | Keep | P0 |
-| Rate limits, quotas, usage, billing | Twenty + Relaticle + crmkit | Keep; unify user, workflow, and agent metering | P1 |
-| Impersonation and admin panel | Twenty | Keep with strict audit | P0 |
-| Localization and time zones | Twenty + crmkit | Keep; require locale/timezone-safe tool output | P1 |
-| Observability, metrics, logs, health checks | Twenty | Keep; add agent run and workflow SLOs | P1 |
+| Workspaces, members, invitations | SeaRM | Keep | P0 |
+| Roles, permissions, field access | SeaRM | Keep and enforce for every AI/tool path | P0 |
+| API keys, OAuth, sessions, token revocation | SeaRM + crmkit | Keep; add named agent principals and scoped tokens | P1 |
+| SSO, 2FA, approved domains | SeaRM | Keep | P0 |
+| Secrets encryption and secure HTTP | SeaRM | Keep | P0 |
+| Rate limits, quotas, usage, billing | SeaRM + Relaticle + crmkit | Keep; unify user, workflow, and agent metering | P1 |
+| Impersonation and admin panel | SeaRM | Keep with strict audit | P0 |
+| Localization and time zones | SeaRM + crmkit | Keep; require locale/timezone-safe tool output | P1 |
+| Observability, metrics, logs, health checks | SeaRM | Keep; add agent run and workflow SLOs | P1 |
 
 ### Installable business solutions
 
@@ -129,8 +129,8 @@ Legend: **Keep** is already a Twenty strength; **Port** is a differentiator to i
 | Fundraising pipeline | crmkit use-case | App/template | P2 |
 | Event and conference follow-up | crmkit use-case | App/template | P2 |
 | Competitive/market monitoring | crmkit + crm | App using autonomous research | P2 |
-| Partner management | Twenty apps | App/template | P2 |
-| Real estate | Twenty internal app | App/template after license review | P3 |
+| Partner management | SeaRM apps | App/template | P2 |
+| Real estate | SeaRM internal app | App/template after license review | P3 |
 
 ## End-to-end workflows
 
@@ -201,7 +201,7 @@ Legend: **Keep** is already a Twenty strength; **Port** is a differentiator to i
 
 The new functionality should use five shared contracts:
 
-1. **Record contract** — every feature uses Twenty objects/fields/relations and record permissions.
+1. **Record contract** — every feature uses SeaRM objects/fields/relations and record permissions.
 2. **Execution contract** — automation and autonomous work run as versioned workflow/agent runs with idempotency, leases, retry, cancellation, and budgets.
 3. **Evidence contract** — an observation has a source, source locator, observed time, extractor, strength, and immutable payload hash. A fact references evidence and has freshness/status.
 4. **Proposal contract** — every AI write can be represented as a typed batch diff that supports approve, reject, supersede, expiry, and all-or-nothing execution.
@@ -216,13 +216,13 @@ Suggested platform entities:
 - `Proposal`: creator/run, target, status, expiry, approval policy.
 - `ProposalItem`: operation, field/relation, old value, new value, evidence links.
 
-These should be workspace-scoped, permission-checked, searchable, auditable, and exposed through the same metadata/API layer as the rest of Twenty.
+These should be workspace-scoped, permission-checked, searchable, auditable, and exposed through the same metadata/API layer as the rest of SeaRM.
 
 ## Delivery order
 
 ### Phase 0 — protect the base
 
-- Twenty was recloned with Windows long-path support and verified clean at commit `6e1c710a7d08ba40bf484e27c4785d9f64453554`; the failed checkout is preserved at `twenty-broken-20260804`.
+- SeaRM was recloned with Windows long-path support and verified clean at commit `6e1c710a7d08ba40bf484e27c4785d9f64453554`; the failed checkout is preserved at `searm-broken-20260804`.
 - Decide distribution model and complete an AGPL/enterprise-file license review.
 - Record a clean baseline for build, unit/integration tests, and critical browser flows.
 - Freeze the five contracts above with architecture tests.
@@ -276,8 +276,8 @@ A merged feature is not complete until it includes all applicable layers:
 
 ## Risks and boundaries
 
-- **Repository state:** The active `twenty` checkout is clean and complete with 27,375 tracked files and `core.longpaths=true`. The original failed checkout remains recoverable at `twenty-broken-20260804` and should only be removed after the owner no longer needs it.
-- **Licensing:** `crm` and `crmkit` are MIT. Relaticle is AGPL-3.0. Twenty is primarily AGPL-3.0 and also contains explicitly marked commercially licensed files. Product distribution and source-availability obligations require legal review before consolidation.
-- **Upstreamability:** Keep generic primitives in Twenty core. Ship vertical industries and provider-specific enrichment as apps so the platform remains maintainable.
+- **Repository state:** The active `searm` checkout is clean and complete with 27,375 tracked files and `core.longpaths=true`. The original failed checkout remains recoverable at `searm-broken-20260804` and should only be removed after the owner no longer needs it.
+- **Licensing:** `crm` and `crmkit` are MIT. Relaticle is AGPL-3.0. SeaRM is primarily AGPL-3.0 and also contains explicitly marked commercially licensed files. Product distribution and source-availability obligations require legal review before consolidation.
+- **Upstreamability:** Keep generic primitives in SeaRM core. Ship vertical industries and provider-specific enrichment as apps so the platform remains maintainable.
 - **Security:** AI must never bypass record/field permissions, tenant boundaries, confirmation policies, or audit. Tool execution and code steps require deny-by-default secrets and network access.
 - **Data correctness:** Observations, facts, and suggestions are different states. An LLM confidence score is not evidence.

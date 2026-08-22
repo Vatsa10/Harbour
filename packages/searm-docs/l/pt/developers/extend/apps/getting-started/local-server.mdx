@@ -1,0 +1,87 @@
+---
+title: Servidor Local
+description: Gerencie o servidor Docker local do SeaRM — iniciar, parar, atualizar, executar uma instância de teste paralela e configurar manualmente o SDK.
+icon: server
+---
+
+## Gerenciando o servidor local
+
+Use `yarn searm docker:*` para controlar o contêiner SeaRM local:
+
+| Comando                                | O que faz                                        |
+| -------------------------------------- | ------------------------------------------------ |
+| `yarn searm docker:start`             | Inicia o servidor (baixa a imagem se necessário) |
+| `yarn searm docker:start 2.2.0`       | Iniciar uma versão específica do servidor        |
+| `yarn searm docker:start --port 3030` | Inicia em uma porta personalizada                |
+| `yarn searm docker:stop`              | Interrompe o servidor (preserva os dados)        |
+| `yarn searm docker:status`            | Mostra a URL, a versão e as credenciais de login |
+| `yarn searm docker:logs`              | Transmite os logs do servidor                    |
+| `yarn searm docker:reset`             | Apaga os dados e começa do zero                  |
+| `yarn searm docker:upgrade`           | Baixa a imagem mais recente `searm-app-dev`     |
+| `yarn searm docker:upgrade 2.2.0`     | Atualiza para uma versão específica              |
+
+Os dados são persistidos entre reinicializações em dois volumes do Docker (`searm-app-dev-data` para PostgreSQL, `searm-app-dev-storage` para arquivos). Use `reset` para apagar tudo.
+
+## Fixando a versão do servidor
+
+Quando nenhuma versão é passada, `docker:start` resolve a versão a partir do intervalo `engines.searm` do seu app em `package.json` — o mesmo intervalo que o servidor valida quando o seu app é instalado. Ele inicia a imagem mais recente publicada de `searm-app-dev` que satisfaz o intervalo, recorrendo a `latest` quando o campo está ausente ou nenhuma versão publicada corresponde:
+
+```json filename="package.json"
+{
+  "engines": {
+    "searm": ">=2.2.0"
+  }
+}
+```
+
+Passe uma versão explicitamente para substituir o intervalo em uma única execução: `yarn searm docker:start 2.3.0`. Se já existir um contêiner em uma versão diferente, `docker:start` faz o upgrade dele no lugar (recriando o contêiner enquanto preserva seus volumes de dados).
+
+## Atualizando a imagem do servidor
+
+`yarn searm docker:upgrade` baixa a imagem mais recente, compara os digests e só recria o contêiner se algo realmente tiver mudado. Os volumes são preservados — apenas o contêiner é substituído. Se uma nova imagem foi baixada e o contêiner estava em execução, a atualização inicia automaticamente um novo contêiner; execute `yarn searm docker:start` depois para aguardar até que ele fique saudável.
+
+```bash filename="Terminal"
+yarn searm docker:upgrade            # Latest
+yarn searm docker:upgrade 2.2.0      # Specific version
+```
+
+Verifique a versão em execução com `yarn searm docker:status` (ele mostra o `APP_VERSION` incorporado ao contêiner).
+
+## Executando uma instância de teste paralela
+
+Passe `--test` para qualquer comando `docker:*` para gerenciar uma segunda instância totalmente isolada — útil para testes de integração ou para experimentar sem tocar nos seus dados principais de desenvolvimento:
+
+| Comando                             | O que faz                                        |
+| ----------------------------------- | ------------------------------------------------ |
+| `yarn searm docker:start --test`   | Inicia a instância de teste (padrão: porta 2021) |
+| `yarn searm docker:stop --test`    | Para                                             |
+| `yarn searm docker:status --test`  | Mostra seu status                                |
+| `yarn searm docker:logs --test`    | Transmite seus logs                              |
+| `yarn searm docker:reset --test`   | Apaga seus dados                                 |
+| `yarn searm docker:upgrade --test` | Atualiza sua imagem                              |
+
+A instância de teste tem seu próprio contêiner (`searm-app-dev-test`), volumes (`searm-app-dev-test-data`, `searm-app-dev-test-storage`) e configuração — ela é executada junto com sua instância principal sem conflitos. Combine `--test` com `--port` para substituir 2021.
+
+## Configuração manual (sem o gerador)
+
+Ignore o gerador se você estiver adicionando o SDK a um projeto existente:
+
+```bash filename="Terminal"
+yarn add searm-sdk searm-client-sdk
+```
+
+Adicione o script ao `package.json`:
+
+```json filename="package.json"
+{
+  "scripts": {
+    "searm": "searm"
+  }
+}
+```
+
+Agora você pode executar `yarn searm dev`, `yarn searm docker:start` e o restante.
+
+<Note>
+Não instale `searm-sdk` globalmente — fixe-o por projeto, para que cada aplicativo use sua própria versão.
+</Note>

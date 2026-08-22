@@ -19,14 +19,14 @@ jobs:
     uses: ./.github/workflows/changed-files.yaml
     with:
       files: |
-        packages/create-twenty-app/**
-        packages/twenty-sdk/**
-        packages/twenty-client-sdk/**
-        packages/twenty-shared/**
-        !packages/create-twenty-app/package.json
-        !packages/twenty-sdk/package.json
-        !packages/twenty-client-sdk/package.json
-        !packages/twenty-shared/package.json
+        packages/create-searm-app/**
+        packages/searm-sdk/**
+        packages/searm-client-sdk/**
+        packages/searm-shared/**
+        !packages/create-searm-app/package.json
+        !packages/searm-sdk/package.json
+        !packages/searm-client-sdk/package.json
+        !packages/searm-shared/package.json
   create-app-e2e-minimal:
     needs: changed-files-check
     if: needs.changed-files-check.outputs.any_changed == 'true'
@@ -50,9 +50,9 @@ jobs:
         ports:
           - 6379:6379
     env:
-      PUBLISHABLE_PACKAGES: twenty-client-sdk twenty-sdk create-twenty-app
-      TWENTY_API_URL: http://localhost:3000
-      TWENTY_API_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMDIwMjAyMC1lNmI1LTQ2ODAtOGEzMi1iODIwOTczNzE1NmIiLCJ1c2VySWQiOiIyMDIwMjAyMC1lNmI1LTQ2ODAtOGEzMi1iODIwOTczNzE1NmIiLCJ3b3Jrc3BhY2VJZCI6IjIwMjAyMDIwLTFjMjUtNGQwMi1iZjI1LTZhZWNjZjdlYTQxOSIsIndvcmtzcGFjZU1lbWJlcklkIjoiMjAyMDIwMjAtNDYzZi00MzViLTgyOGMtMTA3ZTAwN2EyNzExIiwidXNlcldvcmtzcGFjZUlkIjoiMjAyMDIwMjAtMWU3Yy00M2Q5LWE1ZGItNjg1YjUwNjlkODE2IiwidHlwZSI6IkFDQ0VTUyIsImF1dGhQcm92aWRlciI6InBhc3N3b3JkIiwiaWF0IjoxNzUxMjgxNzA0LCJleHAiOjIwNjY4NTc3MDR9.HMGqCsVlOAPVUBhKSGlD1X86VoHKt4LIUtET3CGIdik
+      PUBLISHABLE_PACKAGES: searm-client-sdk searm-sdk create-searm-app
+      SEARM_API_URL: http://localhost:3000
+      SEARM_API_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMDIwMjAyMC1lNmI1LTQ2ODAtOGEzMi1iODIwOTczNzE1NmIiLCJ1c2VySWQiOiIyMDIwMjAyMC1lNmI1LTQ2ODAtOGEzMi1iODIwOTczNzE1NmIiLCJ3b3Jrc3BhY2VJZCI6IjIwMjAyMDIwLTFjMjUtNGQwMi1iZjI1LTZhZWNjZjdlYTQxOSIsIndvcmtzcGFjZU1lbWJlcklkIjoiMjAyMDIwMjAtNDYzZi00MzViLTgyOGMtMTA3ZTAwN2EyNzExIiwidXNlcldvcmtzcGFjZUlkIjoiMjAyMDIwMjAtMWU3Yy00M2Q5LWE1ZGItNjg1YjUwNjlkODE2IiwidHlwZSI6IkFDQ0VTUyIsImF1dGhQcm92aWRlciI6InBhc3N3b3JkIiwiaWF0IjoxNzUxMjgxNzA0LCJleHAiOjIwNjY4NTc3MDR9.HMGqCsVlOAPVUBhKSGlD1X86VoHKt4LIUtET3CGIdik
     steps:
       - name: Fetch custom Github Actions and base branch history
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -99,13 +99,13 @@ jobs:
             cd ../..
           done
 
-      - name: Scaffold app using published create-twenty-app
+      - name: Scaffold app using published create-searm-app
         run: |
-          npm install -g create-twenty-app@$CI_VERSION --registry http://localhost:4873
-          create-twenty-app --version
+          npm install -g create-searm-app@$CI_VERSION --registry http://localhost:4873
+          create-searm-app --version
           mkdir -p /tmp/e2e-test-workspace
           cd /tmp/e2e-test-workspace
-          create-twenty-app test-app --display-name "Test scaffolded app" --description "E2E test scaffolded app" --url http://localhost:3000
+          create-searm-app test-app --display-name "Test scaffolded app" --description "E2E test scaffolded app" --url http://localhost:3000
 
       - name: Install scaffolded app dependencies
         run: |
@@ -120,9 +120,9 @@ jobs:
           echo "--- Checking package.json references correct SDK version ---"
           node -e "
             const pkg = require('./package.json');
-            const sdkVersion = pkg.devDependencies['twenty-sdk'];
+            const sdkVersion = pkg.devDependencies['searm-sdk'];
             if (!sdkVersion.startsWith('0.0.0-ci.')) {
-              console.error('Expected twenty-sdk version to start with 0.0.0-ci., got:', sdkVersion);
+              console.error('Expected searm-sdk version to start with 0.0.0-ci., got:', sdkVersion);
               process.exit(1);
             }
             console.log('SDK version in scaffolded app:', sdkVersion);
@@ -131,10 +131,10 @@ jobs:
       - name: Verify SDK CLI is available
         run: |
           cd /tmp/e2e-test-workspace/test-app
-          npx --no-install twenty --version
+          npx --no-install searm --version
 
       - name: Setup server environment
-        run: npx nx reset:env:e2e-testing-server twenty-server
+        run: npx nx reset:env:e2e-testing-server searm-server
 
       - name: Create databases
         run: |
@@ -142,18 +142,18 @@ jobs:
           PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -d postgres -c 'CREATE DATABASE "test";'
 
       - name: Setup database
-        run: npx nx run twenty-server:database:reset
+        run: npx nx run searm-server:database:reset
 
       - name: Start server
-        run: nohup npx nx start:ci twenty-server &
+        run: nohup npx nx start:ci searm-server &
 
       - name: Wait for server to be ready
         run: npx wait-on http://localhost:3000/healthz --timeout 120000 --interval 1000
 
-      - name: Authenticate with twenty-server
+      - name: Authenticate with searm-server
         run: |
           cd /tmp/e2e-test-workspace/test-app
-          npx --no-install twenty remote:add --api-key ${{ env.TWENTY_API_KEY }} --url ${{ env.TWENTY_API_URL }}
+          npx --no-install searm remote:add --api-key ${{ env.SEARM_API_KEY }} --url ${{ env.SEARM_API_URL }}
 
       - name: Run scaffolded app integration test (deploys, installs, and verifies the app)
         run: |

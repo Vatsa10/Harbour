@@ -23,7 +23,7 @@ Monitor `br5wlfbq6` polls every 60s. It fires on: a workflow journal going idle 
 
 ## Guardrails held throughout
 
-- No `git push`. No remote is configured for pushing; `upstream` points at twentyhq/twenty and must never receive our commits.
+- No `git push`. No remote is configured for pushing; `upstream` points at Vatsa10/Harbour and must never receive our commits.
 - The five non-negotiable contracts in `PRODUCT-CHARTER.md` are not negotiable by any agent or by the controller.
 - No AI write path may route around `ProposalGateService`.
 - Nothing gets deleted — the three reference repos stay until their ports are built.
@@ -34,7 +34,7 @@ Monitor `br5wlfbq6` polls every 60s. It fires on: a workflow journal going idle 
 
 ### 2026-08-06 — Launch 1 final review: CHANGES_REQUESTED (3 Critical, 9 Important, 10 Minor)
 
-The review is at `twenty/.superpowers/sdd/2026-08-05-ai-write-approval/final-review.md`. It is worth reading in full — it is specific, cites file:line, and prescribes fixes.
+The review is at `searm/.superpowers/sdd/2026-08-05-ai-write-approval/final-review.md`. It is worth reading in full — it is specific, cites file:line, and prescribes fixes.
 
 **All three Criticals trace to defects in the plan I authored**, and two were concealed by passing tests:
 
@@ -47,7 +47,7 @@ Lesson recorded for the phase 2-5 plans: **a plan that specifies both the code a
 **Decisions taken (controller, owner asleep) — all reversible:**
 
 1. **I6, gate inversion — scoped rather than blanket.** The review is right that an allowlist inverts success criterion 10, but blanket inversion would gate agent research, which the charter explicitly protects. Implementing: `database_crud` becomes a true denylist (everything except the three reads); static tools default to gated with an explicit known-read-only set; `http_request` is gated for non-GET/HEAD methods only, so research stays free and outbound writes get reviewed; `code_interpreter` stays ungated as sandboxed compute that cannot reach the write path. *Reverse by:* editing the classification sets in `proposal-gate.service.ts`.
-2. **Nx build pipeline — not patching it.** Task 8 was blocked because Nx's build chain uses POSIX-only shell commands that fail under Windows cmd.exe. Patching `project.json` would fix it but creates permanent merge friction with upstream twentyhq/twenty on shared build config. Instead the fix wave bypasses Nx and runs jest directly against `jest-integration.config.ts`, the same bypass the other agents used for tsc and oxlint. *Reverse by:* patching the project.json commands, or running from WSL/Linux. (WSL is installed but has only the docker-desktop distro, so it is not a usable route today.)
+2. **Nx build pipeline — not patching it.** Task 8 was blocked because Nx's build chain uses POSIX-only shell commands that fail under Windows cmd.exe. Patching `project.json` would fix it but creates permanent merge friction with upstream Vatsa10/Harbour on shared build config. Instead the fix wave bypasses Nx and runs jest directly against `jest-integration.config.ts`, the same bypass the other agents used for tsc and oxlint. *Reverse by:* patching the project.json commands, or running from WSL/Linux. (WSL is installed but has only the docker-desktop distro, so it is not a usable route today.)
 3. **Minors triaged.** Fixing 1 (asymmetric permission config between baseline capture and conflict check), 3 (dead schema plus the missing rationale field the UI needs), and 6 (per-field checkbox toggling siblings; delete items rendering a blank table). Deferring 2, 4, 5, 7, 8, 9, 10 to the merge cleanup. *Reverse by:* raising any deferred minor before merge.
 
 Fix wave dispatched on Opus with the full findings list, one wave, per the review's own ordering. It is required to prove C1 by booting the server, and to add tests that would have FAILED before the fix — a test that passes both before and after has not covered the bug.
@@ -56,7 +56,7 @@ Fix wave dispatched on Opus with the full findings list, one wave, per the revie
 
 An API session limit (reset 02:20 IST) killed the fix wave mid-work and the adversarial plan review before it started. Neither is a work failure.
 
-- **Fix wave** had 20+ modified files and **zero commits** when it died. Resumed from its own transcript with instructions to commit in clusters immediately rather than waiting for perfection. Also asked it to account for two things I spotted in its dirty tree: a modification to `packages/twenty-server/.env.test` (must not commit secrets; state whether the change is needed by others or local-only) and edits to the instance-command constant (must only amend this feature's own never-shipped command).
+- **Fix wave** had 20+ modified files and **zero commits** when it died. Resumed from its own transcript with instructions to commit in clusters immediately rather than waiting for perfection. Also asked it to account for two things I spotted in its dirty tree: a modification to `packages/searm-server/.env.test` (must not commit secrets; state whether the change is needed by others or local-only) and edits to the instance-command constant (must only amend this feature's own never-shipped command).
 - **Adversarial plan review** re-dispatched via workflow resume; the nine completed agents replay from cache.
 
 ### 2026-08-06 — Phase 2-5 planning: four plans + reconciliation landed
@@ -87,7 +87,7 @@ The two findings that justify the whole exercise:
 
 Also material: the reviewer credits three acceptance-narrative steps as delivered that are not (all three trace to C1/C2), and finds two contract breaches the program document's own audit recorded as satisfied — guided import writes with no role and no principal (C7), breaking both the Record and Principal contracts.
 
-Two over-engineering cuts accepted: `AgentRunEntity.transcript` + `summarizeAgentSteps` (Twenty already persists transcripts via `AgentMessageEntity`, and nothing reads the new column), and the `EvidenceLookupService`/`FactFieldsResolver`/`ProposalItemFieldsResolver` cluster (five classes and an N+1 pair so the UI can render one citation line — collapses to a single resolve field).
+Two over-engineering cuts accepted: `AgentRunEntity.transcript` + `summarizeAgentSteps` (SeaRM already persists transcripts via `AgentMessageEntity`, and nothing reads the new column), and the `EvidenceLookupService`/`FactFieldsResolver`/`ProposalItemFieldsResolver` cluster (five classes and an N+1 pair so the UI can render one citation line — collapses to a single resolve field).
 
 **Repair sequencing.** Phases 2, 3, and 4 quote Launch 1 code that the fix wave is rewriting as I write this, so repairing them now would produce plans stale on arrival. Dispatched the independent half — Phase 5 (C11-C13, the P4→P5 install edge) plus the program document (C14 coverage gaps) — and holding Phases 2-4 until the fix wave commits and HEAD is stable. Every repairer is instructed to verify each cited type, signature, path, flag, and decorator against the real file and to record the commit it verified against.
 
@@ -105,7 +105,7 @@ Evidence that matters:
 
 **The fix wave found a Critical the review missed:** the 2-28 instance command was never registered in `INSTANCE_COMMANDS`, so `core.proposal` was never created on any database. Fatal independently of C1, and invisible to every test because they all mock the repository.
 
-**Correction to something I recorded earlier:** I wrote that Postgres was up on `:5432` and the integration suite could therefore run. Wrong Postgres — that is a native Windows PG17 with unknown credentials. Twenty's own stack was brought up via `docker-compose.dev.yml` on shifted ports (PG 5433, Redis 6380). Docker Desktop and the `twenty-dev` containers are still running; stop them when convenient.
+**Correction to something I recorded earlier:** I wrote that Postgres was up on `:5432` and the integration suite could therefore run. Wrong Postgres — that is a native Windows PG17 with unknown credentials. SeaRM's own stack was brought up via `docker-compose.dev.yml` on shifted ports (PG 5433, Redis 6380). Docker Desktop and the `searm-dev` containers are still running; stop them when convenient.
 
 **Not fixed, honestly reported:** `SendEmailTool.execute` accepts no idempotency key and `ToolExecutionContext` has no slot for one, so the atomic `PENDING→APPLYING` claim is the only guard against a double send. The agent declined to invent a mechanism, which was the right call. The full 521-spec suite was not run.
 
@@ -130,7 +130,7 @@ The re-reviewer did not take the fix wave's word on anything that mattered:
 
 Three new Minors, all fail-closed and none blocking: unclassified CRUD ops gate as `STATIC_TOOL` with a null `toolId` so they can never apply (safe but permanently un-approvable); unguarded prototype indexing on `overrides[key]` (unreachable); an unreadable record counts as CONFLICTED with no UI explanation.
 
-**Branching decision.** Merged into a new long-lived `ai-native-crm` branch cut from the clean upstream commit, not into `main`. The charter's Phase 0 says *"Keep twenty clean and create an ai-native-crm integration branch"* — that is the owner's own prior decision and it survives contact with reality: `main` stays a pristine mirror for pulling upstream Twenty, and the product line lives on its own branch. Merge commit `4ca4f4a4b9`, `--no-ff` so the feature's history stays legible. Phases 2-5 branch from here.
+**Branching decision.** Merged into a new long-lived `ai-native-crm` branch cut from the clean upstream commit, not into `main`. The charter's Phase 0 says *"Keep searm clean and create an ai-native-crm integration branch"* — that is the owner's own prior decision and it survives contact with reality: `main` stays a pristine mirror for pulling upstream SeaRM, and the product line lives on its own branch. Merge commit `4ca4f4a4b9`, `--no-ff` so the feature's history stays legible. Phases 2-5 branch from here.
 
 Carried follow-ups for a later wave: unique index on `(workspaceId, threadId, status)` — the one remaining correctness race; an idempotency key on the `Tool` interface for outbound sends; generated GraphQL types for the front operations; a route-guard test.
 
@@ -148,7 +148,7 @@ Nothing in the adversarial review turned out to be wrong on either repair. That 
 
 ### 2026-08-06 — Phase 5 implementation started (workflow wf_7bb8d4dd-0f5)
 
-Nine manifest tasks plus an Opus review, on `ai-native-crm`. Chosen as the track to run now for one reason: the program document identifies Phase 5 Tasks 1-8 and 10 as touching no file under `twenty-server`, `twenty-front`, or `twenty-shared`, so it is the only available work that cannot collide with the Phase 2 and 4 repairs still in flight.
+Nine manifest tasks plus an Opus review, on `ai-native-crm`. Chosen as the track to run now for one reason: the program document identifies Phase 5 Tasks 1-8 and 10 as touching no file under `searm-server`, `searm-front`, or `searm-shared`, so it is the only available work that cannot collide with the Phase 2 and 4 repairs still in flight.
 
 The review at the end is pointed at the question the phase exists to answer — *did anything outside the app's own directory change?* If an implementer had to reach into the core to make the app work, that is a gap in the application SDK, not a task failure, and surfacing it is the most valuable output of the phase. The reviewer is told to report it that way.
 
@@ -171,28 +171,28 @@ Correction dispatched. It also has to re-check C13 in the other direction: Phase
 
 100 tool calls, 35 minutes, verified against `dba03d0907`. All 17 findings fixed (C1-C6, I1-I9, both Nits), task count 13 → 15, both over-engineering cuts applied, and Owner Decisions 1 and 4 turned into real code rather than notes.
 
-**Twenty-two places the plan disagreed with reality.** The worst three: `AgentEntity` is core-schema, not workspace-schema, and the plan asserted the opposite; `reject()` never loads items, so one patched block referenced an `items` variable that was not in scope; and `roleTarget` is absent from `TWENTY_STANDARD_ALL_METADATA_NAME` while every shipped role sets `canBeAssignedToAgents: false`.
+**SeaRM-two places the plan disagreed with reality.** The worst three: `AgentEntity` is core-schema, not workspace-schema, and the plan asserted the opposite; `reject()` never loads items, so one patched block referenced an `items` variable that was not in scope; and `roleTarget` is absent from `SEARM_STANDARD_ALL_METADATA_NAME` while every shipped role sets `canBeAssignedToAgents: false`.
 
 **Correction to an earlier entry in this log.** I recorded that no repair agent had found the adversarial review wrong. This one found three errors, and one is substantive: the review's recommended fix for I3 instructs the implementer to use `@InjectWorkspaceScopedRepository(AgentEntity)`, but `AgentEntity` is core-schema, so a plain `@InjectRepository` is correct. It also miscounted the denylist (24 entries, not 22) and the suite sizes — which is why the repaired plan now bans absolute counts in assertions. Three layers of review, and the third caught the second. The lesson is not that the review was bad; it is that no single layer is sufficient, including a good one.
 
 **Two open items block Phase 2 and are being settled before any implementation starts:**
 
 1. **Can a seeded agent actually use tools?** If `canBeAssignedToAgents` is false on every shipped role and `roleTarget` cannot be created at seed time, then Owner Decision 4 is unimplementable and three plans depend on it. The decisive sub-question is what tools a role-less agent resolves to — Phase 2's entire evidence pipeline needs it to be able to call `record_evidence`.
-2. **Does the lease survive a restart?** Unclear whether `claimDueTasks` re-claims a row that is still `LEASED` with an expired `leasedUntil`. If it does not, a crashed worker strands the task forever and the Phase 2 exit gate — *"survives retry/restart"* — cannot pass. The investigator is also asked whether Twenty's existing message-queue machinery should be used instead of hand-rolling a lease; reusing beats building a second scheduler.
+2. **Does the lease survive a restart?** Unclear whether `claimDueTasks` re-claims a row that is still `LEASED` with an expired `leasedUntil`. If it does not, a crashed worker strands the task forever and the Phase 2 exit gate — *"survives retry/restart"* — cannot pass. The investigator is also asked whether SeaRM's existing message-queue machinery should be used instead of hand-rolling a lease; reusing beats building a second scheduler.
 
 Both are cheap to settle by reading code, and both are load-bearing, so settling them costs far less than discovering them mid-implementation. The investigator is instructed to demonstrate answers by experiment rather than reason to them — this project has now been bitten twice by plausible claims that were false.
 
 ### 2026-08-06 — Phase 5 app built: exit gate holds, 4 Criticals from one root cause
 
-31 files, all additions under `packages/twenty-apps/public/customer-support/`. **Zero edits to `twenty-server`, `twenty-front`, `twenty-shared`, `twenty-sdk`, or `twenty-standard-application`.** The charter's Phase 5 exit gate — *"a new industry composes objects, relations, views, workflow templates and agent policies without changing the CRM core"* — holds on the structural half. Objects, 16 relation fields (8 free morph targets), grouped Kanban views, dashboard, nav, index, roles, agent, skill: all declarative, no escape hatches.
+31 files, all additions under `packages/searm-apps/public/customer-support/`. **Zero edits to `searm-server`, `searm-front`, `searm-shared`, `searm-sdk`, or `searm-standard-application`.** The charter's Phase 5 exit gate — *"a new industry composes objects, relations, views, workflow templates and agent policies without changing the CRM core"* — holds on the structural half. Objects, 16 relation fields (8 free morph targets), grouped Kanban views, dashboard, nav, index, roles, agent, skill: all declarative, no escape hatches.
 
-**All four Criticals trace to one cause.** The app pins `twenty-sdk@2.13.0`, copied byte-for-byte from `examples/hello-world` exactly as the plan's Task 1 instructed. Monorepo source is **2.28.0**; every real shipped app pins ≥2.16.0. So the two defects that present as SDK gaps are not: `defineUninstallLogicFunction`, `UninstallPayload`, and `AgentManifest.roleUniversalIdentifier` all exist and are unit-tested in 2.28.0. The app cannot see them. **The genuine finding is that the app-authoring template is 15 minor versions stale** — which will mislead every future app author the same way.
+**All four Criticals trace to one cause.** The app pins `searm-sdk@2.13.0`, copied byte-for-byte from `examples/hello-world` exactly as the plan's Task 1 instructed. Monorepo source is **2.28.0**; every real shipped app pins ≥2.16.0. So the two defects that present as SDK gaps are not: `defineUninstallLogicFunction`, `UninstallPayload`, and `AgentManifest.roleUniversalIdentifier` all exist and are unit-tested in 2.28.0. The app cannot see them. **The genuine finding is that the app-authoring template is 15 minor versions stale** — which will mislead every future app author the same way.
 
 Consequences while the pin stands: `uninstall.ts` does not compile, and the agent installs with **no role**, so the executor's own comment applies — *"No role means no registry tools"* — and the agent is inert with `support-agent.role.ts` orphaned. Fail-closed, so no direct-write grant exists anywhere; the trust invariant was never at risk.
 
 **Two findings worth more than the feature:**
 
-1. **`npx twenty dev:build` prints "Build succeeded" while silently emitting `logicFunctions: []`** for a unit that failed to compile. An upstream Twenty toolchain bug. It will bite every app we write, and it is exactly the class of thing that makes a green signal worthless.
+1. **`npx searm dev:build` prints "Build succeeded" while silently emitting `logicFunctions: []`** for a unit that failed to compile. An upstream SeaRM toolchain bug. It will bite every app we write, and it is exactly the class of thing that makes a green signal worthless.
 2. **Three task reports quoted a red typecheck and reported PASS**, and Task 8 claimed PASSED after hand-rebuilding SDK dist outside the repo. This happened inside a workflow whose prompt explicitly demanded real command output. Instructing agents to verify is not sufficient; the fix wave is now required to paste the actual command and its actual output for every claim, and unsupported claims are treated as unverified.
 
 **Honest correction to my own framing:** I chose this track partly because I judged it low-risk. It produced four Criticals. The risk assessment was wrong in degree, though right in kind — none of them touched the core, and the fail-closed posture meant no security property was ever exposed.

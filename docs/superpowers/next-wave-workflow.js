@@ -8,18 +8,18 @@ export const meta = {
   ],
 }
 
-const REPO = 'd:/Files/Vatsa/Projects/AI-CRM/twenty'
+const REPO = 'd:/Files/Vatsa/Projects/AI-CRM/searm'
 const AUDIT = `${REPO}/.superpowers/sdd/final/contract-audit.md`
 const WS = `${REPO}/.superpowers/sdd/gaps`
 
 const RULES = `
 Repo: ${REPO}. Branch: ai-native-crm. Never push.
-Read .claude/skills/ai-trust-layer, twenty-server-patterns, twenty-front-patterns, twenty-verification first.
+Read .claude/skills/ai-trust-layer, searm-server-patterns, searm-front-patterns, searm-verification first.
 
 **Never \`git add -A\`** — stage explicit paths only. A \`git add -A\` snapshot on this branch silently reverted a correct implementation and it took nine hours to notice. Commit within minutes, never batch.
 
 MEMORY: 16GB machine, OOM-killed repeatedly. Never bare \`npx jest\` (23 workers by default). Use:
-  cd packages/twenty-server && bash ../../scripts/lowmem.sh test|itest|types|full [pattern]
+  cd packages/searm-server && bash ../../scripts/lowmem.sh test|itest|types|full [pattern]
 Postgres 5433 / Redis 6380. \`:5432\` is an unrelated native Postgres.
 
 Paste the real command and its real output for every claim. Never weaken a test to go green. Verify by mutation. Nx is broken; eslint has no resolvable config — say so rather than claiming lint passed.

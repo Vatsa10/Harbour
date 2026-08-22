@@ -10,14 +10,14 @@ Written against: OASIS SAML 2.0 (core, bindings, profiles), OpenID Connect Core 
 
 The enterprise audit says **DEFER**, and reasons that SSO can be "left in place, dark and unreachable, at essentially zero maintenance cost."
 
-**The reasoning does not survive the relicensing goal.** Twenty's SSO is not free to leave in place, because 24 of its server files and 26 of its front files carry `@license Enterprise` and therefore cannot ship in an AGPL fork at all. Measured, 2026-08-17 at HEAD `a0320502fe`:
+**The reasoning does not survive the relicensing goal.** SeaRM's SSO is not free to leave in place, because 24 of its server files and 26 of its front files carry `@license Enterprise` and therefore cannot ship in an AGPL fork at all. Measured, 2026-08-17 at HEAD `a0320502fe`:
 
 ```
-$ grep -rl "@license Enterprise" twenty-server/src/engine/core-modules/{auth,sso} | wc -l
+$ grep -rl "@license Enterprise" searm-server/src/engine/core-modules/{auth,sso} | wc -l
 24
-$ grep -rl "@license Enterprise" twenty-front/src/modules/{settings/security,auth} | wc -l
+$ grep -rl "@license Enterprise" searm-front/src/modules/{settings/security,auth} | wc -l
 26
-$ grep -rl "@license Enterprise" twenty-front/src/pages/settings/security | wc -l
+$ grep -rl "@license Enterprise" searm-front/src/pages/settings/security | wc -l
 1
 ```
 
@@ -99,7 +99,7 @@ Front Stage 1: keep the AGPL sign-in-up shell; delete the seven enterprise `SSO/
 
 ### 2.4 Stage 1 gate
 
-1. `grep -rl "@license Enterprise" twenty-server/src/engine/core-modules/{auth,sso} | wc -l` → 1 (`enterprise-features-enabled.guard.ts`, pending 4.1)
+1. `grep -rl "@license Enterprise" searm-server/src/engine/core-modules/{auth,sso} | wc -l` → 1 (`enterprise-features-enabled.guard.ts`, pending 4.1)
 2. `bash ../../scripts/lowmem.sh types` clean
 3. `get-auth-providers-by-workspace.util.spec.ts` green, **unedited** — `git diff --stat` on that path shows nothing
 4. Server boots; `/healthz` ok; zero `Nest can't resolve`
@@ -112,7 +112,7 @@ Front Stage 1: keep the AGPL sign-in-up shell; delete the seven enterprise `SSO/
 
 This section is the strongest argument in the document, so it comes before the design.
 
-**Do not hand-roll any of the protocol.** Not the XML signature verification, not the JWT validation, not the nonce handling. The dependencies are already in `packages/twenty-server/package.json` and already installed:
+**Do not hand-roll any of the protocol.** Not the XML signature verification, not the JWT validation, not the nonce handling. The dependencies are already in `packages/searm-server/package.json` and already installed:
 
 | Concern | Library | Version present | What it does |
 | --- | --- | --- | --- |
@@ -213,7 +213,7 @@ Both protocols reduce to the same five steps, and only steps 2 and 3 differ.
 
 ### 5.1 What carries state across the round trip
 
-Twenty's Google strategy stuffs a JSON blob into the OAuth `state` parameter (`google.auth.strategy.ts:52-66`) and parses it back on return. Match that pattern for OIDC — it is the AGPL convention here and the front end already builds these params.
+SeaRM's Google strategy stuffs a JSON blob into the OAuth `state` parameter (`google.auth.strategy.ts:52-66`) and parses it back on return. Match that pattern for OIDC — it is the AGPL convention here and the front end already builds these params.
 
 SAML has no `state`; it has `RelayState`, an opaque IdP-echoed string with a 80-byte practical limit. **Do not put a JSON blob in it.** Store the pre-auth context (`identityProviderId`, `returnToPath`, `workspaceId`, the PKCE/request id) in Redis under a random 128-bit key with a 10-minute TTL, and put only that key in `RelayState`. This also gives replay protection for free: the key is deleted on first use, so a captured `RelayState` cannot be reused.
 
@@ -286,7 +286,7 @@ So JIT is a per-IdP boolean, `jitProvisioningEnabled`, default **`true`**, with 
 - `true` — new users are created and added. The normal enterprise expectation.
 - `false` — SSO authenticates only users who are already members. Unknown email → 403 with a message naming the workspace admin. Useful when the directory is broader than the intended user set.
 
-Twenty's existing `approvedAccessDomains` relation on `WorkspaceEntity` composes on top: when it is populated, the SSO email's domain must also match. Reuse it rather than adding a second domain allow-list.
+SeaRM's existing `approvedAccessDomains` relation on `WorkspaceEntity` composes on top: when it is populated, the SSO email's domain must also match. Reuse it rather than adding a second domain allow-list.
 
 ### 6.4 Attribute mapping
 
@@ -307,7 +307,7 @@ On subsequent logins, name and picture are **not** overwritten from the assertio
 
 ## 7. Composition with existing auth
 
-Twenty's AGPL auth already models multiple providers, and SSO slots into the existing shape without new concepts:
+SeaRM's AGPL auth already models multiple providers, and SSO slots into the existing shape without new concepts:
 
 - `AuthProviderEnum` (`workspace/types/workspace.type.ts`) already has `SSO = 'sso'`, alongside `Google`, `Microsoft`, `Password`, `Impersonation`. Nothing to add.
 - `getAuthProvidersByWorkspace()` already returns `sso: [...]` next to the three booleans. Nothing to add.

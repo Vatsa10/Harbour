@@ -17,10 +17,10 @@ jobs:
       files: |
         package.json
         yarn.lock
-        packages/twenty-front-component-renderer/**
-        packages/twenty-sdk/**
-        packages/twenty-shared/**
-        !packages/twenty-sdk/package.json
+        packages/searm-front-component-renderer/**
+        packages/searm-sdk/**
+        packages/searm-shared/**
+        !packages/searm-sdk/package.json
   renderer-task:
     needs: changed-files-check
     if: needs.changed-files-check.outputs.any_changed == 'true'
@@ -37,7 +37,7 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/yarn-install
       - name: Run ${{ matrix.task }}
-        run: npx nx ${{ matrix.task }} twenty-front-component-renderer
+        run: npx nx ${{ matrix.task }} searm-front-component-renderer
   renderer-sb-build:
     needs: changed-files-check
     if: needs.changed-files-check.outputs.any_changed == 'true'
@@ -51,12 +51,12 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/yarn-install
       - name: Build storybook
-        run: npx nx storybook:build twenty-front-component-renderer
+        run: npx nx storybook:build searm-front-component-renderer
       - name: Upload storybook build
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: storybook-twenty-front-component-renderer
-          path: packages/twenty-front-component-renderer/storybook-static
+          name: storybook-searm-front-component-renderer
+          path: packages/searm-front-component-renderer/storybook-static
           retention-days: 1
   renderer-sb-test:
     timeout-minutes: 30
@@ -72,12 +72,12 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/yarn-install
       - name: Build dependencies
-        run: npx nx build twenty-sdk
+        run: npx nx build searm-sdk
       - name: Download storybook build
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: storybook-twenty-front-component-renderer
-          path: packages/twenty-front-component-renderer/storybook-static
+          name: storybook-searm-front-component-renderer
+          path: packages/searm-front-component-renderer/storybook-static
       - name: Resolve Playwright version
         id: playwright-version
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
@@ -90,13 +90,13 @@ jobs:
       - name: Install Playwright
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: |
-          cd packages/twenty-front-component-renderer
+          cd packages/searm-front-component-renderer
           npx playwright install chromium
       - name: Serve storybook & run tests
         run: |
-          npx http-server packages/twenty-front-component-renderer/storybook-static --port 6008 --silent &
+          npx http-server packages/searm-front-component-renderer/storybook-static --port 6008 --silent &
           timeout 30 bash -c 'until curl -sf http://localhost:6008 > /dev/null 2>&1; do sleep 1; done'
-          npx nx storybook:test twenty-front-component-renderer
+          npx nx storybook:test searm-front-component-renderer
   ci-front-component-renderer-status-check:
     if: always() && !cancelled()
     timeout-minutes: 5
