@@ -200,10 +200,15 @@ export class WorkflowValidationWorkspaceService {
         return step;
       }
 
+      // Settings are widened to a plain record before spreading: spreading the
+      // union member directly makes TypeScript distribute across every step
+      // type, which exceeds its complexity limit once a new action type exists.
+      const currentSettings = step.settings as Record<string, unknown>;
+
       return {
         ...step,
-        settings: { ...step.settings, outputSchema: computedSchema },
-      };
+        settings: { ...currentSettings, outputSchema: computedSchema },
+      } as typeof step;
     } catch {
       // Output schema enrichment is best-effort: if it cannot be computed,
       // validation still runs against the step's existing settings rather

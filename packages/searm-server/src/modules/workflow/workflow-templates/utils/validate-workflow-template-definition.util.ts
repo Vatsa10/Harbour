@@ -80,5 +80,34 @@ export const validateWorkflowTemplateDefinition = (
         );
       }
     }
+
+    // A CREATE_AGENT_TASK step with no target has nothing to schedule
+    // research on — it would either throw at runtime on every execution or,
+    // worse, resolve to `undefined` and schedule against a garbage record.
+    // Refuse the install the same way an agentId-less AI_AGENT step is
+    // refused above. Budget is deliberately NOT required here: an omitted
+    // budget already resolves to AgentTaskService's bounded
+    // AGENT_TASK_DEFAULT_BUDGET, so there is no unbounded-run case for this
+    // check to prevent.
+    if (step.type === WorkflowActionType.CREATE_AGENT_TASK) {
+      const input = isPlainObject(step.settings) ? step.settings.input : null;
+      const objectNameSingular = isPlainObject(input)
+        ? (input as Record<string, unknown>).objectNameSingular
+        : undefined;
+      const recordId = isPlainObject(input)
+        ? (input as Record<string, unknown>).recordId
+        : undefined;
+
+      if (
+        typeof objectNameSingular !== 'string' ||
+        objectNameSingular.trim().length === 0 ||
+        typeof recordId !== 'string' ||
+        recordId.trim().length === 0
+      ) {
+        throw new InvalidWorkflowDefinitionError(
+          `Workflow step at index ${index} is a CREATE_AGENT_TASK step missing objectNameSingular or recordId — it would have nothing to schedule research on.`,
+        );
+      }
+    }
   });
 };

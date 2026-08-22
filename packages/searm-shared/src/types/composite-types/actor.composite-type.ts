@@ -64,5 +64,10 @@ export type ActorMetadata = {
   name: string;
   context: {
     provider?: ConnectedAccountProvider;
+    // Set when this actor metadata was stamped by applying an approved
+    // proposal, so the write's principal traces back to the proposal that
+    // caused it and the human who approved it. See ProposalExecutionService.
+    proposalId?: string;
+    approvedByWorkspaceMemberId?: string | null;
   };
 };

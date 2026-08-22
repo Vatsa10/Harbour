@@ -18,4 +18,5 @@ export enum WorkflowActionType {
   ITERATOR = 'ITERATOR',
   EMPTY = 'EMPTY',
   DELAY = 'DELAY',
+  CREATE_AGENT_TASK = 'CREATE_AGENT_TASK',
 }

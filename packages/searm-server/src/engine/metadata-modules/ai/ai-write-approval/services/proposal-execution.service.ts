@@ -169,6 +169,7 @@ export class ProposalExecutionService {
         selectedItemIds,
         workspaceId,
         approverUserWorkspaceId,
+        proposalCreatedByActor: proposal.createdByActor,
       });
     } catch (error) {
       // Never leave a proposal stuck in APPLYING because of an unexpected throw.
@@ -186,12 +187,14 @@ export class ProposalExecutionService {
     selectedItemIds: string[];
     workspaceId: string;
     approverUserWorkspaceId: string;
+    proposalCreatedByActor: ActorMetadata | null;
   }): Promise<ApprovalResult> {
     const {
       proposalId,
       selectedItemIds,
       workspaceId,
       approverUserWorkspaceId,
+      proposalCreatedByActor,
     } = params;
 
     const items = await this.proposalItemRepository.find({
@@ -204,6 +207,8 @@ export class ProposalExecutionService {
     const approver = await this.buildApproverContext(
       workspaceId,
       approverUserWorkspaceId,
+      proposalId,
+      proposalCreatedByActor,
     );
 
     // Scope first, conflict second. hasBaselineConflict reports an empty read
@@ -448,10 +453,15 @@ export class ProposalExecutionService {
   }
 
   // Runs as the approver so object and field permissions are enforced by the
-  // ordinary ORM path, and so createdBy/updatedBy names the human who approved.
+  // ordinary ORM path. Attribution, though, names the AI that proposed the
+  // change - the approver is recorded in context. Charter Principal contract:
+  // an AI-originated write must never be indistinguishable from a hand edit,
+  // even once a human has approved it.
   private async buildApproverContext(
     workspaceId: string,
     approverUserWorkspaceId: string,
+    proposalId: string,
+    proposalCreatedByActor: ActorMetadata | null,
   ): Promise<ApproverContext> {
     const userWorkspace = await this.userWorkspaceRepository.findOne({
       where: { id: approverUserWorkspaceId, workspaceId },
@@ -502,10 +512,20 @@ export class ProposalExecutionService {
       }),
       rolePermissionConfig: { unionOf: [roleId] },
       actorMetadata: {
-        source: FieldActorSource.MANUAL,
-        workspaceMemberId,
-        name: [user.firstName, user.lastName].filter(Boolean).join(' '),
-        context: {},
+        // No proposer on the proposal means we cannot name an author. That is
+        // SYSTEM, never MANUAL: attributing it to the approving human would
+        // assert authorship nobody actually claimed.
+        source: isDefined(proposalCreatedByActor)
+          ? proposalCreatedByActor.source
+          : FieldActorSource.SYSTEM,
+        workspaceMemberId:
+          proposalCreatedByActor?.workspaceMemberId ?? workspaceMemberId,
+        name: proposalCreatedByActor?.name ?? '',
+        context: {
+          ...(proposalCreatedByActor?.context ?? {}),
+          proposalId,
+          approvedByWorkspaceMemberId: workspaceMemberId,
+        },
       },
       workspaceId,
       userId: user.id,

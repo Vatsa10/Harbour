@@ -87,6 +87,16 @@ describe('ProposalExecutionService', () => {
       workspaceId: 'workspace-1',
       status: 'PENDING',
       expiresAt: new Date(Date.now() + 86400000),
+      // Proposals are AI-originated by construction (ProposalGateService
+      // stamps createdByActor from the tool-call/agent context). The default
+      // fixture reflects that so tests don't accidentally exercise the
+      // "no creator recorded" fallback unless they opt into it.
+      createdByActor: {
+        source: 'AGENT',
+        workspaceMemberId: null,
+        name: 'Sales Agent',
+        context: {},
+      },
     });
     // Every conditional UPDATE claims its row unless a test says otherwise.
     proposalRepository.update.mockResolvedValue({ affected: 1 });
@@ -246,8 +256,12 @@ describe('ProposalExecutionService', () => {
     expect(result.aborted).toBe(false);
   });
 
-  // I4: the record must name the approver, not SYSTEM.
-  it('should apply as the approver, with the approver as the audit actor', async () => {
+  // Principal contract: the write is executed as the approver (auth/roles),
+  // but stamped with the actor that PROPOSED it, never with the approver's
+  // own identity — an approved AI change must never masquerade as MANUAL.
+  // Both parties stay traceable: the proposer via source/name, the approver
+  // via context.approvedByWorkspaceMemberId.
+  it('should stamp the write with the AI proposer, carrying the approver in context, not the approver as the actor', async () => {
     proposalItemRepository.find.mockResolvedValue([buildItem()]);
 
     await approve(['item-1']);
@@ -256,17 +270,26 @@ describe('ProposalExecutionService', () => {
       expect.objectContaining({
         rolePermissionConfig: { unionOf: ['role-1'] },
         updatedBy: expect.objectContaining({
-          workspaceMemberId: 'workspace-member-1',
-          name: 'Jane Austen',
+          source: 'AGENT',
+          name: 'Sales Agent',
+          context: expect.objectContaining({
+            proposalId: 'proposal-1',
+            approvedByWorkspaceMemberId: 'workspace-member-1',
+          }),
         }),
         authContext: expect.objectContaining({
           userWorkspaceId: 'user-workspace-1',
         }),
       }),
     );
+    expect(updateRecordService.execute).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        updatedBy: expect.objectContaining({ source: 'MANUAL' }),
+      }),
+    );
   });
 
-  it('should pass the approver as createdBy on a create', async () => {
+  it('should pass the AI proposer as createdBy on a create, with the approver recorded in context', async () => {
     createRecordService.execute.mockResolvedValue({
       success: true,
       message: 'created',
@@ -285,13 +308,54 @@ describe('ProposalExecutionService', () => {
 
     expect(createRecordService.execute).toHaveBeenCalledWith(
       expect.objectContaining({
-        createdBy: expect.objectContaining({ name: 'Jane Austen' }),
+        createdBy: expect.objectContaining({
+          source: 'AGENT',
+          name: 'Sales Agent',
+          context: expect.objectContaining({
+            proposalId: 'proposal-1',
+            approvedByWorkspaceMemberId: 'workspace-member-1',
+          }),
+        }),
       }),
     );
     expect(itemStatusWrite('item-1')).toMatchObject({
       status: 'APPLIED',
       resultRecordId: 'new-record-1',
     });
+  });
+
+  // If a write genuinely has no recorded principal, it must be attributable
+  // as such (SYSTEM, with an explicit note) rather than silently defaulting
+  // to MANUAL, which would make an unattributed AI write indistinguishable
+  // from a hand-typed one.
+  it('should attribute the write to SYSTEM, never MANUAL, when the proposal recorded no creator actor', async () => {
+    proposalRepository.findOne.mockResolvedValue({
+      id: 'proposal-1',
+      workspaceId: 'workspace-1',
+      status: 'PENDING',
+      expiresAt: new Date(Date.now() + 86400000),
+      createdByActor: null,
+    });
+    proposalItemRepository.find.mockResolvedValue([buildItem()]);
+
+    await approve(['item-1']);
+
+    expect(updateRecordService.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        updatedBy: expect.objectContaining({
+          source: 'SYSTEM',
+          context: expect.objectContaining({
+            proposalId: 'proposal-1',
+            approvedByWorkspaceMemberId: 'workspace-member-1',
+          }),
+        }),
+      }),
+    );
+    expect(updateRecordService.execute).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        updatedBy: expect.objectContaining({ source: 'MANUAL' }),
+      }),
+    );
   });
 
   // C3: each bulk envelope must replay through its own service, unmerged.
@@ -713,7 +777,7 @@ describe('ProposalExecutionService', () => {
           objectRecord: { personId: 'person-1' },
           rolePermissionConfig: { unionOf: ['role-1'] },
           isHumanApproved: true,
-          updatedBy: expect.objectContaining({ name: 'Jane Austen' }),
+          updatedBy: expect.objectContaining({ name: 'Sales Agent' }),
         }),
       );
       expect(globalWorkspaceOrmManager.getRepository).not.toHaveBeenCalled();

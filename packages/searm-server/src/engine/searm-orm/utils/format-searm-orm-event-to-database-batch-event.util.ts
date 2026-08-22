@@ -21,6 +21,7 @@ import {
   computeUpdatedFieldsFromDiff,
   objectRecordChangedValues,
 } from 'src/engine/core-modules/event-emitter/utils/object-record-changed-values';
+import { deriveActorAttributionFromRecord } from 'src/engine/searm-orm/utils/derive-actor-attribution-from-record.util';
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import type { FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
@@ -80,7 +81,10 @@ export const formatSearmOrmEventToDatabaseBatchEvent = <
           event.userWorkspaceId = authContext?.userWorkspaceId;
           event.workspaceMemberId = authContext?.workspaceMemberId;
           event.recordId = recordAfter.id;
-          event.properties = { after: recordAfter };
+          event.properties = {
+            after: recordAfter,
+            ...deriveActorAttributionFromRecord(recordAfter),
+          };
 
           return event;
         }) ?? [];
@@ -151,6 +155,7 @@ export const formatSearmOrmEventToDatabaseBatchEvent = <
               after: recordAfter,
               updatedFields,
               diff,
+              ...deriveActorAttributionFromRecord(recordAfter),
             },
           } satisfies
             | ObjectRecordUpdateEvent<T>
@@ -196,7 +201,10 @@ export const formatSearmOrmEventToDatabaseBatchEvent = <
         event.userWorkspaceId = authContext?.userWorkspaceId;
         event.workspaceMemberId = authContext?.workspaceMemberId;
         event.recordId = recordBefore.id;
-        event.properties = { before: recordBefore };
+        event.properties = {
+          before: recordBefore,
+          ...deriveActorAttributionFromRecord(recordBefore),
+        };
 
         return event;
       });
@@ -246,6 +254,7 @@ export const formatSearmOrmEventToDatabaseBatchEvent = <
           }),
           ...(diff && { diff }),
           ...(updatedFields && { updatedFields }),
+          ...deriveActorAttributionFromRecord(recordAfter),
         };
 
         return event;

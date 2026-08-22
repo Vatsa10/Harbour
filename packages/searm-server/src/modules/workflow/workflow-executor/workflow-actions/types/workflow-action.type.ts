@@ -2,6 +2,7 @@ import { WorkflowActionType } from 'searm-shared/workflow';
 
 import { type WorkflowAiAgentActionSettings } from 'src/modules/workflow/workflow-executor/workflow-actions/ai-agent/types/workflow-ai-agent-action-settings.type';
 import { type WorkflowCodeActionSettings } from 'src/modules/workflow/workflow-executor/workflow-actions/code/types/workflow-code-action-settings.type';
+import { type WorkflowCreateAgentTaskActionSettings } from 'src/modules/workflow/workflow-executor/workflow-actions/create-agent-task/types/workflow-create-agent-task-action-settings.type';
 import { type WorkflowCreateCalendarEventActionSettings } from 'src/modules/workflow/workflow-executor/workflow-actions/create-calendar-event/types/workflow-create-calendar-event-action-settings.type';
 import { type WorkflowDelayActionSettings } from 'src/modules/workflow/workflow-executor/workflow-actions/delay/types/workflow-delay-action-settings.type';
 import { type WorkflowFilterActionSettings } from 'src/modules/workflow/workflow-executor/workflow-actions/filter/types/workflow-filter-action-settings.type';
@@ -128,6 +129,11 @@ export type WorkflowDelayAction = BaseWorkflowAction & {
   settings: WorkflowDelayActionSettings;
 };
 
+export type WorkflowCreateAgentTaskAction = BaseWorkflowAction & {
+  type: WorkflowActionType.CREATE_AGENT_TASK;
+  settings: WorkflowCreateAgentTaskActionSettings;
+};
+
 export type WorkflowAction =
   | WorkflowCodeAction
   | WorkflowLogicFunctionAction
@@ -147,4 +153,5 @@ export type WorkflowAction =
   | WorkflowAiAgentAction
   | WorkflowIteratorAction
   | WorkflowEmptyAction
-  | WorkflowDelayAction;
+  | WorkflowDelayAction
+  | WorkflowCreateAgentTaskAction;
