@@ -15,11 +15,7 @@ import { mockedPublicWorkspaceDataBySubdomain } from '~/testing/mock-data/public
 import { mockedUserData } from '~/testing/mock-data/users';
 
 import { GET_PUBLIC_WORKSPACE_DATA_BY_DOMAIN } from '@/auth/graphql/queries/getPublicWorkspaceDataByDomain';
-import { BILLING_PORTAL_SESSION } from '@/settings/billing/graphql/queries/billingPortalSession';
-import { GET_RESOURCE_CREDIT_USAGE } from '@/settings/billing/graphql/queries/getResourceCreditUsage';
-import { LIST_PLANS } from '@/settings/billing/graphql/queries/listPlans';
 import { GET_ROLES } from '@/settings/roles/graphql/queries/getRolesQuery';
-import { mockBillingPlans } from '~/testing/mock-data/billing-plans';
 import { mockedCompanyRecords } from '~/testing/mock-data/generated/data/companies/mock-companies-data';
 import { mockedTaskRecords } from '~/testing/mock-data/generated/data/tasks/mock-tasks-data';
 import { mockedStandardObjectMetadataQueryResult } from '~/testing/mock-data/generated/metadata/objects/mock-objects-metadata';
@@ -522,38 +518,6 @@ export const graphqlMocks = {
       return HttpResponse.json({
         data: {
           getRoles: mockedRoles,
-        },
-      });
-    }),
-    graphql.query(getOperationName(LIST_PLANS) ?? '', () => {
-      return HttpResponse.json({
-        data: mockBillingPlans,
-      });
-    }),
-    graphql.query(getOperationName(GET_RESOURCE_CREDIT_USAGE) ?? '', () => {
-      return HttpResponse.json({
-        data: {
-          getResourceCreditUsage: [
-            {
-              __typename: 'BillingResourceCreditUsage',
-              productKey: 'RESOURCE_CREDIT',
-              usedCredits: 1000,
-              grantedCredits: 500000,
-              rolloverCredits: 0,
-              totalGrantedCredits: 500000,
-              unitPriceCents: 1,
-            },
-          ],
-        },
-      });
-    }),
-    graphql.query(getOperationName(BILLING_PORTAL_SESSION) ?? '', () => {
-      return HttpResponse.json({
-        data: {
-          billingPortalSession: {
-            __typename: 'BillingSession',
-            url: 'https://billing.stripe.com/p/mock-portal-session',
-          },
         },
       });
     }),

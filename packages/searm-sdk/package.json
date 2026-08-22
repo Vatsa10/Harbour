@@ -24,27 +24,27 @@
   ],
   "exports": {
     "./billing": {
-      "types": "./dist/billing/index.d.ts",
+      "types": "./dist/sdk/billing/index.d.ts",
       "import": "./dist/billing/index.mjs",
       "require": "./dist/billing/index.cjs"
     },
     "./define": {
-      "types": "./dist/define/index.d.ts",
+      "types": "./dist/sdk/define/index.d.ts",
       "import": "./dist/define/index.mjs",
       "require": "./dist/define/index.cjs"
     },
     "./front-component": {
-      "types": "./dist/front-component/index.d.ts",
+      "types": "./dist/sdk/front-component/index.d.ts",
       "import": "./dist/front-component/index.mjs",
       "require": "./dist/front-component/index.cjs"
     },
     "./logic-function": {
-      "types": "./dist/logic-function/index.d.ts",
+      "types": "./dist/sdk/logic-function/index.d.ts",
       "import": "./dist/logic-function/index.mjs",
       "require": "./dist/logic-function/index.cjs"
     },
     "./utils": {
-      "types": "./dist/utils/index.d.ts",
+      "types": "./dist/sdk/utils/index.d.ts",
       "import": "./dist/utils/index.mjs",
       "require": "./dist/utils/index.cjs"
     },
@@ -80,10 +80,10 @@
     "preact": "^10.28.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "searm-client-sdk": "workspace:*",
     "semver": "7.6.3",
     "sharp": "^0.34.5",
     "tinyglobby": "^0.2.15",
-    "searm-client-sdk": "workspace:*",
     "typescript": "^5.9.3",
     "uuid": "^13.0.2"
   },
@@ -97,11 +97,11 @@
     "@vitest/coverage-v8": "^4.0.18",
     "prettier": "^3.1.1",
     "rollup-plugin-dts": "^6.4.1",
+    "searm-shared": "workspace:*",
+    "searm-ui": "workspace:*",
     "ts-morph": "^25.0.0",
     "tsc-alias": "^1.8.16",
     "tsx": "^4.7.0",
-    "searm-shared": "workspace:*",
-    "searm-ui": "workspace:*",
     "vite": "^8.0.0",
     "vite-plugin-dts": "^4.5.4",
     "wait-on": "^9.0.10"

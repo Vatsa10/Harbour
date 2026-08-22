@@ -1,10 +1,8 @@
-import { verifyEmailRedirectPathState } from '@/app/states/verifyEmailRedirectPathState';
 import { ONBOARDING_PATHS } from '@/auth/constants/OnboardingPaths';
 import { ONGOING_USER_CREATION_PATHS } from '@/auth/constants/OngoingUserCreationPaths';
 import { useIsLogged } from '@/auth/hooks/useIsLogged';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { returnToPathState } from '@/auth/states/returnToPathState';
-import { billingState } from '@/client-config/states/billingState';
 import { useIsCurrentLocationOnAWorkspace } from '@/domain-manager/hooks/useIsCurrentLocationOnAWorkspace';
 import { isMinimalMetadataReadyState } from '@/metadata-store/states/isMinimalMetadataReadyState';
 import { useDefaultHomePagePath } from '@/navigation/hooks/useDefaultHomePagePath';
@@ -44,8 +42,6 @@ export const usePageChangeEffectNavigateLocation = () => {
   );
   const { defaultHomePagePath } = useDefaultHomePagePath();
   const location = useLocation();
-  const billing = useAtomStateValue(billingState);
-  const isBillingEnabled = billing?.isBillingEnabled ?? false;
 
   const someMatchingLocationOf = (appPaths: AppPath[]): boolean =>
     appPaths.some((appPath) => isMatchingLocation(location, appPath));
@@ -72,10 +68,6 @@ export const usePageChangeEffectNavigateLocation = () => {
       skip: !isOnPageLayoutPage || !isDefined(pageLayoutId),
     },
   );
-  const verifyEmailRedirectPath = useAtomStateValue(
-    verifyEmailRedirectPathState,
-  );
-
   const returnToPath = useAtomStateValue(returnToPathState);
   const resolvedReturnToPath = isNonEmptyString(returnToPath)
     ? returnToPath
@@ -100,23 +92,6 @@ export const usePageChangeEffectNavigateLocation = () => {
     ])
   ) {
     return AppPath.SignInUp;
-  }
-
-  if (
-    onboardingStatus === OnboardingStatus.PLAN_REQUIRED &&
-    !someMatchingLocationOf([
-      AppPath.PlanRequired,
-      AppPath.PlanRequiredSuccess,
-      AppPath.BookCall,
-    ])
-  ) {
-    if (
-      isMatchingLocation(location, AppPath.VerifyEmail) &&
-      isDefined(verifyEmailRedirectPath)
-    ) {
-      return verifyEmailRedirectPath;
-    }
-    return AppPath.PlanRequired;
   }
 
   if (isWorkspaceSuspended) {
@@ -162,15 +137,6 @@ export const usePageChangeEffectNavigateLocation = () => {
     !isMatchingLocation(location, AppPath.InviteTeam)
   ) {
     return AppPath.InviteTeam;
-  }
-
-  if (isBillingEnabled && onboardingStatus === OnboardingStatus.COMPLETED) {
-    if (isMatchingLocation(location, AppPath.InviteTeam)) {
-      return AppPath.PlanRequired;
-    }
-    if (isMatchingLocation(location, AppPath.PlanRequired)) {
-      return;
-    }
   }
 
   if (

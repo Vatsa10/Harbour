@@ -10,6 +10,4 @@ export const ONBOARDING_TRANSITION_PATHS = [
   AppPath.SyncEmails,
   AppPath.InstallApps,
   AppPath.InviteTeam,
-  AppPath.PlanRequired,
-  AppPath.PlanRequiredSuccess,
 ];

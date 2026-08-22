@@ -1,5 +1,5 @@
-import { SettingsBillingLabelValueItem } from '@/settings/billing/components/internal/SettingsBillingLabelValueItem';
-import { SubscriptionInfoContainer } from '@/settings/billing/components/SubscriptionInfoContainer';
+import { UsageLabelValueItem } from '@/settings/usage/components/UsageLabelValueItem';
+import { UsageInfoContainer } from '@/settings/usage/components/UsageInfoContainer';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { UsageBreakdownPieSection } from '@/settings/usage/components/UsageBreakdownPieSection';
 import { UsageDailyChartSection } from '@/settings/usage/components/UsageDailyChartSection';
@@ -66,12 +66,12 @@ export const SettingsAiUsageUserDetail = () => {
       <SettingsPageContainer>
         {!hasAnyData && (
           <Section>
-            <SubscriptionInfoContainer>
-              <SettingsBillingLabelValueItem
+            <UsageInfoContainer>
+              <UsageLabelValueItem
                 label={t`No usage data`}
                 value={t`No AI consumption recorded for this user.`}
               />
-            </SubscriptionInfoContainer>
+            </UsageInfoContainer>
           </Section>
         )}
 

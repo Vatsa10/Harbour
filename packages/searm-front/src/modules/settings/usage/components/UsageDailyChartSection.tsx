@@ -1,7 +1,7 @@
 import { GraphWidgetLineChart } from '@/page-layout/widgets/graph/graph-widget-line-chart/components/GraphWidgetLineChart';
 import { type LineChartSeriesWithColor } from '@/page-layout/widgets/graph/graph-widget-line-chart/types/LineChartSeriesWithColor';
 import { WidgetComponentInstanceContext } from '@/page-layout/widgets/states/contexts/WidgetComponentInstanceContext';
-import { SubscriptionInfoContainer } from '@/settings/billing/components/SubscriptionInfoContainer';
+import { UsageInfoContainer } from '@/settings/usage/components/UsageInfoContainer';
 import { UsageSectionSkeleton } from '@/settings/usage/components/UsageSectionSkeleton';
 import { useUsageAnalyticsData } from '@/settings/usage/hooks/useUsageAnalyticsData';
 import { useUsageValueFormatter } from '@/settings/usage/hooks/useUsageValueFormatter';
@@ -88,7 +88,7 @@ export const UsageDailyChartSection = ({
           />
         }
       />
-      <SubscriptionInfoContainer>
+      <UsageInfoContainer>
         <StyledLineChartContainer>
           <WidgetComponentInstanceContext.Provider
             value={{ instanceId: `${chartId}-line-chart` }}
@@ -104,7 +104,7 @@ export const UsageDailyChartSection = ({
             />
           </WidgetComponentInstanceContext.Provider>
         </StyledLineChartContainer>
-      </SubscriptionInfoContainer>
+      </UsageInfoContainer>
     </Section>
   );
 };

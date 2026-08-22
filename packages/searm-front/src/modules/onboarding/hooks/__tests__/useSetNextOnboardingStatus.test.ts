@@ -181,21 +181,6 @@ describe('useSetNextOnboardingStatus', () => {
     expect(shouldOpenAiChatAfterOnboarding).toBe(false);
   });
 
-  it('should require a plan after profile creation when billing is enabled and the workspace has no subscription', () => {
-    const {
-      nextOnboardingStatus,
-      isWelcomeAnimationVisible,
-      shouldOpenAiChatAfterOnboarding,
-    } = renderHooks(OnboardingStatus.PROFILE_CREATION, {
-      withOneWorkspaceMember: false,
-      isBillingEnabled: true,
-      withSubscription: false,
-    });
-    expect(nextOnboardingStatus).toEqual(OnboardingStatus.PLAN_REQUIRED);
-    expect(isWelcomeAnimationVisible).toBe(false);
-    expect(shouldOpenAiChatAfterOnboarding).toBe(false);
-  });
-
   it('should complete after inviting the team when billing is disabled', () => {
     const {
       nextOnboardingStatus,
@@ -218,20 +203,6 @@ describe('useSetNextOnboardingStatus', () => {
     });
     expect(nextOnboardingStatus).toEqual(OnboardingStatus.COMPLETED);
     expect(isWelcomeAnimationVisible).toBe(true);
-    expect(shouldOpenAiChatAfterOnboarding).toBe(false);
-  });
-
-  it('should require a plan after inviting the team when billing is enabled and the workspace has no subscription', () => {
-    const {
-      nextOnboardingStatus,
-      isWelcomeAnimationVisible,
-      shouldOpenAiChatAfterOnboarding,
-    } = renderHooks(OnboardingStatus.INVITE_TEAM, {
-      isBillingEnabled: true,
-      withSubscription: false,
-    });
-    expect(nextOnboardingStatus).toEqual(OnboardingStatus.PLAN_REQUIRED);
-    expect(isWelcomeAnimationVisible).toBe(false);
     expect(shouldOpenAiChatAfterOnboarding).toBe(false);
   });
 

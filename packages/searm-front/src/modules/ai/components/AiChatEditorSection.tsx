@@ -8,7 +8,6 @@ import { isDefined } from 'searm-shared/utils';
 import { AiChatBanner } from '@/ai/components/AiChatBanner';
 import { AiChatEmptyState } from '@/ai/components/AiChatEmptyState';
 import { AiChatQuestionCard } from '@/ai/components/AiChatQuestionCard';
-import { AIChatNoMoreBillingCreditsBanner } from '@/ai/components/AIChatNoMoreBillingCreditsBanner';
 import { AiChatStandaloneError } from '@/ai/components/AiChatStandaloneError';
 import { AgentChatContextPreview } from '@/ai/components/internal/AgentChatContextPreview';
 import { AgentChatFileUploadButton } from '@/ai/components/internal/AgentChatFileUploadButton';
@@ -25,9 +24,7 @@ import { agentChatPendingQuestionComponentSelector } from '@/ai/states/selectors
 import { Select } from '@/ui/input/components/Select';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
-import { hasReachedCurrentBillingPeriodCapSelector } from '@/workspace/states/hasReachedCurrentBillingPeriodCapSelector';
 import { type SelectOption } from 'searm-ui/input';
 
 const StyledInputArea = styled.div<{ isMobile: boolean }>`
@@ -119,9 +116,6 @@ const StyledRightButtonsContainer = styled.div`
 export const AiChatEditorSection = () => {
   const { t } = useLingui();
   const isMobile = useIsMobile();
-  const hasReachedCurrentBillingPeriodCap = useAtomStateValue(
-    hasReachedCurrentBillingPeriodCapSelector,
-  );
   const { enabledModels } = useWorkspaceAiModelAvailability();
   const hasNoEnabledModels = enabledModels.length === 0;
   const { options, pinnedOption } = useAiModelOptions({
@@ -161,9 +155,6 @@ export const AiChatEditorSection = () => {
             message={t`No AI models are enabled in this workspace.`}
             variant="warning"
           />
-        )}
-        {hasReachedCurrentBillingPeriodCap && (
-          <AIChatNoMoreBillingCreditsBanner />
         )}
         {isDefined(pendingQuestion) ? (
           <AiChatQuestionCard pendingQuestion={pendingQuestion} />

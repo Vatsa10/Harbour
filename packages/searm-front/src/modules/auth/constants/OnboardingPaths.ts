@@ -6,7 +6,5 @@ export const ONBOARDING_PATHS = [
   AppPath.SyncEmails,
   AppPath.InstallApps,
   AppPath.InviteTeam,
-  AppPath.PlanRequired,
-  AppPath.PlanRequiredSuccess,
   AppPath.BookCall,
 ];

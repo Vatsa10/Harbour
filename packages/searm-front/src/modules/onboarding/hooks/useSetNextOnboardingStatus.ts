@@ -8,12 +8,10 @@ import {
   type CurrentWorkspace,
   currentWorkspaceState,
 } from '@/auth/states/currentWorkspaceState';
-import { billingState } from '@/client-config/states/billingState';
 import { isOnboardingAiChatEnabledState } from '@/client-config/states/isOnboardingAiChatEnabledState';
 import { isWelcomeAnimationVisibleState } from '@/onboarding/states/isWelcomeAnimationVisibleState';
 import { shouldOpenAiChatAfterOnboardingState } from '@/onboarding/states/shouldOpenAiChatAfterOnboardingState';
 import { getHasJustCompletedOnboarding } from '@/onboarding/utils/getHasJustCompletedOnboarding';
-import { getIsPlanRequired } from '@/onboarding/utils/getIsPlanRequired';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 
 import { useCallback } from 'react';
@@ -23,19 +21,12 @@ import { useStore } from 'jotai';
 type GetNextOnboardingStatusArgs = {
   currentUser: CurrentUser | null;
   currentWorkspace: CurrentWorkspace | null;
-  isBillingEnabled: boolean;
 };
 
 const getNextOnboardingStatus = ({
   currentUser,
   currentWorkspace,
-  isBillingEnabled,
 }: GetNextOnboardingStatusArgs) => {
-  const isPlanRequired = getIsPlanRequired({
-    isBillingEnabled,
-    currentWorkspace,
-  });
-
   if (currentUser?.onboardingStatus === OnboardingStatus.WORKSPACE_ACTIVATION) {
     return OnboardingStatus.SYNC_EMAIL;
   }
@@ -55,14 +46,10 @@ const getNextOnboardingStatus = ({
     if (currentWorkspace?.workspaceMembersCount === 1) {
       return OnboardingStatus.INVITE_TEAM;
     }
-    return isPlanRequired
-      ? OnboardingStatus.PLAN_REQUIRED
-      : OnboardingStatus.COMPLETED;
+    return OnboardingStatus.COMPLETED;
   }
   if (currentUser?.onboardingStatus === OnboardingStatus.INVITE_TEAM) {
-    return isPlanRequired
-      ? OnboardingStatus.PLAN_REQUIRED
-      : OnboardingStatus.COMPLETED;
+    return OnboardingStatus.COMPLETED;
   }
   return OnboardingStatus.COMPLETED;
 };
@@ -71,8 +58,6 @@ export const useSetNextOnboardingStatus = () => {
   const store = useStore();
   const currentUser = useAtomStateValue(currentUserState);
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
-  const billing = useAtomStateValue(billingState);
-  const isBillingEnabled = billing?.isBillingEnabled ?? false;
   const isOnboardingAiChatEnabled = useAtomStateValue(
     isOnboardingAiChatEnabledState,
   );
@@ -81,7 +66,6 @@ export const useSetNextOnboardingStatus = () => {
     const nextOnboardingStatus = getNextOnboardingStatus({
       currentUser,
       currentWorkspace,
-      isBillingEnabled,
     });
     store.set(currentUserState.atom, (current) => {
       if (isDefined(current)) {
@@ -105,11 +89,5 @@ export const useSetNextOnboardingStatus = () => {
         isOnboardingAiChatEnabled,
       );
     }
-  }, [
-    currentUser,
-    currentWorkspace,
-    isBillingEnabled,
-    isOnboardingAiChatEnabled,
-    store,
-  ]);
+  }, [currentUser, currentWorkspace, isOnboardingAiChatEnabled, store]);
 };

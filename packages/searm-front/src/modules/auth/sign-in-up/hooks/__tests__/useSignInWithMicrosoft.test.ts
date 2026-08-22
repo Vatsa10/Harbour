@@ -19,12 +19,6 @@ describe('useSignInWithMicrosoft', () => {
     apolloMocks: [],
   });
 
-  const mockBillingCheckoutSession = {
-    plan: 'PRO',
-    interval: 'Month',
-    requirePaymentMethod: true,
-  };
-
   it('should call signInWithMicrosoft with the correct parameters', () => {
     const workspaceInviteHashMock = 'testHash';
     const inviteTokenMock = 'testToken';
@@ -51,7 +45,6 @@ describe('useSignInWithMicrosoft', () => {
       action: 'join-workspace',
       workspaceInviteHash: workspaceInviteHashMock,
       workspacePersonalInviteToken: inviteTokenMock,
-      billingCheckoutSession: mockBillingCheckoutSession,
     });
   });
 
@@ -76,7 +69,6 @@ describe('useSignInWithMicrosoft', () => {
 
     expect(signInWithMicrosoftMock).toHaveBeenCalledWith({
       action: 'join-workspace',
-      billingCheckoutSession: mockBillingCheckoutSession,
       workspaceInviteHash: workspaceInviteHashMock,
       workspacePersonalInviteToken: undefined,
     });

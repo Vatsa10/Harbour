@@ -68,7 +68,7 @@ export const BookCall = () => {
         </ScrollWrapper>
       </StyledContent>
       <StyledFooter>
-        <Link to={AppPath.PlanRequired}>
+        <Link to={AppPath.Index}>
           <LightButton Icon={IconChevronLeft} title={t`Back`} />
         </Link>
       </StyledFooter>

@@ -1,6 +1,6 @@
 import { isClickHouseConfiguredState } from '@/client-config/states/isClickHouseConfiguredState';
-import { SettingsBillingLabelValueItem } from '@/settings/billing/components/internal/SettingsBillingLabelValueItem';
-import { SubscriptionInfoContainer } from '@/settings/billing/components/SubscriptionInfoContainer';
+import { UsageLabelValueItem } from '@/settings/usage/components/UsageLabelValueItem';
+import { UsageInfoContainer } from '@/settings/usage/components/UsageInfoContainer';
 import { UsageBreakdownPieSection } from '@/settings/usage/components/UsageBreakdownPieSection';
 import { UsageByUserTableSection } from '@/settings/usage/components/UsageByUserTableSection';
 import { UsageDailyChartSection } from '@/settings/usage/components/UsageDailyChartSection';
@@ -31,12 +31,12 @@ export const SettingsUsageAnalyticsSection = () => {
           title={t`Usage Analytics`}
           description={t`Credit usage breakdown for your workspace.`}
         />
-        <SubscriptionInfoContainer>
-          <SettingsBillingLabelValueItem
+        <UsageInfoContainer>
+          <UsageLabelValueItem
             label={t`ClickHouse Not Configured`}
             value={t`Usage analytics requires ClickHouse. Contact your administrator.`}
           />
-        </SubscriptionInfoContainer>
+        </UsageInfoContainer>
       </Section>
     );
   }
@@ -58,12 +58,12 @@ export const SettingsUsageAnalyticsSection = () => {
           title={t`Usage Analytics`}
           description={t`Credit usage breakdown for your workspace.`}
         />
-        <SubscriptionInfoContainer>
-          <SettingsBillingLabelValueItem
+        <UsageInfoContainer>
+          <UsageLabelValueItem
             label={t`No usage data yet`}
             value={t`Usage analytics will appear here once you start using credits.`}
           />
-        </SubscriptionInfoContainer>
+        </UsageInfoContainer>
       </Section>
     );
   }
