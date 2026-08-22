@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 
+import { FieldActorSource } from 'searm-shared/types';
 import { isDefined } from 'searm-shared/utils';
 
 import { type EvidenceEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/evidence.entity';
 import { FactEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/fact.entity';
 import { FactStatus } from 'src/engine/metadata-modules/ai/ai-research/types/fact-status.type';
+import { ProposalCreationService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-creation.service';
+import { ProposalActionType } from 'src/engine/metadata-modules/ai/ai-write-approval/types/proposal-status.type';
 import { InjectWorkspaceScopedRepository } from 'src/engine/searm-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/searm-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { isPostgresUniqueViolation } from 'src/utils/is-postgres-unique-violation.util';
@@ -20,6 +24,12 @@ export class FactDerivationService {
     // fits exactly and removes the chance of a cross-workspace fact.
     @InjectWorkspaceScopedRepository(FactEntity)
     private readonly factRepository: WorkspaceScopedRepository<FactEntity>,
+    // Resolved lazily via ModuleRef, same pattern as RecordEvidenceTool:
+    // AiWriteApprovalModule already imports AiResearchModule (for FactService),
+    // so a constructor-injected ProposalCreationService here would close a
+    // real module cycle. `strict: false` resolves from the whole application
+    // container, which is safe for this default-scoped provider.
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   // Deterministic — no LLM in this path. The agent already reported what it
@@ -79,6 +89,19 @@ export class FactDerivationService {
     });
 
     if (!isDefined(existingCurrent)) {
+      // Charter rule: only STRONG (server-observed) evidence may mint a Fact
+      // directly. WEAK evidence — anything a model asserted, or fetched from
+      // outside the CRM — must go to a human as a proposal instead, even when
+      // there is nothing yet to conflict with.
+      if (evidence.strength === 'WEAK') {
+        await this.proposeFieldChange(evidence, {
+          oldValue: undefined,
+          reason: `Weak/model-asserted observation for ${objectNameSingular}.${fieldName}`,
+        });
+
+        return null;
+      }
+
       return this.factRepository.save(
         workspaceId,
         this.buildNewFact(evidence, { hasConflict: false }),
@@ -101,53 +124,76 @@ export class FactDerivationService {
       });
     }
 
-    // Different value. Same run means the agent observed a contradiction
-    // within one research pass, not a change over time — surface it as a
-    // conflict on both facts rather than silently superseding.
+    // Different value than the existing CURRENT fact — a conflict, whether it
+    // arrived in the same run (the agent saw a contradiction within one
+    // research pass) or a later one (the value may have changed over time, or
+    // the new observation may simply be wrong). Either way this is exactly
+    // the "conflicting observation" case the charter says must never
+    // auto-resolve: it goes to a human as a proposal, never straight to a new
+    // Fact row. Same-run vs cross-run no longer changes the write path — it
+    // only changes the reason text a reviewer sees.
+    //
+    // The existing fact is still marked hasConflict: true for visibility in
+    // fact history/UI. That is metadata on the row that is already the
+    // asserted truth, not a new asserted value, so it does not touch the
+    // evidence contract the way writing a second Fact would.
+    await this.factRepository.save(workspaceId, {
+      ...existingCurrent,
+      hasConflict: true,
+    });
+
     const isSameRunConflict = existingCurrent.runId === evidence.runId;
 
-    if (isSameRunConflict) {
-      await this.factRepository.save(workspaceId, {
-        ...existingCurrent,
-        hasConflict: true,
-      });
-
-      return this.factRepository.save(
-        workspaceId,
-        this.buildNewFact(evidence, { hasConflict: true }),
-      ) as Promise<FactEntity>;
-    }
-
-    // Different run, different value: time passed and the world changed.
-    // Supersede — keep the history, don't delete it. The old row stays
-    // queryable with its own value and evidence, and points forward to the
-    // fact that replaced it.
-    //
-    // The outgoing row leaves CURRENT *before* the replacement is inserted:
-    // IDX_FACT_CURRENT_UNIQUE forbids two uncontested CURRENT rows for one
-    // field, so the old order (insert, then supersede) would now always
-    // violate it. The forward pointer is written once the successor has an id.
-    const supersededAt = new Date();
-
-    await this.factRepository.save(workspaceId, {
-      ...existingCurrent,
-      status: FactStatus.SUPERSEDED,
-      supersededAt,
+    await this.proposeFieldChange(evidence, {
+      oldValue: existingCurrent.value,
+      reason: isSameRunConflict
+        ? `Conflicting observation for ${objectNameSingular}.${fieldName} (contradicts another observation from the same research run)`
+        : `Conflicting observation for ${objectNameSingular}.${fieldName} (disagrees with the current fact)`,
     });
 
-    const newFact = (await this.factRepository.save(
+    return null;
+  }
+
+  // The single place FactDerivationService reaches into the proposal model.
+  // ProposalCreationService.createFromExtraction is the non-agent entry point
+  // into Proposal/ProposalItem — the same tables and the same AiWritePolicy
+  // check a tool call goes through, just without a ToolProviderContext to key
+  // a batch on. sourceKey is derived from evidence.id so a retried derivation
+  // (see deriveFact's unique-violation retry) can never duplicate a proposal.
+  private async proposeFieldChange(
+    evidence: EvidenceEntity,
+    params: { oldValue: unknown; reason: string },
+  ): Promise<void> {
+    const { workspaceId, objectNameSingular, recordId } = evidence;
+    const { fieldName, value } = evidence.payload;
+
+    const proposalCreationService = this.moduleRef.get(
+      ProposalCreationService,
+      { strict: false },
+    );
+
+    await proposalCreationService.createFromExtraction({
       workspaceId,
-      this.buildNewFact(evidence, { hasConflict: false }),
-    )) as FactEntity;
-
-    await this.factRepository.save(workspaceId, {
-      ...existingCurrent,
-      status: FactStatus.SUPERSEDED,
-      supersededAt,
-      supersededByFactId: newFact.id,
+      sourceKey: `fact-derivation:${evidence.id}`,
+      reason: params.reason,
+      createdByActor: {
+        source: FieldActorSource.AGENT,
+        workspaceMemberId: null,
+        name: 'Fact derivation',
+        context: {},
+      },
+      items: [
+        {
+          actionType: ProposalActionType.UPDATE_RECORD,
+          objectNameSingular,
+          recordId,
+          payload: { [fieldName]: value },
+          baseline: isDefined(params.oldValue)
+            ? { [fieldName]: params.oldValue }
+            : {},
+        },
+      ],
     });
-
-    return newFact;
   }
 
   private buildNewFact(

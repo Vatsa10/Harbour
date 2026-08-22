@@ -1,8 +1,10 @@
 import { Test, type TestingModule } from '@nestjs/testing';
+import { ModuleRef } from '@nestjs/core';
 
 import { FactEntity } from 'src/engine/metadata-modules/ai/ai-research/entities/fact.entity';
 import { FactDerivationService } from 'src/engine/metadata-modules/ai/ai-research/services/fact-derivation.service';
 import { FactStatus } from 'src/engine/metadata-modules/ai/ai-research/types/fact-status.type';
+import { ProposalCreationService } from 'src/engine/metadata-modules/ai/ai-write-approval/services/proposal-creation.service';
 import { getWorkspaceScopedRepositoryToken } from 'src/engine/searm-orm/workspace-scoped-repository/get-workspace-scoped-repository-token.util';
 
 const buildEvidence = (overrides: Record<string, unknown> = {}) =>
@@ -34,6 +36,17 @@ describe('FactDerivationService', () => {
     softDelete: jest.fn(),
   };
 
+  const proposalCreationService = {
+    createFromExtraction: jest.fn(),
+  };
+
+  // Resolved via ModuleRef, same pattern as RecordEvidenceTool: AiResearchModule
+  // cannot import AiWriteApprovalModule without a real circular edge, since
+  // AiWriteApprovalModule already imports AiResearchModule for FactService.
+  const moduleRef = {
+    get: jest.fn().mockImplementation(() => proposalCreationService),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     factRepository.findOne.mockResolvedValue(null);
@@ -43,6 +56,11 @@ describe('FactDerivationService', () => {
       id: entity.id ?? 'fact-new',
       ...entity,
     }));
+    proposalCreationService.createFromExtraction.mockResolvedValue({
+      proposalId: 'proposal-1',
+      itemIds: ['item-1'],
+    });
+    moduleRef.get.mockImplementation(() => proposalCreationService);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -50,6 +68,10 @@ describe('FactDerivationService', () => {
         {
           provide: getWorkspaceScopedRepositoryToken(FactEntity),
           useValue: factRepository,
+        },
+        {
+          provide: ModuleRef,
+          useValue: moduleRef,
         },
       ],
     }).compile();
@@ -126,7 +148,11 @@ describe('FactDerivationService', () => {
     );
   });
 
-  it('should supersede the prior fact when a different value arrives from a later run', async () => {
+  // Charter fix: a cross-run disagreement used to auto-supersede the prior
+  // fact with the new value, silently asserting a change nobody approved.
+  // It must now route to a human via ProposalCreationService instead of
+  // writing a new Fact row at all.
+  it('should route a cross-run conflicting value to a proposal instead of superseding the fact', async () => {
     factRepository.findOne.mockResolvedValue({
       id: 'fact-1',
       value: '400',
@@ -136,44 +162,68 @@ describe('FactDerivationService', () => {
       lastObservedAt: new Date('2026-01-01T00:00:00.000Z'),
     });
 
-    await service.deriveFact(buildEvidence({ runId: 'run-1' }));
+    const fact = await service.deriveFact(buildEvidence({ runId: 'run-1' }));
 
-    expect(factRepository.save).toHaveBeenCalledWith(
+    // No new Fact row is written for the disputed value — the value is only
+    // ever proposed, never asserted, until a human approves it.
+    expect(factRepository.save).not.toHaveBeenCalledWith(
       'workspace-1',
+      expect.objectContaining({ value: '500', status: FactStatus.CURRENT }),
+    );
+    expect(fact).toBeNull();
+
+    expect(proposalCreationService.createFromExtraction).toHaveBeenCalledWith(
       expect.objectContaining({
-        value: '500',
-        status: FactStatus.CURRENT,
-        hasConflict: false,
+        workspaceId: 'workspace-1',
+        sourceKey: 'fact-derivation:evidence-1',
+        items: [
+          expect.objectContaining({
+            objectNameSingular: 'company',
+            recordId: 'record-1',
+            payload: { employeeCount: '500' },
+            baseline: { employeeCount: '400' },
+          }),
+        ],
       }),
     );
 
-    // The LAST write to the old row: the demotion out of CURRENT happens
-    // before the successor exists (the partial unique index forbids two
-    // uncontested CURRENT rows), so the forward pointer is written after.
-    const supersededSave = factRepository.save.mock.calls
-      .map(([, entity]) => entity)
-      .filter((entity) => entity.id === 'fact-1')
-      .pop();
-
-    // Supersession is a status transition with a forward pointer, not a
-    // delete: the old row keeps its value and evidence so "why did we once
-    // believe 400" stays answerable, and it links to what replaced it.
-    expect(supersededSave).toEqual(
-      expect.objectContaining({
-        id: 'fact-1',
-        status: FactStatus.SUPERSEDED,
-        value: '400',
-        evidenceIds: ['evidence-0'],
-        supersededByFactId: 'fact-new',
-        supersededAt: expect.any(Date),
-      }),
-    );
     expect(factRepository.remove).not.toHaveBeenCalled();
     expect(factRepository.delete).not.toHaveBeenCalled();
     expect(factRepository.softDelete).not.toHaveBeenCalled();
   });
 
-  it('should mark both facts conflicted when a different value arrives from the same run', async () => {
+  // Weak/model-asserted evidence must never mint a Fact on its own — it goes
+  // to a human via a proposal, even when there is no existing fact to
+  // conflict with.
+  it('should route a WEAK observation to a proposal instead of creating a Fact when none exists yet', async () => {
+    const fact = await service.deriveFact(
+      buildEvidence({ strength: 'WEAK', sourceType: 'WEB_SEARCH' }),
+    );
+
+    expect(fact).toBeNull();
+    expect(factRepository.save).not.toHaveBeenCalled();
+    expect(proposalCreationService.createFromExtraction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        sourceKey: 'fact-derivation:evidence-1',
+        items: [
+          expect.objectContaining({
+            objectNameSingular: 'company',
+            recordId: 'record-1',
+            payload: { employeeCount: '500' },
+            baseline: {},
+          }),
+        ],
+      }),
+    );
+  });
+
+  // Charter fix: a same-run contradiction used to write a second CURRENT-ish
+  // Fact row flagged hasConflict on both sides. Now it must route to a human
+  // as a proposal instead of ever asserting the new value as a Fact — the
+  // existing fact is still flagged hasConflict for visibility, but no second
+  // Fact row is written.
+  it('should mark the existing fact conflicted and route the new value to a proposal when it arrives from the same run', async () => {
     factRepository.findOne.mockResolvedValue({
       id: 'fact-1',
       value: '400',
@@ -183,25 +233,39 @@ describe('FactDerivationService', () => {
       lastObservedAt: new Date('2026-01-01T00:00:00.000Z'),
     });
 
-    await service.deriveFact(buildEvidence({ runId: 'run-1' }));
+    const fact = await service.deriveFact(buildEvidence({ runId: 'run-1' }));
 
+    expect(fact).toBeNull();
     expect(factRepository.save).toHaveBeenCalledWith(
       'workspace-1',
       expect.objectContaining({ id: 'fact-1', hasConflict: true }),
     );
-    expect(factRepository.save).toHaveBeenCalledWith(
+    // No second Fact row for the disputed value — both claims stay visible
+    // only through the fact history and the new proposal, never as a second
+    // asserted Fact.
+    expect(factRepository.save).not.toHaveBeenCalledWith(
       'workspace-1',
-      expect.objectContaining({
-        value: '500',
-        status: FactStatus.CURRENT,
-        hasConflict: true,
-      }),
+      expect.objectContaining({ value: '500', status: FactStatus.CURRENT }),
     );
     // A same-run contradiction is not a change over time, so the prior fact
     // must NOT be superseded — both claims stay visible to the reviewer.
     expect(factRepository.save).not.toHaveBeenCalledWith(
       'workspace-1',
       expect.objectContaining({ status: FactStatus.SUPERSEDED }),
+    );
+    expect(proposalCreationService.createFromExtraction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        sourceKey: 'fact-derivation:evidence-1',
+        items: [
+          expect.objectContaining({
+            objectNameSingular: 'company',
+            recordId: 'record-1',
+            payload: { employeeCount: '500' },
+            baseline: { employeeCount: '400' },
+          }),
+        ],
+      }),
     );
   });
 
@@ -338,10 +402,11 @@ describe('FactDerivationService', () => {
     });
   });
 
-  // Critical 3, second half: with a partial unique index over uncontested
-  // CURRENT rows, inserting the successor while the predecessor is still
-  // CURRENT would violate it on every ordinary supersession.
-  it('should move the outgoing fact out of CURRENT before inserting its replacement', async () => {
+  // Supersession-on-conflict is gone: a cross-run disagreement never writes a
+  // new Fact row at all now, so there is nothing to order against a
+  // predecessor demotion. This test used to pin that ordering; it now pins
+  // that no Fact write happens for either row in the conflicting pair.
+  it('should not write any Fact row for either the existing or new value on a cross-run conflict', async () => {
     factRepository.findOne.mockResolvedValue({
       id: 'fact-1',
       value: '400',
@@ -354,16 +419,13 @@ describe('FactDerivationService', () => {
 
     await service.deriveFact(buildEvidence({ runId: 'run-2' }));
 
-    const savedStatuses = factRepository.save.mock.calls.map(
-      ([, entity]) => `${entity.id ?? 'new'}:${entity.status}`,
+    expect(factRepository.save).not.toHaveBeenCalledWith(
+      'workspace-1',
+      expect.objectContaining({ status: FactStatus.SUPERSEDED }),
     );
-
-    // The predecessor's demotion must come first; the successor's insert must
-    // not sit between two CURRENT rows for the same field.
-    expect(savedStatuses).toEqual([
-      `fact-1:${FactStatus.SUPERSEDED}`,
-      `new:${FactStatus.CURRENT}`,
-      `fact-1:${FactStatus.SUPERSEDED}`,
-    ]);
+    expect(factRepository.save).not.toHaveBeenCalledWith(
+      'workspace-1',
+      expect.objectContaining({ value: '500', status: FactStatus.CURRENT }),
+    );
   });
 });
